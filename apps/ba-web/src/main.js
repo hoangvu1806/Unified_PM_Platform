@@ -205,9 +205,9 @@ function renderEmptyState(hasQuery) {
     <div class="empty-state" style="grid-column: 1/-1;">
       <div class="empty-state-icon">📋</div>
       <div class="empty-state-title">Chưa có Feature nào</div>
-      <div class="empty-state-desc">Bấm "Tạo Dự Án Mới" để bắt đầu phân tích nghiệp vụ cùng BA Agent.</div>
+      <div class="empty-state-desc">Dự án chưa có feature nào. Bấm "Tạo Feature mới" để bắt đầu phân tích cùng BA Agent.</div>
       <button class="btn btn-cyan" style="padding: 10px 20px;" onclick="document.getElementById('btnCreateFeature').click()">
-        Tạo Dự Án Mới
+        Tạo Feature mới
       </button>
     </div>
   `;
