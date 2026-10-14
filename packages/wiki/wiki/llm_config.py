@@ -48,10 +48,15 @@ def get_llm_settings() -> LlmSettings:
         mode = "auto"
     return LlmSettings(
         sort_mode=mode,
-        base_url=os.environ.get("WIKI_LLM_BASE_URL", "https://llm-gate.imespro.ai/v1").rstrip(
-            "/"
-        ),
-        api_key=os.environ.get("WIKI_LLM_API_KEY", "").strip(),
+        # Platform: fall back to the shared LLM_* gateway variables.
+        base_url=(
+            os.environ.get("WIKI_LLM_BASE_URL")
+            or os.environ.get("LLM_BASE_URL")
+            or "https://llm-gate.imespro.ai/v1"
+        ).rstrip("/"),
+        api_key=(
+            os.environ.get("WIKI_LLM_API_KEY") or os.environ.get("LLM_API_KEY") or ""
+        ).strip(),
         model=os.environ.get("WIKI_LLM_MODEL", "Qwen3.5-27B-AWQ").strip()
         or "Qwen3.5-27B-AWQ",
         timeout_s=float(os.environ.get("WIKI_LLM_TIMEOUT_S", "60")),

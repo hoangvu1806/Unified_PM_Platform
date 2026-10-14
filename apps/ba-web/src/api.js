@@ -5,7 +5,8 @@
  * All endpoints are proxied via Vite dev server (/api → localhost:8000).
  */
 
-const API_BASE = '/api';
+// Behind the platform gateway the BA API lives at /ba/api (build arg VITE_API_BASE).
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 // ── Feature CRUD ─────────────────────────────────────────────
 

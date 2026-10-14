@@ -3,13 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import sqlite3
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from wiki.audit import log_audit
-from wiki.db import connect, row_to_dict
+from wiki.db import Connection, connect, row_to_dict
 from wiki.extract import extract_pdf
 from wiki.models import (
     Actor,
@@ -21,7 +21,7 @@ from wiki.models import (
     WikiSource,
 )
 from wiki.llm_config import build_sorter
-from wiki.paths import audit_path, blob_dir
+from wiki.paths import blob_key, blob_path
 from wiki.permissions import require_project_scope, require_tool
 from wiki.sort import Sorter
 
@@ -46,20 +46,23 @@ class WikiService:
         self._conn = connect(root)
 
     @property
-    def conn(self) -> sqlite3.Connection:
+    def conn(self) -> "Connection":
         return self._conn
 
     def close(self) -> None:
         self._conn.close()
 
     def reset_store(self) -> dict:
-        """Wipe the 3 wiki tables + blobs/audit only. Never unlink wiki.db."""
-        from wiki.paths import db_path
+        """Wipe the wiki tables + their blobs only. Never touches BA/ADK schemas."""
+        from wiki.db import TABLES, schema_name
 
-        db = db_path(self.root).resolve()
+        schema = schema_name()
         names = {
             row[0]
-            for row in self.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            for row in self.conn.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = ?",
+                (schema,),
+            )
         }
         foreign = names & {
             "ba_packages",
@@ -73,24 +76,27 @@ class WikiService:
         if foreign:
             raise WikiError(
                 "COMMON_PRECONDITION_FAILED",
-                f"refusing to clear {db}: contains BA/ADK tables {sorted(foreign)}",
+                f"refusing to clear schema {schema}: contains BA/ADK tables {sorted(foreign)}",
                 409,
             )
-        for table in ("wiki_revision", "wiki_page", "wiki_source"):
+        keys = [
+            str(row["storage_uri"])
+            for row in self.conn.execute("SELECT storage_uri FROM wiki_source")
+        ] if "wiki_source" in names else []
+        for table in TABLES:
             if table in names:
                 self.conn.execute(f"DELETE FROM {table}")
         self.conn.commit()
-        blobs = blob_dir(self.root).resolve()
         removed_blobs = 0
-        if blobs.is_dir() and blobs.name == "blobs" and blobs.parent.name == "data":
-            for path in blobs.iterdir():
-                if path.is_file() and path.suffix.lower() not in {".db", ".db-wal", ".db-shm"}:
-                    path.unlink()
-                    removed_blobs += 1
-        audit = audit_path(self.root)
-        if audit.is_file() and audit.name == "audit.jsonl":
-            audit.unlink()
-        return {"pages": 0, "sources": 0, "removed_blobs": removed_blobs, "wiki_db": str(db)}
+        for key in keys:
+            try:
+                path = blob_path(key)
+            except ValueError:
+                continue  # legacy absolute paths are not ours to delete
+            if path.is_file():
+                path.unlink()
+                removed_blobs += 1
+        return {"pages": 0, "sources": 0, "removed_blobs": removed_blobs, "wiki_db": f"postgres:{schema}"}
 
     def ingest_source(
         self,
@@ -142,7 +148,7 @@ class WikiService:
             WHERE sha256 = ?
               AND namespace = ?
               AND (
-                (? IS NULL AND project_id IS NULL)
+                (CAST(? AS TEXT) IS NULL AND project_id IS NULL)
                 OR project_id = ?
               )
             """,
@@ -188,7 +194,9 @@ class WikiService:
             ext = suffix
         else:
             ext = ".txt" if suffix == "" else suffix
-        blob = blob_dir(self.root) / f"{source_id}{ext}"
+        storage_key = blob_key(f"{source_id}{ext}", namespace, project_id)
+        blob = blob_path(storage_key)
+        blob.parent.mkdir(parents=True, exist_ok=True)
         blob.write_bytes(data)
 
         markdown, page_map = extract_pdf(blob, filename)
@@ -206,7 +214,7 @@ class WikiService:
                 digest,
                 namespace,
                 project_id,
-                str(blob),
+                storage_key,
                 markdown,
                 json.dumps(page_map),
                 ingested_at,
@@ -591,6 +599,8 @@ class WikiService:
         )
         if create_revision:
             # Use MAX, not COUNT — deletions leave gaps; COUNT+1 collides with existing REV-*.
+            # Platform: serialize id allocation across connections until commit.
+            self.conn.execute("SELECT pg_advisory_xact_lock(hashtext('wiki-revision-id'))")
             row = self.conn.execute(
                 """
                 SELECT MAX(CAST(SUBSTR(revision_id, 5) AS INTEGER)) AS m

@@ -9,7 +9,7 @@ from app.attachments.parser import (
 
 
 def test_ba_package_is_compacted_to_traceable_markdown() -> None:
-    source = Path(__file__).resolve().parents[2] / "ba-package_usecase_01.json"
+    source = Path(__file__).resolve().parent / "fixtures" / "ba-package_usecase_01.json"
     raw = source.read_bytes()
 
     parsed = parse_json_document(raw)

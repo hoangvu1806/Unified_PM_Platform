@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, HttpUrl
 
 from ..attachments.parser import parse_bpmn_document, parse_json_document, parse_text_document
-from ..core.config import PROJECT_DIR
+from ..core.config import designer_asset_dir
 from ..core.errors import AppError, not_found
 from ..core.llm import STRUCTURED_PARSER_VERSION
 from ..models import (
@@ -88,12 +88,8 @@ TEXT_SUFFIXES = {".txt", ".md", ".csv", ".yaml", ".yml"}
 MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
 
 def _asset_path(asset_id: str) -> Path:
-    # Keep uploaded bytes in the project data volume.  In Docker, ./data is
-    # mounted at /app/designer_agent/data; app/data is inside the image and is
-    # lost on restart.
-    root = PROJECT_DIR / "data" / "assets"
-    root.mkdir(parents=True, exist_ok=True)
-    return root / asset_id
+    # Uploaded bytes live in the shared platform storage volume.
+    return designer_asset_dir() / asset_id
 
 
 def _standard_asset_id(name: str, suffix: str) -> str:

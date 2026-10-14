@@ -1,3 +1,4 @@
+# Build context: platform root (docker build -f services/ba/Dockerfile .)
 FROM python:3.12-slim-bookworm
 
 WORKDIR /app
@@ -14,11 +15,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
+COPY services/ba/pyproject.toml services/ba/README.md ./
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir ".[dev]"
 
-COPY . .
+# Shared wiki package (factory_wiki adds it to sys.path via WIKI_MVP_ROOT).
+COPY packages/wiki /opt/platform/packages/wiki
+
+COPY services/ba/ .
 
 # Install after copying the source: .dockerignore intentionally excludes
 # node_modules, so installing before COPY . would remove the helper again.

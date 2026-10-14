@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from wiki.models import Actor
-from wiki.paths import audit_path, data_dir
+
+_BASE_FIELDS = {"ts", "operation", "actor", "actor_type", "project_id", "agent_run_id"}
 
 
 def log_audit(
@@ -15,7 +16,6 @@ def log_audit(
     actor: Actor,
     extra: dict | None = None,
 ) -> None:
-    data_dir(root).mkdir(parents=True, exist_ok=True)
     record = {
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "operation": operation,
@@ -25,5 +25,24 @@ def log_audit(
         "agent_run_id": actor.agent_run_id,
         **(extra or {}),
     }
-    with audit_path(root).open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, ensure_ascii=True) + "\n")
+    # Platform: audit rows live in wiki.audit_log (was data/audit.jsonl).
+    from wiki.db import connect
+
+    conn = connect(root)
+    try:
+        conn.execute(
+            "INSERT INTO audit_log (ts, operation, actor, actor_type, project_id, agent_run_id, extra) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                record["ts"],
+                record["operation"],
+                record["actor"],
+                record["actor_type"],
+                record["project_id"],
+                record["agent_run_id"],
+                json.dumps({k: v for k, v in record.items() if k not in _BASE_FIELDS}, ensure_ascii=True),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()

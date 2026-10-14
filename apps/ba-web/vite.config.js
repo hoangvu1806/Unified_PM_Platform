@@ -3,6 +3,8 @@ import { resolve } from 'path';
 
 export default defineConfig({
   root: '.',
+  // Served under /ba/ by the platform gateway; override with VITE_BASE for standalone dev.
+  base: process.env.VITE_BASE || '/ba/',
   build: {
     rollupOptions: {
       input: {

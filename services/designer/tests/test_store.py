@@ -13,12 +13,12 @@ from app.models import (
     WorkspaceActionTarget,
     WorkspaceScreenReference,
 )
-from app.storage.store import Store
+from tests.pg import make_test_store
 
 
 def test_session_and_run_round_trip(tmp_path: Path) -> None:
     async def scenario() -> None:
-        store = Store(tmp_path / "test.db")
+        store = make_test_store()
         await store.initialize()
         session = await store.create_session("Landing page")
         brief = DesignBrief(
@@ -96,7 +96,7 @@ def test_session_workspace_is_persisted_and_reused_by_later_runs(
     tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
-        store = Store(tmp_path / "workspace.db")
+        store = make_test_store()
         await store.initialize()
         session = await store.create_session("Student portal")
         workspace = SessionWorkspace(
@@ -132,7 +132,7 @@ def test_session_workspace_is_persisted_and_reused_by_later_runs(
 
 def test_pending_workspace_action_round_trip(tmp_path: Path) -> None:
     async def scenario() -> None:
-        store = Store(tmp_path / "pending-action.db")
+        store = make_test_store()
         await store.initialize()
         session = await store.create_session("Aurora")
         pending = WorkspaceActionDecision(
@@ -164,7 +164,7 @@ def test_workspace_screen_registry_uses_stable_screen_and_page_ids(
     tmp_path: Path,
 ) -> None:
     async def scenario() -> None:
-        store = Store(tmp_path / "screen-registry.db")
+        store = make_test_store()
         await store.initialize()
         session = await store.create_session("Aurora")
         reference = WorkspaceScreenReference(
@@ -187,7 +187,7 @@ def test_workspace_screen_registry_uses_stable_screen_and_page_ids(
 
 def test_delete_session_cascades_to_all_run_data(tmp_path: Path) -> None:
     async def scenario() -> None:
-        store = Store(tmp_path / "delete-session.db")
+        store = make_test_store()
         await store.initialize()
         session = await store.create_session("Disposable conversation")
         run = await store.create_run(
@@ -210,7 +210,7 @@ def test_delete_session_cascades_to_all_run_data(tmp_path: Path) -> None:
 
 def test_latest_session_artifact_survives_clarification_runs(tmp_path: Path) -> None:
     async def scenario() -> None:
-        store = Store(tmp_path / "session-assets.db")
+        store = make_test_store()
         await store.initialize()
         session = await store.create_session("Splash")
         upload_run = await store.create_run(

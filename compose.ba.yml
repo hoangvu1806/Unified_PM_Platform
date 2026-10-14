@@ -1,0 +1,9 @@
+# BA module standalone: postgres + gateway + BA (api, web).
+name: platform
+include:
+  - path: infra/compose.yml
+    env_file: .env
+  - path: infra/gateway/compose.yml
+    env_file: .env
+  - path: services/ba/compose.yml
+    env_file: .env

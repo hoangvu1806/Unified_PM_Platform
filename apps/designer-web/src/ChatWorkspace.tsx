@@ -275,7 +275,7 @@ function AssistantAvatar({ className = "" }: { className?: string }) {
     return (
         <span className={`assistant-avatar ${className}`}>
             <img
-                src="/logo.png"
+                src={`${import.meta.env.BASE_URL}logo.png`}
                 alt="Designer"
                 className="assistant-avatar-img"
             />
@@ -286,7 +286,7 @@ function AssistantAvatar({ className = "" }: { className?: string }) {
 function UserAvatar({ className = "" }: { className?: string }) {
     return (
         <span className={`user-avatar ${className}`} title="You">
-            <img src="/user_icon.png" alt="You" className="user-avatar-img" />
+            <img src={`${import.meta.env.BASE_URL}user_icon.png`} alt="You" className="user-avatar-img" />
         </span>
     );
 }
@@ -435,7 +435,7 @@ export function ChatWorkspace({
                     <div className="empty-conversation">
                         <span className="empty-orbit">
                             <img
-                                src="/logo.png"
+                                src={`${import.meta.env.BASE_URL}logo.png`}
                                 alt="Designer Studio"
                                 className="empty-orbit-logo"
                             />

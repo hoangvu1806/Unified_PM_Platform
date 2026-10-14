@@ -7,6 +7,8 @@ export default defineConfig(({ mode }) => {
   if (!Number.isInteger(port) || port <= 0) throw new Error("FRONTEND_PORT is required");
   return {
     envDir: "..",
+    // Served under /designer/ by the platform gateway.
+    base: env.VITE_BASE || "/designer/",
     plugins: [react()],
     server: {
       host: "127.0.0.1",

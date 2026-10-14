@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import PropertyMock, patch
@@ -569,9 +570,8 @@ def test_wiki_clear_does_not_wipe_ba_packages(sqlite_sync_db, tmp_path, monkeypa
     cleared = client.post("/api/wiki/clear", data={"confirm": "CLEAR", "actor": "ba.lead"})
     assert cleared.status_code == 200
     assert cleared.json()["cleared"] is True
-    wiki_db = Path(cleared.json()["wiki_db"])
-    assert wiki_db.name == "wiki.db"
-    assert tmp_path in wiki_db.parents
+    # Platform: the wiki store is the Postgres schema WIKI_DB_SCHEMA.
+    assert cleared.json()["wiki_db"] == f"postgres:{os.environ['WIKI_DB_SCHEMA']}"
 
     empty = client.get("/api/wiki/pages", params={"project_id": "PRJ-MES-01"})
     assert empty.json()["drafts"] == []
@@ -586,16 +586,11 @@ def test_wiki_clear_does_not_wipe_ba_packages(sqlite_sync_db, tmp_path, monkeypa
 
 
 def test_wiki_reset_refuses_colocated_ba_tables(tmp_path, monkeypatch):
-    import sqlite3
-
     monkeypatch.setenv("WIKI_DATA_DIR", str(tmp_path))
     store = WikiStore(tmp_path)
+    # Platform: a BA table inside the wiki schema must block the clear.
+    store.conn.execute("CREATE TABLE ba_packages (session_id TEXT)")
     store.close()
-    db = tmp_path / "data" / "wiki.db"
-    conn = sqlite3.connect(db)
-    conn.execute("CREATE TABLE ba_packages (session_id TEXT)")
-    conn.commit()
-    conn.close()
     with pytest.raises(WikiResetError, match="ba_packages"):
         reset_wiki_store(tmp_path)
 

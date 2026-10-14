@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.masked_api_key,
         settings.api_key_fingerprint,
     )
-    store = Store(settings.sqlite_path)
+    store = Store(settings.postgres_dsn)
     await store.initialize()
     events = EventStream(store)
     openpencil = OpenPencilGateway(settings)
@@ -60,6 +60,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
     await runs.shutdown()
+    await store.close()
 
 
 def create_app() -> FastAPI:

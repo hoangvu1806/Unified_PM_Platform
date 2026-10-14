@@ -29,7 +29,7 @@ export function SessionRail(props: Props) {
             <div className="brand-lockup">
                 <span className="brand-mark" title="Designer Studio">
                     <img
-                        src="/logo.png"
+                        src={`${import.meta.env.BASE_URL}logo.png`}
                         alt="Designer Studio"
                         className="brand-logo-img"
                     />

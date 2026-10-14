@@ -19,9 +19,11 @@ class Base(DeclarativeBase):
 # Generate sync PostgreSQL connection URL using psycopg2
 def get_sync_database_url() -> str:
     encoded_password = urllib.parse.quote_plus(settings.db_password)
+    search_path = urllib.parse.quote(f"-csearch_path={settings.db_schema}")
     return (
         f"postgresql+psycopg2://{settings.db_user}:{encoded_password}"
         f"@{settings.db_host}:{settings.db_port}/{settings.db_name}"
+        f"?options={search_path}"
     )
 
 
@@ -72,6 +74,12 @@ def get_db_session() -> Generator[Session, None, None]:
 
 def init_db() -> None:
     """Initialize database tables if they do not exist."""
+    if sync_engine.dialect.name == "postgresql":
+        from sqlalchemy import text
+
+        # The shared platform DB gives each service its own schema (search_path).
+        with sync_engine.begin() as conn:
+            conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{settings.db_schema}"'))
     Base.metadata.create_all(bind=sync_engine)
     _ensure_ba_package_columns()
 

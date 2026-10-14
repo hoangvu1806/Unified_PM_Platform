@@ -1,11 +1,14 @@
 import asyncio
 import json
 import re
-import sqlite3
 from collections.abc import Callable
-from pathlib import Path
+from enum import Enum
 from typing import Any, TypeVar
 from uuid import UUID, uuid4
+
+from psycopg import Connection, errors
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from ..models import (
     DesignBrief,
@@ -34,29 +37,52 @@ def output_file_for_run(screen_name: str, run_id: UUID) -> str:
     return f"generated/{run_id}/{name}"
 
 
+Row = dict[str, Any]
+
+
+def _param(value: Any) -> Any:
+    # StrEnum members (RunStage/RunStatus) are stored by value, as SQLite did.
+    return value.value if isinstance(value, Enum) else value
+
+
 class Store:
-    def __init__(self, path: Path) -> None:
-        self.path = path
+    """Designer persistence on the shared platform Postgres (schema ``designer``).
+
+    Public methods are unchanged from the SQLite store; only the connection
+    layer differs. Every connection pins ``search_path`` to ``schema``.
+    """
+
+    def __init__(self, dsn: str, schema: str = "designer", max_size: int = 10) -> None:
+        if not re.fullmatch(r"[a-z_][a-z0-9_]*", schema):
+            raise ValueError(f"invalid schema name {schema!r}")
+        self.dsn = dsn
+        self.schema = schema
         self._event_lock = asyncio.Lock()
+        self._pool = ConnectionPool(
+            dsn,
+            min_size=1,
+            max_size=max_size,
+            kwargs={"row_factory": dict_row},
+            configure=self._configure,
+            open=False,
+        )
+
+    def _configure(self, conn: Connection) -> None:
+        conn.execute(f'SET search_path TO "{self.schema}"')
+        conn.commit()
 
     async def initialize(self) -> None:
         await self._call(self._initialize)
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.path, timeout=10.0)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA busy_timeout=10000")
-        connection.execute("PRAGMA foreign_keys=ON")
-        return connection
-
     def _initialize(self) -> None:
-        with self._connect() as db:
-            # Journal mode is persistent database state. Setting it on every
-            # request races with active workflow writes on Docker bind mounts
-            # and can make harmless polling fail with "unable to open database
-            # file". Configure it once at application startup instead.
-            db.execute("PRAGMA journal_mode=WAL")
+        with Connection.connect(self.dsn, autocommit=True) as bootstrap:
+            bootstrap.execute(f'CREATE SCHEMA IF NOT EXISTS "{self.schema}"')
+        self._pool.open(wait=True)
+        with self._pool.connection() as db:
             initialize_schema(db)
+
+    async def close(self) -> None:
+        await self._call(self._pool.close)
 
     async def create_session(self, title: str) -> SessionView:
         now = utc_now()
@@ -80,9 +106,9 @@ class Store:
         return await self._call(lambda: self._delete_session(session_id))
 
     def _delete_session(self, session_id: UUID) -> bool:
-        with self._connect() as db:
+        with self._pool.connection() as db:
             cursor = db.execute(
-                "DELETE FROM sessions WHERE id = ?", (str(session_id),)
+                self._sql("DELETE FROM sessions WHERE id = ?"), (str(session_id),)
             )
             return cursor.rowcount > 0
 
@@ -335,7 +361,8 @@ class Store:
                         payload=payload,
                     )
                     await self._execute(
-                        "INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO events (id, run_id, revision, sequence, event_type, payload, created_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (
                             str(event.id),
                             str(run_id),
@@ -347,8 +374,8 @@ class Store:
                         ),
                     )
                     return event
-                except Exception as e:
-                    if "UNIQUE constraint failed" in str(e) and attempt < 4:
+                except errors.UniqueViolation:
+                    if attempt < 4:
                         await asyncio.sleep(0.05 * (attempt + 1))
                         continue
                     raise
@@ -374,7 +401,8 @@ class Store:
 
     async def add_review(self, run_id: UUID, revision: int, checkpoint: str, decision: str, feedback: str) -> None:
         await self._execute(
-            "INSERT INTO reviews VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO reviews (id, run_id, revision, checkpoint, decision, feedback, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 str(uuid4()),
                 str(run_id),
@@ -388,7 +416,7 @@ class Store:
 
     async def set_artifact(self, run_id: UUID, revision: int, key: str, value: dict[str, Any] | list[Any]) -> None:
         await self._execute(
-            "INSERT INTO artifacts VALUES (?, ?, ?, ?, ?) "
+            "INSERT INTO artifacts (run_id, revision, artifact_key, value, created_at) VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT(run_id, revision, artifact_key) DO UPDATE SET value=excluded.value",
             (str(run_id), revision, key, json.dumps(value), utc_now().isoformat()),
         )
@@ -423,7 +451,7 @@ class Store:
         )
         return {row["artifact_key"]: json.loads(row["value"]) for row in rows}
 
-    def _run_from_row(self, row: sqlite3.Row) -> RunView:
+    def _run_from_row(self, row: Row) -> RunView:
         value = dict(row)
         value["library_ids"] = json.loads(value["library_ids"])
         profile = json.loads(value["mcp_profile"]) if value["mcp_profile"] else None
@@ -438,7 +466,7 @@ class Store:
         return RunView.model_validate(value)
 
     @staticmethod
-    def _session_from_row(row: sqlite3.Row) -> SessionView:
+    def _session_from_row(row: Row) -> SessionView:
         value = dict(row)
         value["design_brief"] = (
             json.loads(value["design_brief"]) if value.get("design_brief") else None
@@ -467,24 +495,29 @@ class Store:
         )
         return SessionView.model_validate(value)
 
+    @staticmethod
+    def _sql(sql: str) -> str:
+        # Queries keep SQLite's "?" placeholders; psycopg uses "%s".
+        return sql.replace("%", "%%").replace("?", "%s")
+
     async def _execute(self, sql: str, params: tuple[Any, ...]) -> None:
         def execute() -> None:
-            with self._connect() as db:
-                db.execute(sql, params)
+            with self._pool.connection() as db:
+                db.execute(self._sql(sql), tuple(_param(p) for p in params))
 
         await self._call(execute)
 
-    async def _fetchone(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Row | None:
-        def fetch() -> sqlite3.Row | None:
-            with self._connect() as db:
-                return db.execute(sql, params).fetchone()
+    async def _fetchone(self, sql: str, params: tuple[Any, ...] = ()) -> Row | None:
+        def fetch() -> Row | None:
+            with self._pool.connection() as db:
+                return db.execute(self._sql(sql), tuple(_param(p) for p in params)).fetchone()
 
         return await self._call(fetch)
 
-    async def _fetchall(self, sql: str, params: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
-        def fetch() -> list[sqlite3.Row]:
-            with self._connect() as db:
-                return db.execute(sql, params).fetchall()
+    async def _fetchall(self, sql: str, params: tuple[Any, ...] = ()) -> list[Row]:
+        def fetch() -> list[Row]:
+            with self._pool.connection() as db:
+                return db.execute(self._sql(sql), tuple(_param(p) for p in params)).fetchall()
 
         return await self._call(fetch)
 

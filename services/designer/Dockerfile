@@ -1,6 +1,8 @@
+# Build context: platform root (docker build -f services/designer/Dockerfile .)
+# Requires the openpencil:local image (see services/designer/infra/README.md).
 FROM openpencil:local AS openpencil-runtime
 
-FROM python:3.11-slim
+FROM python:3.12-slim-bookworm
 
 # The component pipeline uses OpenPencil's local CLI to inspect .fig sources.
 # Reuse the exact CLI/dependency tree already built for the OpenPencil image so
@@ -11,21 +13,20 @@ COPY --from=openpencil-runtime /lib/ld-musl-x86_64.so.1 /lib/ld-musl-x86_64.so.1
 COPY --from=openpencil-runtime /usr/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
 COPY --from=openpencil-runtime /usr/lib/libstdc++.so.6.0.33 /usr/lib/libstdc++.so.6.0.33
 RUN ln -s /usr/lib/libstdc++.so.6.0.33 /usr/lib/libstdc++.so.6
-COPY backend/openpencil-cli /usr/local/bin/openpencil
+COPY services/designer/openpencil-cli /usr/local/bin/openpencil
 RUN chmod +x /usr/local/bin/openpencil
 
-WORKDIR /app/designer_agent
+# Service root = /app (docs/, data/, logs/ live beside app/).
+WORKDIR /app
 
-# Install dependencies
-COPY backend/requirements.txt ./backend/
-RUN pip install --no-cache-dir -r ./backend/requirements.txt
+COPY packages/platform_core /opt/platform/packages/platform_core
+RUN pip install --no-cache-dir /opt/platform/packages/platform_core
 
-# Copy backend source
-COPY backend/ ./backend/
+COPY services/designer/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
-WORKDIR /app/designer_agent/backend
+COPY services/designer/ ./
 
 EXPOSE 8282
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8282"]
-

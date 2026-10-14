@@ -1,7 +1,7 @@
 from pathlib import Path
 
 PROMPT_DIR = Path(__file__).resolve().parents[2] / "prompts"
-KNOWLEDGE_DIR = Path(__file__).resolve().parents[3] / "docs" / "knowledge"
+KNOWLEDGE_DIR = Path(__file__).resolve().parents[2] / "docs" / "knowledge"  # services/designer/docs
 
 DESIGN_PROMPTS = {
     "project_analyzer",

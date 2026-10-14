@@ -8,9 +8,10 @@ RUN npm install
 
 COPY . .
 
-# Set API base URL to relative /api/v1 so Nginx handles proxying automatically
-ARG VITE_API_BASE_URL=/api/v1
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+# Behind the platform gateway: UI at /designer/, API at /designer/api/v1
+ARG VITE_API_BASE_URL=/designer/api/v1
+ARG VITE_BASE=/designer/
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL VITE_BASE=$VITE_BASE
 ENV FRONTEND_PORT=3232
 
 RUN npm run build

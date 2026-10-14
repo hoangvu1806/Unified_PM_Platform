@@ -1,4 +1,5 @@
-FROM node:22-alpine
+# Static build served by nginx; the platform gateway proxies /ba/ here.
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -7,6 +8,12 @@ RUN npm ci
 
 COPY . .
 
-EXPOSE 5173
+ARG VITE_BASE=/ba/
+ARG VITE_API_BASE=/ba/api
+ENV VITE_BASE=$VITE_BASE VITE_API_BASE=$VITE_API_BASE
+RUN npm run build
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+FROM nginx:1.27-alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80

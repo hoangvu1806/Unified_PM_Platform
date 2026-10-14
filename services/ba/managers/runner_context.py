@@ -35,7 +35,9 @@ async def init_adk() -> None:
     db_repository = BaPackageRepository()
     db_repository.init_tables()
 
-    _session_service = DatabaseSessionService(db_url=settings.database_url)
+    _session_service = DatabaseSessionService(
+        db_url=settings.database_url, **settings.async_engine_kwargs
+    )
     _runner = Runner(
         app_name=APP_NAME,
         agent=create_ba_agent(),

@@ -22,7 +22,7 @@ export function WorkspaceHeader({
         <header className="topbar">
             <div className="topbar-title">
                 <img
-                    src="/logo.png"
+                    src={`${import.meta.env.BASE_URL}logo.png`}
                     alt="Designer Studio"
                     className="topbar-logo-img"
                 />

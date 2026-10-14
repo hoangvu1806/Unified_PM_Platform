@@ -1,0 +1,86 @@
+# BA module. Run alone with: docker compose -f compose.ba.yml up -d
+services:
+  ba-api:
+    build:
+      context: ../..
+      dockerfile: services/ba/Dockerfile
+    env_file:
+      - path: ../../.env
+        required: true
+    environment:
+      # In-network overrides only; every other value comes from platform/.env
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      DESIGNER_INTERNAL_URL: http://designer-api:8282
+      WIKI_MVP_ROOT: /opt/platform/packages/wiki
+      WIKI_DATA_DIR: /data/wiki
+    volumes:
+      - wiki-data:/data/wiki
+      - platform-storage:/data/storage
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 25s
+    restart: unless-stopped
+
+  ba-web:
+    build:
+      context: ../../apps/ba-web
+      args:
+        VITE_BASE: /ba/
+        VITE_API_BASE: /ba/api
+    restart: unless-stopped
+
+  litellm:
+    profiles: ["litellm"]
+    image: docker.litellm.ai/berriai/litellm@sha256:545bebaecffb357e5848c9f59eb7f292494f59da4b6544ca08bdcf3c7a8f2423
+    command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
+    env_file:
+      - path: ../../.env
+        required: true
+    volumes:
+      - ./deploy/litellm-config.yaml:/app/config.yaml:ro
+
+  ba-test:
+    profiles: ["test"]
+    build:
+      context: ../..
+      dockerfile: services/ba/Dockerfile
+    env_file:
+      - path: ../../.env
+        required: true
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      WIKI_MVP_ROOT: /opt/platform/packages/wiki
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["pytest", "tests/", "-q", "--tb=short", "-p", "no:cacheprovider"]
+
+  wiki-test:
+    profiles: ["test"]
+    build:
+      context: ../..
+      dockerfile: services/ba/Dockerfile
+    env_file:
+      - path: ../../.env
+        required: true
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    working_dir: /opt/platform/packages/wiki
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "pip install -q -e '.[dev]' && pytest -q --tb=short -p no:cacheprovider"]
+
+volumes:
+  wiki-data:

@@ -1,0 +1,59 @@
+# Designer module. Run alone with: docker compose -f compose.designer.yml up -d
+# Needs the openpencil:local image: cd ../BA/open-pencil && docker compose up -d
+services:
+  designer-api:
+    build:
+      context: ../..
+      dockerfile: services/designer/Dockerfile
+    env_file:
+      - path: ../../.env
+        required: true
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      DESIGN_DATA_DIR: /data/design-data
+    volumes:
+      - designer-data:/app/data          # assets until Sprint 2 storage move, logs
+      - platform-storage:/data/storage
+      - designer-cache:/data/design-data/cache
+      - ${DESIGNER_HOST_DESIGN_SYSTEMS:-../../../design-systems}:/data/design-data/design-systems:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # OpenPencil MCP on the host
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8282/api/v1/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+    restart: unless-stopped
+
+  designer-web:
+    build:
+      context: ../../apps/designer-web
+      args:
+        VITE_BASE: /designer/
+        VITE_API_BASE_URL: /designer/api/v1
+    restart: unless-stopped
+
+  designer-test:
+    profiles: ["test"]
+    build:
+      context: ../..
+      dockerfile: services/designer/Dockerfile
+    env_file:
+      - path: ../../.env
+        required: true
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "pip install -q -r requirements-dev.txt && pytest -q --tb=short -p no:cacheprovider"]
+
+volumes:
+  designer-data:
+  designer-cache:

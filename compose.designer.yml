@@ -1,0 +1,9 @@
+# Designer module standalone: postgres + gateway + Designer (api, web).
+name: platform
+include:
+  - path: infra/compose.yml
+    env_file: .env
+  - path: infra/gateway/compose.yml
+    env_file: .env
+  - path: services/designer/compose.yml
+    env_file: .env

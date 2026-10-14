@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp import ClientSession
 
-from ..core.config import PROJECT_DIR
+from ..core.config import designer_asset_dir
 from ..core.errors import AppError
 from ..models import UiNode, UiSpecification
 
@@ -116,7 +116,7 @@ async def apply_uploaded_component_media(
         for item in exact_assets
         if isinstance(item, dict) and str(item.get("id") or "").strip()
     }
-    asset_root = PROJECT_DIR / "data" / "assets"
+    asset_root = designer_asset_dir()
     target = {"document_id": document_id, "page_id": page_id}
     component_asset_ids = asset_node_ids or {}
     for binding in getattr(bindings, "bindings", []):
@@ -195,7 +195,7 @@ async def apply_uploaded_asset_markers(
     exact_assets: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Apply original bytes to rendered nodes named ``asset::<id>``."""
-    asset_root = PROJECT_DIR / "data" / "assets"
+    asset_root = designer_asset_dir()
     applied: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
     target = {"document_id": document_id, "page_id": page_id}

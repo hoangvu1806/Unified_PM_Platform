@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-PROJECT_DIR = Path(__file__).resolve().parents[3]
+PROJECT_DIR = Path(__file__).resolve().parents[2]  # services/designer
 KNOWLEDGE_DIR = PROJECT_DIR / "docs" / "knowledge"
 
 CATALOGS = {

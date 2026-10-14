@@ -17,6 +17,9 @@ def _candidate_mvp_roots() -> list[Path]:
     """Host layouts: WikiFactoryAI/mvp, ~/apps/wiki-mvp beside ba-factory, Docker /opt."""
     out: list[Path] = []
     for raw in (
+        # Platform monorepo: services/ba → ../../packages/wiki
+        _BA_REPO.parents[1] / "packages" / "wiki" if len(_BA_REPO.parents) > 1 else None,
+        Path("/opt/platform/packages/wiki"),
         _BA_REPO.parents[1] / "mvp" if len(_BA_REPO.parents) > 1 else None,
         _BA_REPO.parent / "wiki-mvp",
         _BA_REPO.parent / "mvp",
