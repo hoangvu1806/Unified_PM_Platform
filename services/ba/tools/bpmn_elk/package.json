@@ -1,0 +1,16 @@
+{
+  "name": "ba-bpmn-elk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node helper: ELK-BPMN JSON → BPMN 2.0 XML+DI via bpmn-elk-layout",
+  "type": "module",
+  "scripts": {
+    "layout": "node layout.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "bpmn-elk-layout": "1.4.0"
+  }
+}

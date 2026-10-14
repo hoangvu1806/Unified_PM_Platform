@@ -1,0 +1,122 @@
+"""BA Agent — FastAPI Backend Service (Entry Point).
+
+Assembles the application by mounting routers from ``managers/service/``
+and initializing the ADK runtime via ``managers/runner_context``.
+
+Endpoints are defined in:
+- ``managers/service/api.py``      — V1 Chat (sync + SSE)
+- ``managers/service/features.py`` — Feature CRUD + Chat History
+"""
+
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+
+import httpx
+from dotenv import load_dotenv
+from sqlalchemy import text
+
+load_dotenv()
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from config.base_config import settings
+from config.llm_resolve import resolve_llm_endpoint
+from managers.database.connection import SessionLocal
+from managers.runner_context import get_runner, init_adk
+from managers.service import chat_router, features_router, va_router, wiki_router
+
+logger = logging.getLogger(__name__)
+
+
+# ── Application Lifespan ─────────────────────────────────────
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan — init ADK on startup."""
+    await init_adk()
+    yield
+    logger.info("Shutting down BA Agent server")
+
+
+# ── FastAPI App ───────────────────────────────────────────────
+
+app = FastAPI(
+    title="BA Agent API",
+    version="0.1.0",
+    docs_url="/docs" if settings.swagger_enabled else None,
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(chat_router)
+app.include_router(features_router)
+app.include_router(wiki_router)
+app.include_router(va_router)
+
+
+# ── Health Check ──────────────────────────────────────────────
+
+
+async def _llm_endpoint_ready() -> bool:
+    """LiteLLM /health/readiness, or company-gate /v1/models when no proxy."""
+    endpoint = resolve_llm_endpoint()
+    base = endpoint.api_base_url.rstrip("/")
+    proxy_root = base.removesuffix("/v1")
+    headers = {}
+    if endpoint.api_key:
+        headers["Authorization"] = f"Bearer {endpoint.api_key}"
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            response = await client.get(f"{proxy_root}/health/readiness", headers=headers)
+            if response.status_code == 200:
+                return True
+            models = await client.get(f"{base}/models", headers=headers)
+            return models.status_code == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
+@app.get("/api/health")
+async def health_check():
+    """Demo is ready when ADK and Postgres are up. LLM is diagnostic only."""
+    try:
+        runner = get_runner()
+        adk_ready = runner is not None
+    except Exception:  # noqa: BLE001
+        adk_ready = False
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+        database_ready = True
+    except Exception:  # noqa: BLE001
+        database_ready = False
+
+    llm_proxy_ready = await _llm_endpoint_ready()
+    endpoint = resolve_llm_endpoint()
+
+    # Chat still needs an LLM, but a down company-gate / missing LiteLLM image
+    # must not take the manager, wiki, or feature CRUD down with it.
+    ready = adk_ready and database_ready
+    payload = {
+        "status": "ok" if ready else "not_ready",
+        "app": "ba-agent",
+        "adk_ready": adk_ready,
+        "database_ready": database_ready,
+        "llm_proxy_ready": llm_proxy_ready,
+        "llm_provider": endpoint.provider,
+        "llm_endpoint": endpoint.api_base_url,
+    }
+    return JSONResponse(payload, status_code=200 if ready else 503)

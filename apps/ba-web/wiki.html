@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wiki Knowledge — Import</title>
+  <meta name="description" content="Wiki documents: upload to draft, human approve, then BA/VA can fetch. Same store as Wiki MVP.">
+  <link rel="stylesheet" href="/src/design-tokens.css">
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    main.wiki-body {
+      flex: 1;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 28px 24px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .wiki-hero {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .wiki-hero-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .wiki-clear-panel {
+      width: 100%;
+      background: var(--bg-surface);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: var(--radius-xl);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .wiki-clear-panel[hidden] {
+      display: none;
+    }
+    .wiki-clear-panel p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .wiki-title {
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .wiki-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      max-width: 52rem;
+      line-height: 1.55;
+    }
+    .flow-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 12px;
+    }
+    .flow-step {
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+    }
+    .flow-step .mono {
+      font-size: 10px;
+      color: var(--accent-cyan);
+      letter-spacing: 0.06em;
+    }
+    .flow-step strong {
+      display: block;
+      margin: 4px 0 2px;
+      font-size: 13px;
+    }
+    .flow-step span {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .wiki-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .wiki-card h2 {
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent-cyan);
+    }
+    .form-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 12px;
+      align-items: flex-end;
+    }
+    .wiki-upload {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .wiki-upload-grid {
+      display: grid;
+      grid-template-columns: minmax(15.4rem, 1.485fr) minmax(12rem, 1fr) minmax(12rem, 1fr);
+      gap: 14px 16px;
+      align-items: start;
+    }
+    .wiki-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .wiki-field-file {
+      grid-column: 1;
+    }
+    .wiki-field-project {
+      grid-column: 1;
+    }
+    .wiki-field-actor {
+      grid-column: 2;
+    }
+    .wiki-field-action {
+      grid-column: 3;
+      align-self: start;
+    }
+    .wiki-field-action label {
+      visibility: hidden;
+    }
+    .wiki-field-action .btn {
+      width: 100%;
+      min-height: 36px;
+    }
+    .wiki-field label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .wiki-field input,
+    .wiki-field select {
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 36px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      border-radius: var(--radius-md);
+      padding: 7px 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+    .wiki-field input[type="file"] {
+      padding: 6px 8px;
+    }
+    .wiki-field input.is-locked {
+      opacity: 0.85;
+      border-color: rgba(0, 242, 254, 0.35);
+      cursor: default;
+    }
+    .wiki-field-hint {
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.4;
+      margin-top: 2px;
+    }
+    @media (max-width: 860px) {
+      .wiki-upload-grid {
+        grid-template-columns: 1fr;
+      }
+      .wiki-field-file,
+      .wiki-field-project,
+      .wiki-field-actor,
+      .wiki-field-action {
+        grid-column: auto;
+      }
+      .wiki-field-action label {
+        display: none;
+      }
+    }
+    .wiki-scope-banner {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(0, 242, 254, 0.35);
+      background: rgba(0, 242, 254, 0.08);
+      color: var(--text-main);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .wiki-split {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .wiki-split-block {
+      padding: 12px 14px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      background: var(--bg-base);
+    }
+    .wiki-split-title {
+      margin: 0 0 4px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .wiki-split-sub {
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .wiki-notice {
+      font-size: 13px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-base);
+      color: var(--text-muted);
+    }
+    .wiki-notice.ok {
+      color: var(--status-approved);
+      border-color: rgba(16, 185, 129, 0.35);
+    }
+    .wiki-notice.err {
+      color: var(--status-error);
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    table.wiki-table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    table.wiki-table th,
+    table.wiki-table td {
+      text-align: left;
+      padding: 8px 6px;
+      border-bottom: 1px solid var(--border-subtle);
+      vertical-align: top;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    table.wiki-table th {
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    /* Default column widths — shared by drafts + approved (company / project) tables */
+    table.wiki-table col.col-page-id { width: 9.5rem; }
+    table.wiki-table col.col-ns { width: 5.5rem; }
+    table.wiki-table col.col-bucket { width: 6.5rem; }
+    table.wiki-table col.col-title { width: auto; }
+    table.wiki-table col.col-meta { width: 5.5rem; }
+    table.wiki-table col.col-actions { width: 11.75rem; }
+    table.wiki-table td.wiki-actions-cell {
+      overflow: visible;
+      vertical-align: middle;
+      padding-right: 4px;
+    }
+    table.wiki-table td.wiki-title-cell {
+      white-space: normal;
+      overflow: visible;
+      word-break: break-word;
+    }
+    .empty-row {
+      color: var(--text-dim);
+      font-size: 12.5px;
+      padding: 12px 4px;
+    }
+    .wiki-row-actions {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      gap: 8px;
+    }
+    .wiki-row-actions .btn {
+      min-height: 28px;
+      width: 5.25rem;
+      padding: 5px 10px;
+      font-size: 11.5px;
+      justify-content: center;
+      box-sizing: border-box;
+      flex: 0 0 5.25rem;
+    }
+    /* Demote: quiet secondary — Delete: destructive but not loud */
+    .wiki-row-actions .wiki-btn-demote {
+      background: transparent;
+      border-color: var(--border-subtle);
+      color: var(--text-muted);
+    }
+    .wiki-row-actions .wiki-btn-demote:hover {
+      background: var(--bg-surface-hover);
+      border-color: var(--border-focus);
+      color: var(--text-main);
+    }
+    .wiki-row-actions .wiki-btn-delete {
+      background: transparent;
+      border-color: rgba(239, 68, 68, 0.35);
+      color: var(--status-error);
+    }
+    .wiki-row-actions .wiki-btn-delete:hover {
+      background: var(--status-error-bg);
+      border-color: var(--status-error);
+    }
+    .wiki-va-finding {
+      margin-top: 4px;
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--status-error);
+      white-space: normal;
+      word-break: break-word;
+    }
+    @media (max-width: 800px) {
+      .flow-strip { grid-template-columns: 1fr 1fr; }
+      table.wiki-table col.col-page-id { width: 7rem; }
+      table.wiki-table col.col-ns { width: 4.5rem; }
+      table.wiki-table col.col-bucket { width: 5rem; }
+      table.wiki-table col.col-meta { width: 4.75rem; }
+      table.wiki-table col.col-actions { width: 5.75rem; }
+      .wiki-row-actions {
+        flex-direction: column;
+        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .wiki-row-actions .btn {
+        width: 100%;
+        flex: 1 1 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="top-bar">
+    <div class="brand-group">
+      <a href="index.html" class="btn" style="padding: 5px 10px; font-size: 11.5px;">← Document Manager</a>
+      <a href="#" class="btn" id="linkOpenBa" style="padding: 5px 10px; font-size: 11.5px;">Open BA Chat</a>
+      <a href="#" class="btn btn-violet" id="linkOpenVa" style="padding: 5px 10px; font-size: 11.5px;">VA</a>
+      <div class="brand-title">
+        <span class="tag tag-cyan">UNIFY | WIKI</span>
+        <span>Wiki Knowledge</span>
+      </div>
+      <span class="tag tag-violet" id="sessionTag">documents · not a KG</span>
+    </div>
+  </header>
+
+  <main class="wiki-body">
+    <div class="wiki-hero">
+      <div>
+        <h1 class="wiki-title">Import wiki documents</h1>
+        <p class="wiki-sub">
+          Wiki is <strong>approved pages</strong> (documents), not a knowledge graph.
+          Opened from BA with <code class="mono">?project_id=</code> — lists stay scoped to
+          <strong>company (shared)</strong> + <strong>that project only</strong>.
+          Agents never approve.
+        </p>
+        <p class="wiki-scope-banner" id="wikiScopeBanner" hidden></p>
+      </div>
+      <div class="wiki-hero-actions">
+        <button class="btn btn-danger" type="button" id="btnWikiClear">Clear database</button>
+      </div>
+    </div>
+
+    <div class="wiki-clear-panel" id="wikiClearPanel" hidden>
+      <p>This deletes all wiki pages, drafts, sources, blobs. Type <code class="mono">CLEAR</code> to confirm. Human-only — not exposed to BA/VA.</p>
+      <div class="form-grid">
+        <div class="wiki-field">
+          <label for="wikiClearConfirm">Confirm</label>
+          <input id="wikiClearConfirm" autocomplete="off" placeholder="CLEAR" spellcheck="false">
+        </div>
+        <button class="btn btn-danger" type="button" id="btnWikiClearConfirm">Xóa dữ liệu wiki</button>
+        <button class="btn" type="button" id="btnWikiClearCancel">Cancel</button>
+      </div>
+    </div>
+
+    <div class="flow-strip" aria-label="Import flow">
+      <div class="flow-step">
+        <div class="mono">1 · UPLOAD</div>
+        <strong>File → draft</strong>
+        <span>PDF / source ingest writes draft pages only.</span>
+      </div>
+      <div class="flow-step">
+        <div class="mono">2 · DRAFT</div>
+        <strong>Human review</strong>
+        <span>Drafts stay invisible to BA / VA.</span>
+      </div>
+      <div class="flow-step">
+        <div class="mono">3 · APPROVE</div>
+        <strong>Human only</strong>
+        <span>No agent can flip status to approved.</span>
+      </div>
+      <div class="flow-step">
+        <div class="mono">4 · FETCH</div>
+        <strong>BA / VA read</strong>
+        <span>Validate and chat pull current approved pages.</span>
+      </div>
+    </div>
+
+    <section class="wiki-card">
+      <h2>Upload / import</h2>
+      <form id="wikiUploadForm" class="wiki-upload">
+        <div class="wiki-upload-grid">
+          <div class="wiki-field wiki-field-file">
+            <label for="wikiFile">File</label>
+            <input id="wikiFile" name="file" type="file" accept="application/pdf,.pdf,.txt,.md" required>
+          </div>
+          <div class="wiki-field">
+            <label for="wikiNamespace">Namespace</label>
+            <select id="wikiNamespace" name="namespace">
+              <option value="project" selected>project (this BA project only)</option>
+              <option value="company">company (shared org-wide)</option>
+            </select>
+          </div>
+          <div class="wiki-field">
+            <label for="wikiSort">Sort</label>
+            <select id="wikiSort" name="sort_mode">
+              <option value="auto" selected>auto (LLM, heuristic fallback)</option>
+              <option value="heuristic">heuristic</option>
+              <option value="llm">llm</option>
+              <option value="both">both (H- + L-)</option>
+            </select>
+          </div>
+          <div class="wiki-field wiki-field-project">
+            <label for="wikiProject">Project</label>
+            <input id="wikiProject" name="project_id" value="" placeholder="PRJ-… hashed id from BA" autocomplete="off" spellcheck="false">
+            <span class="wiki-field-hint" id="wikiProjectHint"></span>
+          </div>
+          <div class="wiki-field wiki-field-actor">
+            <label for="wikiActor">Actor (human)</label>
+            <input id="wikiActor" name="actor" value="ba.lead">
+          </div>
+          <div class="wiki-field wiki-field-action">
+            <label for="btnWikiUpload">Action</label>
+            <button class="btn btn-cyan" type="submit" id="btnWikiUpload">Upload → draft</button>
+          </div>
+        </div>
+      </form>
+      <p class="wiki-notice" id="wikiNotice">Import = upload → draft → approve → BA/VA can fetch. Same data dir as the Wiki MVP.</p>
+    </section>
+
+    <section class="wiki-card">
+      <h2>Drafts / proposed — human approve</h2>
+      <p class="wiki-sub" style="margin:0 0 12px;">Split: company drafts (shared) vs this project only.</p>
+      <div id="wikiDrafts"></div>
+    </section>
+
+    <section class="wiki-card">
+      <h2>Approved — company shared + this project</h2>
+      <p class="wiki-sub" id="wikiApprovedHint" style="margin:0 0 12px;">
+        Prefer <strong>Demote → draft</strong> to clear a V-WIKI violator (keeps the body). Hard Delete is permanent.
+        After either action, re-Validate in BA/VA — the fail stamp is frozen until then.
+      </p>
+      <div id="wikiApproved"></div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/wiki.js"></script>
+</body>
+</html>

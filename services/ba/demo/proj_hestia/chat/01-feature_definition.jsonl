@@ -1,0 +1,2 @@
+{"active_section": "feature_definition", "user_message": "Goal: Hestia tro ly nau an — nhan dien nguyen lieu tu anh, goi y mon, canh bao an toan thuc pham. Actors: ACT-END-USER, ACT-AIML-ENGINE, ACT-PO. Scope-in: image detect, recipe suggest, safety warn, manual input. Scope-out: tinh calo, thuc don tuan."}
+{"active_section": "feature_definition", "user_message": "Xac nhan FD du: goal/actors/scope-in/scope-out nhu tren. Dong OQ critical neu con. Chuyen sang Business Rules khi du."}

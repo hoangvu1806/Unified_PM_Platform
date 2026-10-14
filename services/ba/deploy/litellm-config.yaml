@@ -1,0 +1,30 @@
+model_list:
+  - model_name: ba-company
+    litellm_params:
+      model: os.environ/COMPANY_LLM_MODEL
+      api_base: os.environ/LLM_GATE_API_BASE_URL
+      api_key: os.environ/LLM_GATE_API_KEY
+      timeout: 45
+
+  - model_name: ba-fallback
+    litellm_params:
+      model: os.environ/FALLBACK_LLM_MODEL
+      api_base: os.environ/FALLBACK_LLM_API_BASE_URL
+      api_key: os.environ/OPENAI_API_KEY
+      timeout: 45
+
+router_settings:
+  routing_strategy: simple-shuffle
+  fallbacks:
+    - ba-company: [ba-fallback]
+  num_retries: 0
+  allowed_fails: 1
+  cooldown_time: 60
+  enable_pre_call_checks: true
+
+litellm_settings:
+  drop_params: true
+  json_logs: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

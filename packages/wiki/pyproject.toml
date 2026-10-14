@@ -1,0 +1,30 @@
+[project]
+name = "wiki-knowledge-mvp"
+version = "0.1.0"
+description = "Learning MVP for UAPDF-WKM-001 Wiki Knowledge Module"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "python-multipart>=0.0.12",
+  "jinja2>=3.1",
+  "pypdf>=5.0",
+  "pydantic>=2.0",
+  "mcp>=1.9",
+  "httpx>=0.27",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["wiki*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

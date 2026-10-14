@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BA ↔ Wiki simulation</title>
+  <style>
+    :root {
+      --navy: #1F3A5F;
+      --ink: #1c1c1c;
+      --muted: #5c5c5c;
+      --line: #D4CFC5;
+      --fill: #F7F5F1;
+      --paper: #FFFEFB;
+      --accent: #8A5A2B;
+      --ok: #1F5C45;
+      --ok-soft: #E4F0EA;
+      --warn-soft: #F3E8DA;
+      --err: #8B2E2E;
+      --err-soft: #F6E4E4;
+      --active: #2A4A73;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Times New Roman", Times, Georgia, serif;
+      color: var(--ink);
+      background: #F3F1EC;
+      line-height: 1.45;
+    }
+    header.top {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 1rem 1.25rem;
+      border-bottom: 2px solid var(--navy);
+      background: var(--paper);
+    }
+    header h1 { margin: 0; font-size: 1.35rem; color: var(--navy); }
+    .sub { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.92rem; }
+    a.back { color: var(--navy); }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(340px, 1.15fr) minmax(280px, 1fr) minmax(240px, 0.85fr);
+      gap: 0.85rem;
+      padding: 0.9rem 1.1rem 2rem;
+      align-items: start;
+    }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.85rem 0.95rem 1rem;
+    }
+    .panel h2 { margin: 0 0 0.65rem; font-size: 1rem; color: var(--navy); }
+    svg.flow { width: 100%; height: auto; display: block; background: #EEF2F7; border-radius: 8px; }
+    .nrect { stroke-width: 1.8; }
+    .n-person { fill: #1F3A5F; stroke: #0F2138; }
+    .n-agent { fill: #3D4F8C; stroke: #24325C; }
+    .n-hub { fill: #8A5A2B; stroke: #5C3B1A; }
+    .n-draft { fill: #F6E3C8; stroke: #8A5A2B; }
+    .n-ok { fill: #CDE5D8; stroke: #1F5C45; }
+    .n-gate { fill: #FFFFFF; stroke: #1F3A5F; }
+    .nrect.is-active { stroke: #C9A227; stroke-width: 4; }
+    .nrect.is-done { stroke-width: 3.2; filter: brightness(1.08); }
+    .n-person.is-done, .n-agent.is-done, .n-hub.is-done { stroke: #F4E6C3; }
+    .n-draft.is-done, .n-ok.is-done, .n-gate.is-done { stroke: #1F5C45; }
+    .nlabel { font-size: 13px; font-family: Menlo, Consolas, monospace; font-weight: 700; }
+    .nlabel.on-dark { fill: #FFFFFF; }
+    .nlabel.on-light { fill: #1F3A5F; }
+    .elabel { font-size: 10px; font-family: Menlo, Consolas, monospace; fill: #3A4A62; }
+    .edge { stroke: #5A6A80; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .edge.is-active { stroke: #C9A227; stroke-width: 3.2; marker-end: url(#arrow-hot); }
+    .edge.is-done { stroke: #1F5C45; marker-end: url(#arrow-ok); }
+    .legend { display: flex; flex-wrap: wrap; gap: 0.45rem 0.75rem; margin: 0.55rem 0 0.35rem; font-size: 0.78rem; color: var(--muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+    .sw { width: 0.7rem; height: 0.7rem; border-radius: 2px; border: 1px solid #1F3A5F; }
+    .sw.person { background: #1F3A5F; }
+    .sw.agent { background: #3D4F8C; }
+    .sw.hub { background: #8A5A2B; }
+    .sw.draft { background: #F6E3C8; }
+    .sw.ok { background: #CDE5D8; }
+    .controls { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
+    button {
+      font-family: inherit;
+      background: var(--navy);
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 0.4rem 0.75rem;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.ghost { background: var(--fill); color: var(--navy); border: 1px solid var(--line); }
+    button.danger { background: var(--err); }
+    .step-idx { font-family: Menlo, Consolas, monospace; font-size: 0.75rem; color: var(--muted); }
+    .explain { margin: 0.4rem 0 0.7rem; }
+    pre.payload {
+      margin: 0;
+      padding: 0.6rem;
+      background: var(--fill);
+      border-radius: 8px;
+      font-size: 0.72rem;
+      overflow: auto;
+      max-height: 280px;
+      white-space: pre-wrap;
+    }
+    .log {
+      font-family: Menlo, Consolas, monospace;
+      font-size: 0.7rem;
+      max-height: 70vh;
+      overflow: auto;
+    }
+    .log .item { border-bottom: 1px solid var(--line); padding: 0.45rem 0; }
+    .log .ok { color: var(--ok); }
+    .log .err { color: var(--err); }
+    .log .meta { color: var(--muted); }
+    .badge {
+      display: inline-block;
+      font-family: Menlo, Consolas, monospace;
+      font-size: 0.7rem;
+      padding: 0.12rem 0.4rem;
+      border-radius: 999px;
+      background: var(--warn-soft);
+      color: var(--accent);
+    }
+    .hint { color: var(--muted); font-size: 0.88rem; margin: 0; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>Mô phỏng BA Agent ↔ Wiki Knowledge</h1>
+      <p class="sub">Ticket scripted <code>F-KHO-SPEND</code> · Wiki HTTP thật · LLM = draft only</p>
+    </div>
+    <p class="hint"><a class="back" href="/">← Wiki home</a></p>
+  </header>
+  <div class="layout">
+    <section class="panel">
+      <h2>Luồng</h2>
+      <div class="legend">
+        <span><i class="sw person"></i> người</span>
+        <span><i class="sw agent"></i> agent</span>
+        <span><i class="sw hub"></i> API</span>
+        <span><i class="sw draft"></i> draft</span>
+        <span><i class="sw ok"></i> approved</span>
+      </div>
+      <svg class="flow" viewBox="0 0 400 560" aria-label="BA Wiki flow graph">
+        <defs>
+          <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+            <path d="M0,0 L8,3.5 L0,7 Z" fill="#5A6A80"></path>
+          </marker>
+          <marker id="arrow-hot" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+            <path d="M0,0 L8,3.5 L0,7 Z" fill="#C9A227"></path>
+          </marker>
+          <marker id="arrow-ok" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+            <path d="M0,0 L8,3.5 L0,7 Z" fill="#1F5C45"></path>
+          </marker>
+        </defs>
+        <path id="e-user-ba" class="edge" d="M200,62 L200,86" />
+        <path id="e-propose" class="edge" d="M145,140 L145,200" />
+        <path id="e-ground" class="edge" d="M255,200 L255,140" />
+        <path id="e-mcp-draft" class="edge" d="M145,252 L104,300" />
+        <path id="e-draft-gate" class="edge" d="M104,352 L104,390" />
+        <path id="e-gate-can" class="edge" d="M184,414 L216,326" />
+        <path id="e-can-val" class="edge" d="M296,352 L296,390" />
+        <text class="elabel" x="112" y="176">propose</text>
+        <text class="elabel" x="262" y="176">ground</text>
+        <text class="elabel" x="48" y="278">draft</text>
+        <text class="elabel" x="210" y="372">approve</text>
+        <text class="elabel" x="304" y="376">read</text>
+
+        <g data-node="BA_PO">
+          <rect class="nrect n-person" x="110" y="16" width="180" height="46" rx="8"></rect>
+          <text class="nlabel on-dark" x="200" y="44" text-anchor="middle">BA / PO</text>
+        </g>
+        <g data-node="BA_Agent">
+          <rect class="nrect n-agent" x="80" y="86" width="240" height="54" rx="8"></rect>
+          <text class="nlabel on-dark" x="200" y="118" text-anchor="middle">BA Agent (FD)</text>
+        </g>
+        <g data-node="Wiki_MCP">
+          <rect class="nrect n-hub" x="80" y="200" width="240" height="52" rx="8"></rect>
+          <text class="nlabel on-dark" x="200" y="232" text-anchor="middle">Wiki MCP / HTTP</text>
+        </g>
+        <g data-node="Draft">
+          <rect class="nrect n-draft" x="24" y="300" width="160" height="52" rx="8"></rect>
+          <text class="nlabel on-light" x="104" y="332" text-anchor="middle">Draft / Proposed</text>
+        </g>
+        <g data-node="Canonical">
+          <rect class="nrect n-ok" x="216" y="300" width="160" height="52" rx="8"></rect>
+          <text class="nlabel on-light" x="296" y="332" text-anchor="middle">Approved SSOT</text>
+        </g>
+        <g data-node="HumanGate">
+          <rect class="nrect n-gate" x="24" y="390" width="160" height="52" rx="8"></rect>
+          <text class="nlabel on-light" x="104" y="422" text-anchor="middle">Human Approve</text>
+        </g>
+        <g data-node="Validate">
+          <rect class="nrect n-agent" x="216" y="390" width="160" height="52" rx="8"></rect>
+          <text class="nlabel on-dark" x="296" y="422" text-anchor="middle">Validate Agent</text>
+        </g>
+      </svg>
+      <p class="hint" id="graph-hint">Bấm Next để chạy từng bước. Gọi API wiki thật. Viền vàng = bước đang chạy.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Bước</h2>
+      <div class="controls">
+        <button type="button" id="btn-back" class="ghost">Back</button>
+        <button type="button" id="btn-next">Next</button>
+        <button type="button" id="btn-reset" class="danger">Reset sim pages</button>
+      </div>
+      <p class="step-idx" id="step-idx">Bước 0 / 7 — chưa chạy</p>
+      <h3 id="step-title" style="margin:0.35rem 0 0;color:var(--navy)">Sẵn sàng</h3>
+      <p class="explain" id="step-explain">
+        Mô phỏng P1–P2: Agent đọc knowledge đã duyệt, trích Feature Definition (script),
+        đề xuất trang wiki, bị từ chối approve, rồi Lead duyệt.
+      </p>
+      <pre class="payload" id="payload">{}</pre>
+    </section>
+
+    <section class="panel">
+      <h2>HTTP log <span class="badge" id="approved-count">approved: —</span></h2>
+      <div class="log" id="log"></div>
+    </section>
+  </div>
+
+  <script>
+    const PROJECT = "PRJ-MES-01";
+    const NS = "project";
+    const PROPOSE = [
+      {
+        page_id: "SIM-ORG-PO-SPEND",
+        namespace: NS,
+        project_id: PROJECT,
+        bucket_id: "org",
+        title: "Product Owner (spend)",
+        abbrev: "PO",
+        body: "---\nba_section: feature_definition\nba_id: ACT-PO\nfeature_id: F-KHO-SPEND\nsession_id: sim\n---\nPO: phe duyet don mua vat tu khi vuot 50 trieu VND.",
+      },
+      {
+        page_id: "SIM-CONSTRAINT-F-KHO",
+        namespace: NS,
+        project_id: PROJECT,
+        bucket_id: "constraint",
+        title: "Khong auto-approve don kho",
+        body: "---\nba_section: feature_definition\nba_id: SCOPE-OUT-AUTO\nfeature_id: F-KHO-SPEND\n---\nScope out: khong de agent tu approve don. Human gate bat buoc.",
+      },
+      {
+        page_id: "SIM-PROGRESS-F-KHO",
+        namespace: NS,
+        project_id: PROJECT,
+        bucket_id: "progress",
+        title: "F-KHO-SPEND FD completable",
+        body: "---\nba_section: progress\nfeature_id: F-KHO-SPEND\n---\nsections_status.feature_definition = completed. is_completable = true.",
+      },
+    ];
+    const FD = {
+      feature_id: "F-KHO-SPEND",
+      goal: "Kiem soat chi tieu vat tu kho: moi don co mot nguoi phe duyet, vuot nguong thi PO.",
+      actors: [
+        "ACT-WH-CLERK: nhan vien kho de xuat don",
+        "ACT-PO: Product Owner phe duyet nguong cao",
+      ],
+      scope_in: ["Tao don mua vat tu", "Gan 1 approver hien tai"],
+      scope_out: ["Auto-approve", "Thay SKU am tham"],
+    };
+
+    const STEPS = [
+      {
+        title: "1. Bootstrap SSOT",
+        explain: "Neu wiki chua co trang approved, Lead seed 4 trang (glossary PO, org wh.clerk, constraint SKU, BR-10) roi Approve. Neu da co SSOT (vi du sau make seed-approve), chi liet ke — khong ghi de.",
+        nodes: ["Canonical"],
+        edges: [],
+        run: stepBootstrap,
+      },
+      {
+        title: "2. Grounding — Wiki → BA",
+        explain: "BA Agent search + fetch chi trang approved (header agent). Day la context grounding truoc khi hoi Feature Definition. Agent khong nhin thay draft.",
+        nodes: ["Canonical", "Wiki_MCP", "BA_Agent"],
+        edges: ["e-ground"],
+        run: stepGround,
+      },
+      {
+        title: "3. BA Feature Definition (scripted)",
+        explain: "Khong goi repo UAIP. Gia lap FD subgraph da xong: goal, actors, scope_in/out. Flag FD-F1…F3 PASS → duoc phep propose.",
+        nodes: ["BA_PO", "BA_Agent"],
+        edges: ["e-user-ba"],
+        run: stepFd,
+      },
+      {
+        title: "4. Propose — BA → Draft",
+        explain: "Agent POST /v1/wiki/pages (org, constraint, progress) voi page_id co dinh SIM-*. Tra ve draft/proposed. Khong fetch draft bang agent.",
+        nodes: ["BA_Agent", "Wiki_MCP", "Draft"],
+        edges: ["e-propose", "e-mcp-draft"],
+        run: stepPropose,
+      },
+      {
+        title: "5. Agent approve — bi tu choi",
+        explain: "Cung mot page, POST approve voi X-Actor-Type: agent. API tra 403. LLM = DRAFT only.",
+        nodes: ["BA_Agent", "HumanGate"],
+        edges: ["e-draft-gate"],
+        run: stepDeny,
+      },
+      {
+        title: "6. Human gate — Lead Approve",
+        explain: "Lead (human) approve 3 trang SIM vua propose. Trang vao Canonical SSOT.",
+        nodes: ["Draft", "HumanGate", "Canonical"],
+        edges: ["e-draft-gate", "e-gate-can"],
+        run: stepApproveHuman,
+      },
+      {
+        title: "7. Validate read — SSOT → Validate",
+        explain: "Validate Agent (read-only) search lai. Trang moi (constraint F-KHO, org PO) nam trong hit — conflict check dung knowledge da duyet, khong phai draft.",
+        nodes: ["Canonical", "Validate", "BA_Agent"],
+        edges: ["e-can-val", "e-ground"],
+        run: stepValidate,
+      },
+    ];
+
+    let cursor = -1;
+    let lastProposed = [];
+
+    function headers(kind) {
+      if (kind === "agent") {
+        return {
+          "X-Actor": "ba-agent",
+          "X-Actor-Type": "agent",
+          "X-Agent-Name": "ba-agent",
+          "X-Project-Id": PROJECT,
+          "Content-Type": "application/json",
+        };
+      }
+      return {
+        "X-Actor": "ba.lead",
+        "X-Actor-Type": "human",
+        "X-Project-Id": PROJECT,
+        "Content-Type": "application/json",
+      };
+    }
+
+    function appendLog(kind, method, url, status, body) {
+      const el = document.createElement("div");
+      el.className = "item";
+      const cls = status >= 400 ? "err" : "ok";
+      const snippet = typeof body === "string" ? body.slice(0, 280) : JSON.stringify(body, null, 0).slice(0, 280);
+      el.innerHTML = `<div class="${cls}">${status} ${method} ${url}</div>
+        <div class="meta">${kind}</div>
+        <div>${snippet.replace(/</g, "&lt;")}</div>`;
+      document.getElementById("log").prepend(el);
+    }
+
+    async function call(method, url, kind, body) {
+      const opt = { method, headers: headers(kind) };
+      if (body !== undefined) opt.body = JSON.stringify(body);
+      const res = await fetch(url, opt);
+      let json;
+      try { json = await res.json(); } catch { json = { raw: await res.text() }; }
+      appendLog(kind, method, url, res.status, json.detail || json);
+      return { status: res.status, json };
+    }
+
+    function setGraph(nodes, edges, done) {
+      document.querySelectorAll(".nrect").forEach((r) => r.classList.remove("is-active", "is-done"));
+      document.querySelectorAll(".edge").forEach((e) => e.classList.remove("is-active", "is-done"));
+      (done ? [] : nodes).forEach((id) => {
+        const g = document.querySelector(`[data-node="${id}"] .nrect`);
+        if (g) g.classList.add("is-active");
+      });
+      nodes.forEach((id) => {
+        const g = document.querySelector(`[data-node="${id}"] .nrect`);
+        if (g && done) g.classList.add("is-done");
+      });
+      edges.forEach((id) => {
+        const e = document.getElementById(id);
+        if (e) e.classList.add(done ? "is-done" : "is-active");
+      });
+    }
+
+    function showStepMeta(i, extra) {
+      const s = STEPS[i];
+      document.getElementById("step-idx").textContent = `Bước ${i + 1} / ${STEPS.length}`;
+      document.getElementById("step-title").textContent = s.title;
+      document.getElementById("step-explain").textContent = s.explain;
+      document.getElementById("payload").textContent = JSON.stringify(extra, null, 2);
+      setGraph(s.nodes, s.edges, false);
+    }
+
+    async function refreshState() {
+      const res = await fetch("/sim/state");
+      const st = await res.json();
+      document.getElementById("approved-count").textContent = "approved: " + st.approved_count;
+      return st;
+    }
+
+    async function stepBootstrap() {
+      const r = await call("POST", "/sim/bootstrap", "human");
+      await refreshState();
+      return r.json;
+    }
+
+    async function stepGround() {
+      const search = await call(
+        "GET",
+        `/v1/wiki/pages?namespace=${NS}&project_id=${PROJECT}&query=${encodeURIComponent("phe duyet")}&limit=8`,
+        "agent",
+      );
+      const hits = (search.json.hits || []).slice(0, 3);
+      const fetched = [];
+      for (const h of hits) {
+        const f = await call("GET", `/v1/wiki/pages/${encodeURIComponent(h.page_id)}`, "agent");
+        fetched.push({ page_id: h.page_id, status: f.json.status, title: f.json.title });
+      }
+      return { hits: search.json.hits, fetched };
+    }
+
+    async function stepFd() {
+      return FD;
+    }
+
+    async function stepPropose() {
+      lastProposed = [];
+      const pages = [];
+      for (const p of PROPOSE) {
+        const r = await call("POST", "/v1/wiki/pages", "agent", p);
+        if (r.json.page_id) lastProposed.push(r.json.page_id);
+        pages.push({ page_id: r.json.page_id, status: r.json.status, code: r.json.code });
+      }
+      return { proposed: pages };
+    }
+
+    async function stepDeny() {
+      const id = lastProposed[0] || PROPOSE[0].page_id;
+      const r = await call("POST", `/v1/wiki/pages/${encodeURIComponent(id)}/approve`, "agent", {});
+      return { expected: 403, got: r.status, detail: r.json.detail || r.json };
+    }
+
+    async function stepApproveHuman() {
+      const ids = lastProposed.length ? lastProposed : PROPOSE.map((p) => p.page_id);
+      const out = [];
+      for (const id of ids) {
+        const r = await call("POST", `/v1/wiki/pages/${encodeURIComponent(id)}/approve`, "human", {});
+        out.push({ page_id: id, status: r.status, page: r.json.status || r.json });
+      }
+      await refreshState();
+      return out;
+    }
+
+    async function stepValidate() {
+      const r = await call(
+        "GET",
+        `/v1/wiki/pages?namespace=${NS}&project_id=${PROJECT}&query=${encodeURIComponent("F-KHO")}&limit=10`,
+        "agent",
+      );
+      return { hits: r.json.hits };
+    }
+
+    async function runAt(i) {
+      const s = STEPS[i];
+      showStepMeta(i, { running: true });
+      document.getElementById("btn-next").disabled = true;
+      try {
+        const extra = await s.run();
+        showStepMeta(i, extra);
+        setGraph(s.nodes, s.edges, true);
+      } catch (err) {
+        showStepMeta(i, { error: String(err) });
+      }
+      document.getElementById("btn-next").disabled = false;
+      document.getElementById("btn-back").disabled = i <= 0;
+      document.getElementById("btn-next").textContent = i >= STEPS.length - 1 ? "Done" : "Next";
+    }
+
+    document.getElementById("btn-next").addEventListener("click", async () => {
+      if (cursor >= STEPS.length - 1) return;
+      cursor += 1;
+      await runAt(cursor);
+    });
+    document.getElementById("btn-back").addEventListener("click", async () => {
+      if (cursor <= 0) {
+        cursor = -1;
+        document.getElementById("step-idx").textContent = "Bước 0 / 7 — chưa chạy";
+        document.getElementById("step-title").textContent = "Sẵn sàng";
+        document.getElementById("payload").textContent = "{}";
+        setGraph([], [], false);
+        return;
+      }
+      cursor -= 1;
+      await runAt(cursor);
+    });
+    document.getElementById("btn-reset").addEventListener("click", async () => {
+      const r = await call("POST", "/sim/reset", "human");
+      lastProposed = [];
+      cursor = -1;
+      document.getElementById("log").innerHTML = "";
+      appendLog("human", "POST", "/sim/reset", r.status, r.json);
+      await refreshState();
+      setGraph([], [], false);
+      document.getElementById("step-idx").textContent = "Bước 0 / 7 — đã reset SIM-*";
+      document.getElementById("step-title").textContent = "Sẵn sàng";
+      document.getElementById("payload").textContent = JSON.stringify(r.json, null, 2);
+      document.getElementById("btn-next").textContent = "Next";
+    });
+
+    refreshState();
+  </script>
+</body>
+</html>

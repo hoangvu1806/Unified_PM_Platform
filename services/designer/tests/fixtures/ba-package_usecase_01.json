@@ -1,0 +1,972 @@
+{
+  "message_id": "c0764733-ba82-4fd2-86eb-c716cd44489b",
+  "correlation_id": "9f46c6a3-cc83-4b2f-be64-3dc4b31b5c0e",
+  "project_id": "PRJ-MES-01",
+  "feature_id": "9f46c6a3-cc83-4b2f-be64-3dc4b31b5c0e",
+  "task_id": null,
+  "agent": {
+    "id": "ba-agent",
+    "version": "0.1.0",
+    "prompt_version": "0.1.0",
+    "skill_versions": {}
+  },
+  "contract": {
+    "name": "business-analysis-output",
+    "version": "1.0.0"
+  },
+  "artifact": {
+    "id": "business_analysis_package:9f46c6a3-cc83-4b2f-be64-3dc4b31b5c0e",
+    "type": "business_analysis_package",
+    "version": "1.0.0",
+    "status": "proposed"
+  },
+  "input_references": [
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-PROGRESS-M3",
+      "title": "[llm] M3",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-CONSTRAINT-AMOUNT",
+      "title": "[llm] Amount Field Requirement",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-CONSTRAINT-APPROVAL",
+      "title": "[llm] Approval Constraints",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-CONSTRAINT-WIKI-ERP",
+      "title": "[llm] Wiki is not ERP",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-PROGRESS-M1",
+      "title": "[llm] M1",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-PROGRESS-M2",
+      "title": "[llm] M2",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-CONVENTION-AC-CITE",
+      "title": "[llm] AC Citation Convention",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-CONVENTION-US-ID",
+      "title": "[llm] US ID Convention",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-ORG-BA",
+      "title": "[llm] BA",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-ORG-FINANCE",
+      "title": "[llm] Finance",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-ORG-PO",
+      "title": "[llm] Product Owner",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-ORG-WAREHOUSE",
+      "title": "[llm] Warehouse",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-CONVENTION-POL",
+      "title": "[llm] Policy ID Convention",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-GLOSS-AC",
+      "title": "[llm] AC",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-GLOSS-BR",
+      "title": "[llm] BR",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-GLOSS-PO",
+      "title": "[llm] PO",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-GLOSS-UAPDF",
+      "title": "[llm] UAPDF",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "H-PG-CONS-07D9FE7C",
+      "title": "[heuristic] constraint from SRC-07D9FE7C",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "H-PG-CONV-07D9FE7C",
+      "title": "[heuristic] convention from SRC-07D9FE7C",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "H-PG-ORG-07D9FE7C",
+      "title": "[heuristic] org from SRC-07D9FE7C",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "H-PG-PROG-07D9FE7C",
+      "title": "[heuristic] progress from SRC-07D9FE7C",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "L-PG-GLOSS-US",
+      "title": "[llm] US",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "H-PG-GLOSS-BR",
+      "title": "[heuristic] BR --- Business Rule",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "H-PG-GLOSS-PO",
+      "title": "[heuristic] PO --- Product Owner",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "H-PG-GLOSS-US",
+      "title": "[heuristic] US --- User Story",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "H-PG-RULE-E7C",
+      "title": "[heuristic] Moi don can mot nguoi phe duyet",
+      "version": "1.0.0"
+    },
+    {
+      "type": "wiki_page",
+      "page_id": "H-PG-GLOSS-AC",
+      "title": "[heuristic] AC --- Acceptance Criterion",
+      "version": "1.0.0"
+    }
+  ],
+  "payload": {
+    "feature_title": "Fourth of July flag landing page",
+    "feature_description": "Build a campaign landing page for the Fourth of July to sell American flags and patriotic flag kits (house flag, garden flag, porch kit) to US retail customers. Goal: convert holiday traffic into prepaid orders that ship before July 4. Actors: ACT-CUSTOMER (shopper), ACT-MERCH (merchandiser), ACT-OPS (fulfillment). Scope in: campaign LP, product gallery, limited-time offer, add-to-cart, checkout, inventory sold-out state, shipping cutoff messaging. Scope out: wholesale B2B, custom embroidery, international shipping, non-flag apparel.",
+    "ticket_type": "NEW_FEATURE",
+    "artifacts": {
+      "workflow": {
+        "version": "1.0",
+        "artifact_id": "WF-001",
+        "workflow_md_path": "workflows/fourth_of_july_campaign.md",
+        "workflow_md_content": "## Main Flow\n| Step | Actor | Action | BR Ref |\n|------|-------|--------|--------|\n| 1 | ACT-CUSTOMER | Opens July 4 landing page and browses flag SKUs | - |\n| 2 | ACT-MERCH | Campaign offer JULY4 and cutoff banner are visible | BR-04 BR-02 |\n| 3 | ACT-CUSTOMER | Adds in-stock flag to cart | BR-01 |\n| 4 | ACT-CUSTOMER | Checks out and pays | BR-02 BR-03 |\n| 5 | ACT-OPS | Picks, packs, ships before cutoff or with after-holiday notice | BR-01 BR-02 |\n\n## Exception Flows\n| ID | Condition | Handling |\n|----|-----------|----------|\n| E-01 | SKU out of stock | Sold-out state, no add to cart (BR-01) |\n| E-02 | Order after July 2 12:00 ET | Show may arrive after July 4 (BR-02) |\n| E-03 | Payment fails | Retry once then cancel cart hold |\n\n## End States\n- END-PAID-SHIPPED: Paid and handed to carrier\n- END-PAID-LATE: Paid with after-July-4 delivery notice\n- END-BLOCKED-STOCK: Cannot buy sold-out SKU\n- END-CANCELLED: Payment failed"
+      },
+      "use_cases": [
+        {
+          "id": "US-01",
+          "actor_id": "ACT-CUSTOMER",
+          "rule_ids": [
+            "BR-01",
+            "BR-02"
+          ],
+          "statement": "Là khách hàng, tôi muốn mua cờ nhà từ landing page Fourth of July để kịp treo trước ngày lễ.",
+          "bpmn_node_ids": [
+            "WF-001-STEP-3",
+            "WF-001-STEP-4"
+          ],
+          "acceptance_criteria": [
+            {
+              "id": "AC-01",
+              "then": "sản phẩm được thêm vào giỏ hàng và tôi thấy thông báo thành công",
+              "when": "tôi nhấn 'Thêm vào giỏ hàng'",
+              "given": "SKU còn hàng (inventory > 0)"
+            },
+            {
+              "id": "AC-02",
+              "then": "tôi thấy thông báo rõ ràng: 'Đơn hàng có thể giao sau ngày 4 tháng 7'",
+              "when": "tôi tiến hành thanh toán",
+              "given": "thời gian hiện tại sau 12:00 PM ET ngày 2 tháng 7"
+            }
+          ]
+        },
+        {
+          "id": "US-02",
+          "actor_id": "ACT-CUSTOMER",
+          "rule_ids": [
+            "BR-04"
+          ],
+          "statement": "Là khách hàng, tôi muốn áp dụng mã JULY4 để được giảm 15% một lần trên các SKU cờ.",
+          "bpmn_node_ids": [
+            "WF-001-STEP-4"
+          ],
+          "acceptance_criteria": [
+            {
+              "id": "AC-03",
+              "then": "giảm giá 15% được áp dụng cho các SKU cờ (không bao gồm quà tặng) và mã được đánh dấu là đã sử dụng cho email này",
+              "when": "tôi áp dụng mã 'JULY4'",
+              "given": "email hợp lệ và giỏ hàng chứa ít nhất một SKU cờ"
+            },
+            {
+              "id": "AC-06",
+              "then": "hệ thống từ chối mã với thông báo lỗi: 'Mã khuyến mãi đã được sử dụng'",
+              "when": "tôi cố gắng áp dụng lại mã 'JULY4'",
+              "given": "email này đã sử dụng mã 'JULY4'"
+            }
+          ]
+        },
+        {
+          "id": "US-03",
+          "actor_id": "ACT-OPS",
+          "rule_ids": [
+            "BR-01"
+          ],
+          "statement": "Là vận hành, tôi muốn bán các SKU còn hàng để không mất doanh thu lễ.",
+          "bpmn_node_ids": [
+            "WF-001-STEP-1",
+            "WF-001-STEP-3",
+            "WF-001-EXCEPTION-E-01"
+          ],
+          "acceptance_criteria": [
+            {
+              "id": "AC-06",
+              "then": "hệ thống cho phép giao dịch và giảm số lượng tồn kho khả dụng",
+              "when": "khách hàng thêm sản phẩm vào giỏ hàng",
+              "given": "SKU 'house-flag-50star' có số lượng tồn kho > 0"
+            },
+            {
+              "id": "AC-04",
+              "then": "hiển thị trạng thái 'Hết hàng' và nút 'Thêm vào giỏ hàng' bị vô hiệu hóa",
+              "when": "khách hàng xem SKU đó",
+              "given": "số lượng tồn kho của SKU bằng 0"
+            }
+          ]
+        },
+        {
+          "id": "US-04",
+          "actor_id": "ACT-MERCH",
+          "rule_ids": [
+            "BR-03"
+          ],
+          "statement": "Là merchandiser, tôi muốn chỉ hiển thị nhãn 'Made in USA' khi SKU được gắn cờ để tuân thủ quy định FTC.",
+          "bpmn_node_ids": [
+            "WF-001-STEP-1",
+            "WF-001-STEP-2"
+          ],
+          "acceptance_criteria": [
+            {
+              "id": "AC-05",
+              "then": "không hiển thị tuyên bố 'Made in USA' cho sản phẩm này",
+              "when": "landing page hoặc trang chi tiết sản phẩm được tải",
+              "given": "thuộc tính `is_made_in_usa` của SKU là false"
+            },
+            {
+              "id": "AC-08",
+              "then": "hiển thị tuyên bố 'Made in USA' nổi bật",
+              "when": "landing page hoặc trang chi tiết sản phẩm được tải",
+              "given": "thuộc tính `is_made_in_usa` của SKU là true"
+            }
+          ]
+        }
+      ],
+      "bpmn_reference": {
+        "steps": [
+          {
+            "step": "1",
+            "actor": "ACT-CUSTOMER",
+            "action": "Opens July 4 landing page and browses flag SKUs",
+            "br_ref": "-"
+          },
+          {
+            "step": "2",
+            "actor": "ACT-MERCH",
+            "action": "Campaign offer JULY4 and cutoff banner are visible",
+            "br_ref": "BR-04 BR-02"
+          },
+          {
+            "step": "3",
+            "actor": "ACT-CUSTOMER",
+            "action": "Adds in-stock flag to cart",
+            "br_ref": "BR-01"
+          },
+          {
+            "step": "4",
+            "actor": "ACT-CUSTOMER",
+            "action": "Checks out and pays",
+            "br_ref": "BR-02 BR-03"
+          },
+          {
+            "step": "5",
+            "actor": "ACT-OPS",
+            "action": "Picks, packs, ships before cutoff or with after-holiday notice",
+            "br_ref": "BR-01 BR-02"
+          }
+        ],
+        "source": "deterministic_workflow",
+        "version": "1.0.0",
+        "end_states": [
+          "END-PAID-SHIPPED: Paid and handed to carrier",
+          "END-PAID-LATE: Paid with after-July-4 delivery notice",
+          "END-BLOCKED-STOCK: Cannot buy sold-out SKU",
+          "END-CANCELLED: Payment failed"
+        ],
+        "exceptions": [
+          {
+            "id": "E-01",
+            "handling": "Sold-out state, no add to cart (BR-01)",
+            "condition": "SKU out of stock"
+          },
+          {
+            "id": "E-02",
+            "handling": "Show may arrive after July 4 (BR-02)",
+            "condition": "Order after July 2 12:00 ET"
+          },
+          {
+            "id": "E-03",
+            "handling": "Retry once then cancel cart hold",
+            "condition": "Payment fails"
+          }
+        ],
+        "artifact_id": "BPMN-Fourth_of_July_flag_landing_page-001",
+        "bpmn_xml_path": "BPMN-Fourth_of_July_flag_landing_page-001.bpmn",
+        "bpmn_xml_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" id=\"Definitions_BPMN_Fourth_of_July_flag_landing_page_001\" name=\"Fourth of July flag landing page\" targetNamespace=\"https://imespro.ai/bpmn\" exporter=\"ba-agent\">\n  <bpmn:process id=\"BPMN_Fourth_of_July_flag_landing_page_001\" name=\"Fourth of July flag landing page\" isExecutable=\"false\">\n    <bpmn:laneSet>\n      <bpmn:lane id=\"Lane_ACT_CUSTOMER\" name=\"ACT-CUSTOMER\">\n      <bpmn:flowNodeRef>StartEvent_1</bpmn:flowNodeRef>\n      <bpmn:flowNodeRef>Task_1</bpmn:flowNodeRef>\n      <bpmn:flowNodeRef>Task_3</bpmn:flowNodeRef>\n      <bpmn:flowNodeRef>Task_4</bpmn:flowNodeRef>\n      <bpmn:flowNodeRef>EndEvent_1</bpmn:flowNodeRef>\n      <bpmn:flowNodeRef>EndEvent_2</bpmn:flowNodeRef>\n      <bpmn:flowNodeRef>EndEvent_3</bpmn:flowNodeRef>\n      <bpmn:flowNodeRef>EndEvent_4</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_MERCH\" name=\"ACT-MERCH\">\n      <bpmn:flowNodeRef>Task_2</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_OPS\" name=\"ACT-OPS\">\n      <bpmn:flowNodeRef>Task_5</bpmn:flowNodeRef>\n      </bpmn:lane>\n    </bpmn:laneSet>\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"Start\"/>\n    <bpmn:userTask id=\"Task_1\" name=\"ACT-CUSTOMER: Opens July 4 landing page and browses flag SKUs\"/>\n    <bpmn:userTask id=\"Task_2\" name=\"ACT-MERCH: Campaign offer JULY4 and cutoff banner are visible\"/>\n    <bpmn:userTask id=\"Task_3\" name=\"ACT-CUSTOMER: Adds in-stock flag to cart\"/>\n    <bpmn:userTask id=\"Task_4\" name=\"ACT-CUSTOMER: Checks out and pays\"/>\n    <bpmn:userTask id=\"Task_5\" name=\"ACT-OPS: Picks, packs, ships before cutoff or with after-holiday notice\"/>\n    <bpmn:exclusiveGateway id=\"Gateway_Exceptions\" name=\"Exceptions\"/>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"END-PAID-SHIPPED: Paid and handed to carrier\"/>\n    <bpmn:endEvent id=\"EndEvent_2\" name=\"END-PAID-LATE: Paid with after-July-4 delivery notice\"/>\n    <bpmn:endEvent id=\"EndEvent_3\" name=\"END-BLOCKED-STOCK: Cannot buy sold-out SKU\"/>\n    <bpmn:endEvent id=\"EndEvent_4\" name=\"END-CANCELLED: Payment failed\"/>\n    <bpmn:task id=\"Task_Exc_1\" name=\"SKU out of stock\"/>\n    <bpmn:endEvent id=\"EndEvent_Exc_1\" name=\"E-01\"/>\n    <bpmn:task id=\"Task_Exc_2\" name=\"Order after July 2 12:00 ET\"/>\n    <bpmn:endEvent id=\"EndEvent_Exc_2\" name=\"E-02\"/>\n    <bpmn:task id=\"Task_Exc_3\" name=\"Payment fails\"/>\n    <bpmn:endEvent id=\"EndEvent_Exc_3\" name=\"E-03\"/>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Task_1\"/>\n    <bpmn:sequenceFlow id=\"Flow_2\" sourceRef=\"Task_1\" targetRef=\"Task_2\"/>\n    <bpmn:sequenceFlow id=\"Flow_3\" sourceRef=\"Task_2\" targetRef=\"Task_3\"/>\n    <bpmn:sequenceFlow id=\"Flow_4\" sourceRef=\"Task_3\" targetRef=\"Task_4\"/>\n    <bpmn:sequenceFlow id=\"Flow_5\" sourceRef=\"Task_4\" targetRef=\"Task_5\"/>\n    <bpmn:sequenceFlow id=\"Flow_6\" sourceRef=\"Task_5\" targetRef=\"Gateway_Exceptions\"/>\n    <bpmn:sequenceFlow id=\"Flow_7\" name=\"happy\" sourceRef=\"Gateway_Exceptions\" targetRef=\"EndEvent_1\"/>\n    <bpmn:sequenceFlow id=\"Flow_8\" name=\"E-01\" sourceRef=\"Gateway_Exceptions\" targetRef=\"Task_Exc_1\"/>\n    <bpmn:sequenceFlow id=\"Flow_9\" sourceRef=\"Task_Exc_1\" targetRef=\"EndEvent_Exc_1\"/>\n    <bpmn:sequenceFlow id=\"Flow_10\" name=\"E-02\" sourceRef=\"Gateway_Exceptions\" targetRef=\"Task_Exc_2\"/>\n    <bpmn:sequenceFlow id=\"Flow_11\" sourceRef=\"Task_Exc_2\" targetRef=\"EndEvent_Exc_2\"/>\n    <bpmn:sequenceFlow id=\"Flow_12\" name=\"E-03\" sourceRef=\"Gateway_Exceptions\" targetRef=\"Task_Exc_3\"/>\n    <bpmn:sequenceFlow id=\"Flow_13\" sourceRef=\"Task_Exc_3\" targetRef=\"EndEvent_Exc_3\"/>\n  </bpmn:process>\n</bpmn:definitions>\n",
+        "validation_status": "draft"
+      },
+      "business_rules": [
+        {
+          "id": "BR-01",
+          "source": "Ops inventory policy",
+          "statement": "Only in-stock SKUs may be sold; sold-out SKUs show Sold out and cannot be added to cart."
+        },
+        {
+          "id": "BR-02",
+          "source": "Carrier cutoff",
+          "statement": "Orders placed after 12:00 PM ET on July 2 are accepted but must display that they may arrive after July 4."
+        },
+        {
+          "id": "BR-03",
+          "source": "FTC labeling",
+          "statement": "Product copy must not claim Made in USA unless the SKU flag_made_in_usa is true."
+        },
+        {
+          "id": "BR-04",
+          "source": "Marketing calendar",
+          "statement": "Promo code JULY4 applies once per customer email, 15% off flag SKUs only, not gift wrap."
+        }
+      ],
+      "ui_touchpoints": [
+        {
+          "id": "UIT-01",
+          "name": "Opens July 4 landing page and browses flag SKUs",
+          "actor": "ACT-CUSTOMER",
+          "trigger": "Opens July 4 landing page and browses flag SKUs",
+          "screen": "Opens July 4 landing page and browses flag SKUs",
+          "goal": "Build a campaign landing page for the Fourth of July to sell American flags and patriotic flag kits (house flag, garden flag, porch kit) to US retail customers. Goal: convert holiday traffic into prepaid orders that ship before July 4.",
+          "notes": "-",
+          "related_uc_ids": [
+            "US-01",
+            "US-02"
+          ],
+          "bpmn_node_id": "Task_1",
+          "interaction": "form"
+        },
+        {
+          "id": "UIT-02",
+          "name": "Campaign offer JULY4 and cutoff banner are visible",
+          "actor": "ACT-MERCH",
+          "trigger": "Campaign offer JULY4 and cutoff banner are visible",
+          "screen": "Campaign offer JULY4 and cutoff banner are visible",
+          "goal": "Build a campaign landing page for the Fourth of July to sell American flags and patriotic flag kits (house flag, garden flag, porch kit) to US retail customers. Goal: convert holiday traffic into prepaid orders that ship before July 4.",
+          "notes": "BR-04 BR-02",
+          "related_uc_ids": [
+            "US-04"
+          ],
+          "bpmn_node_id": "Task_2",
+          "interaction": "form"
+        },
+        {
+          "id": "UIT-03",
+          "name": "Adds in-stock flag to cart",
+          "actor": "ACT-CUSTOMER",
+          "trigger": "Adds in-stock flag to cart",
+          "screen": "Adds in-stock flag to cart",
+          "goal": "Build a campaign landing page for the Fourth of July to sell American flags and patriotic flag kits (house flag, garden flag, porch kit) to US retail customers. Goal: convert holiday traffic into prepaid orders that ship before July 4.",
+          "notes": "BR-01",
+          "related_uc_ids": [
+            "US-01",
+            "US-02"
+          ],
+          "bpmn_node_id": "Task_3",
+          "interaction": "form"
+        },
+        {
+          "id": "UIT-04",
+          "name": "Checks out and pays",
+          "actor": "ACT-CUSTOMER",
+          "trigger": "Checks out and pays",
+          "screen": "Checks out and pays",
+          "goal": "Build a campaign landing page for the Fourth of July to sell American flags and patriotic flag kits (house flag, garden flag, porch kit) to US retail customers. Goal: convert holiday traffic into prepaid orders that ship before July 4.",
+          "notes": "BR-02 BR-03",
+          "related_uc_ids": [
+            "US-01",
+            "US-02"
+          ],
+          "bpmn_node_id": "Task_4",
+          "interaction": "form"
+        },
+        {
+          "id": "UIT-05",
+          "name": "Picks, packs, ships before cutoff or with after-holiday notice",
+          "actor": "ACT-OPS",
+          "trigger": "Picks, packs, ships before cutoff or with after-holiday notice",
+          "screen": "Picks, packs, ships before cutoff or with after-holiday notice",
+          "goal": "Build a campaign landing page for the Fourth of July to sell American flags and patriotic flag kits (house flag, garden flag, porch kit) to US retail customers. Goal: convert holiday traffic into prepaid orders that ship before July 4.",
+          "notes": "BR-01 BR-02",
+          "related_uc_ids": [
+            "US-03"
+          ],
+          "bpmn_node_id": "Task_5",
+          "interaction": "confirmation"
+        }
+      ],
+      "feature_definition": {
+        "goal": "Build a campaign landing page for the Fourth of July to sell American flags and patriotic flag kits (house flag, garden flag, porch kit) to US retail customers. Goal: convert holiday traffic into prepaid orders that ship before July 4.",
+        "actors": [
+          "ACT-CUSTOMER: shopper",
+          "ACT-MERCH: merchandiser",
+          "ACT-OPS: fulfillment"
+        ],
+        "scope_in": [
+          "campaign LP",
+          "product gallery",
+          "limited-time offer",
+          "add-to-cart",
+          "checkout",
+          "inventory sold-out state",
+          "shipping cutoff messaging",
+          "shipping cutoff logic (12:00 PM ET, July 2)",
+          "post-cutoff disclaimer logic",
+          "fixed SKU kit structure",
+          "JULY4 promo code (15% off, once per email)"
+        ],
+        "scope_out": [
+          "wholesale B2B",
+          "custom embroidery",
+          "international shipping",
+          "non-flag apparel"
+        ]
+      }
+    },
+    "flags": {
+      "br": {
+        "BR-F1": {
+          "name": "Min rules count",
+          "detail": null,
+          "status": "PASS",
+          "priority": 1
+        },
+        "BR-F2": {
+          "name": "All have source",
+          "detail": null,
+          "status": "PASS",
+          "priority": 2
+        },
+        "BR-F3": {
+          "name": "Statements measurable",
+          "detail": null,
+          "status": "PASS",
+          "priority": 3
+        },
+        "BR-F4": {
+          "name": "No contradiction",
+          "detail": null,
+          "status": "PASS",
+          "priority": 4
+        },
+        "BR-F5": {
+          "name": "True business rules",
+          "detail": null,
+          "status": "PASS",
+          "priority": 5
+        }
+      },
+      "fd": {
+        "FD-F1": {
+          "name": "Mục tiêu tính năng (Goal)",
+          "detail": null,
+          "status": "PASS",
+          "priority": 1
+        },
+        "FD-F2": {
+          "name": "Đối tượng sử dụng & Hệ thống (Actors)",
+          "detail": null,
+          "status": "PASS",
+          "priority": 2
+        },
+        "FD-F3": {
+          "name": "Phạm vi thực hiện (Scope In)",
+          "detail": null,
+          "status": "PASS",
+          "priority": 3
+        },
+        "FD-F4": {
+          "name": "Phạm vi loại trừ (Scope Out)",
+          "detail": null,
+          "status": "PASS",
+          "priority": 5
+        },
+        "FD-F5": {
+          "name": "Kiểm tra mâu thuẫn phạm vi",
+          "detail": null,
+          "status": "PASS",
+          "priority": 4
+        }
+      },
+      "uc": {
+        "UC-F1": {
+          "name": "Min use cases",
+          "detail": null,
+          "status": "PASS",
+          "priority": 1
+        },
+        "UC-F2": {
+          "name": "Statement format",
+          "detail": null,
+          "status": "PASS",
+          "priority": 2
+        },
+        "UC-F3": {
+          "name": "Actor validity",
+          "detail": null,
+          "status": "PASS",
+          "priority": 3
+        },
+        "UC-F4": {
+          "name": "Rule linkage",
+          "detail": null,
+          "status": "PASS",
+          "priority": 4
+        },
+        "UC-F5": {
+          "name": "No duplicate",
+          "detail": null,
+          "status": "PASS",
+          "priority": 5
+        },
+        "UC-F6": {
+          "name": "Actor coverage",
+          "detail": null,
+          "status": "PASS",
+          "priority": 6
+        },
+        "UC-F7": {
+          "name": "AC exists",
+          "detail": null,
+          "status": "PASS",
+          "priority": 7
+        },
+        "UC-F8": {
+          "name": "Happy path AC",
+          "detail": null,
+          "status": "PASS",
+          "priority": 8
+        }
+      },
+      "wf": {
+        "WF-F1": {
+          "name": "Main flow defined",
+          "detail": null,
+          "status": "PASS",
+          "priority": 1
+        },
+        "WF-F2": {
+          "name": "End-to-end coverage",
+          "detail": null,
+          "status": "PASS",
+          "priority": 2
+        },
+        "WF-F3": {
+          "name": "Exception flows exist",
+          "detail": null,
+          "status": "PASS",
+          "priority": 3
+        },
+        "WF-F4": {
+          "name": "Actor consistency",
+          "detail": null,
+          "status": "PASS",
+          "priority": 4
+        },
+        "WF-F5": {
+          "name": "BR references",
+          "detail": null,
+          "status": "PASS",
+          "priority": 5
+        },
+        "WF-F6": {
+          "name": "End states defined",
+          "detail": null,
+          "status": "PASS",
+          "priority": 6
+        }
+      }
+    },
+    "sections_status": {
+      "workflow": "completed",
+      "use_cases": "completed",
+      "business_rules": "completed",
+      "feature_definition": "completed"
+    },
+    "open_questions": [
+      {
+        "id": "OQ-001",
+        "answer": "Shipping cutoff is 12:00 PM Eastern Time on 2 July. Orders at or before cutoff are promised by 4 July. After cutoff, checkout stays open with a disclaimer that delivery may be after 4 July. Do not block checkout.",
+        "impact": "Determines the logic for the checkout flow and inventory management. If not defined, the 'shipping cutoff messaging' cannot be implemented correctly, potentially leading to unfulfillable orders.",
+        "status": "resolved",
+        "question": "What is the specific date for the 'shipping cutoff' mentioned in the scope, and how should the system handle orders placed after this cutoff date (e.g., block checkout, show warning, or allow with disclaimer)?",
+        "severity": "critical",
+        "assigned_to": "PO",
+        "source_turn": 1,
+        "source_section": "feature_definition"
+      },
+      {
+        "id": "OQ-002",
+        "answer": "Kits are pre-defined fixed SKUs, not customized.",
+        "impact": "Impacts product data structure, inventory tracking, and the complexity of the 'product gallery' and 'add-to-cart' functionality.",
+        "status": "resolved",
+        "question": "What constitutes a 'patriotic flag kit'? Are these pre-defined bundles with fixed SKUs, or can customers customize the contents of the kit (house flag + garden flag + porch kit)?",
+        "severity": "warning",
+        "assigned_to": "PO",
+        "source_turn": 1,
+        "source_section": "feature_definition"
+      },
+      {
+        "id": "OQ-003",
+        "answer": "JULY4 is 15 percent off flag SKUs and kits, once per email.",
+        "impact": "Defines the pricing logic and cart calculation rules. Ambiguity here affects the development of the checkout and offer application logic.",
+        "status": "resolved",
+        "question": "For the 'limited-time offer', what is the exact discount mechanism (e.g., percentage off, fixed price, BOGO) and does it apply to individual items or only to kits?",
+        "severity": "warning",
+        "assigned_to": "PO",
+        "source_turn": 1,
+        "source_section": "feature_definition"
+      }
+    ],
+    "assumptions": [
+      {
+        "id": "ASM-01",
+        "statement": "The system assumes that 'prepaid orders' implies a standard e-commerce checkout flow with payment gateway integration, and that inventory is reserved upon successful payment.",
+        "source_turn": 1,
+        "source_section": "feature_definition"
+      },
+      {
+        "id": "ASM-02",
+        "statement": "The system assumes that 'ACT-MERCH' (merchandiser) has the ability to configure the campaign landing page content, offers, and product visibility via an admin interface, separate from the customer-facing frontend.",
+        "source_turn": 1,
+        "source_section": "feature_definition"
+      },
+      {
+        "id": "ASM-03",
+        "statement": "The system assumes that 'ACT-OPS' (fulfillment) receives order data in a format compatible with their existing warehouse management system, and that the 'shipping cutoff' is a business rule enforced by the e-commerce platform, not a physical constraint of the warehouse.",
+        "source_turn": 1,
+        "source_section": "feature_definition"
+      }
+    ],
+    "validation": {
+      "status": "passed_with_warnings",
+      "warnings": [
+        {
+          "name": "UC-WF alignment",
+          "detail": "AC-01 của US-01 mô tả “sản phẩm được thêm vào giỏ hàng và tôi thấy thông báo thành công” nhưng workflow không chứa từ khóa tương ứng",
+          "check_id": "V-05",
+          "severity": "warning",
+          "suggestion": "Cập nhật AC hoặc thêm bước workflow khớp hành vi.",
+          "affected_sections": [
+            "use_cases",
+            "workflow"
+          ]
+        },
+        {
+          "name": "UC-WF alignment",
+          "detail": "AC-03 của US-02 mô tả “giảm giá 15% được áp dụng cho các SKU cờ (không bao gồm quà tặng) và mã được đán” nhưng workflow không chứa từ khóa tương ứng",
+          "check_id": "V-05",
+          "severity": "warning",
+          "suggestion": "Cập nhật AC hoặc thêm bước workflow khớp hành vi.",
+          "affected_sections": [
+            "use_cases",
+            "workflow"
+          ]
+        },
+        {
+          "name": "UC-WF alignment",
+          "detail": "AC-06 của US-03 mô tả “hệ thống cho phép giao dịch và giảm số lượng tồn kho khả dụng” nhưng workflow không chứa từ khóa tương ứng",
+          "check_id": "V-05",
+          "severity": "warning",
+          "suggestion": "Cập nhật AC hoặc thêm bước workflow khớp hành vi.",
+          "affected_sections": [
+            "use_cases",
+            "workflow"
+          ]
+        },
+        {
+          "name": "UC-WF alignment",
+          "detail": "AC-05 của US-04 mô tả “không hiển thị tuyên bố 'Made in USA' cho sản phẩm này” nhưng workflow không chứa từ khóa tương ứng",
+          "check_id": "V-05",
+          "severity": "warning",
+          "suggestion": "Cập nhật AC hoặc thêm bước workflow khớp hành vi.",
+          "affected_sections": [
+            "use_cases",
+            "workflow"
+          ]
+        }
+      ],
+      "validated_at": "2026-09-07T14:23:31.307317+00:00",
+      "failed_checks": [],
+      "passed_checks": [
+        {
+          "name": "BR-WF traceability",
+          "check_id": "V-02"
+        },
+        {
+          "name": "UC actor validity",
+          "check_id": "V-03"
+        },
+        {
+          "name": "Exception flow coverage",
+          "check_id": "V-07"
+        },
+        {
+          "name": "Touchpoint-UC mapping",
+          "check_id": "V-09"
+        }
+      ],
+      "agent_response": "📋 **Validation PASSED WITH WARNINGS** — Fourth of July flag landing page\n\n**Passed checks:** V-02, V-03, V-07, V-09\n\n**Warnings (optional — không chặn export):**\n- UC-WF alignment: AC-01 của US-01 mô tả “sản phẩm được thêm vào giỏ hàng và tôi thấy thông báo thành công” nhưng workflow không chứa từ khóa tương ứng\n- UC-WF alignment: AC-03 của US-02 mô tả “giảm giá 15% được áp dụng cho các SKU cờ (không bao gồm quà tặng) và mã được đán” nhưng workflow không chứa từ khóa tương ứng\n- UC-WF alignment: AC-06 của US-03 mô tả “hệ thống cho phép giao dịch và giảm số lượng tồn kho khả dụng” nhưng workflow không chứa từ khóa tương ứng\n- UC-WF alignment: AC-05 của US-04 mô tả “không hiển thị tuyên bố 'Made in USA' cho sản phẩm này” nhưng workflow không chứa từ khóa tương ứng\n\n**Wiki evidence (current approved):**\n- L-PG-PROGRESS-M3: [llm] M3\n- L-PG-CONSTRAINT-AMOUNT: [llm] Amount Field Requirement\n- L-PG-CONSTRAINT-APPROVAL: [llm] Approval Constraints\n- L-PG-CONSTRAINT-WIKI-ERP: [llm] Wiki is not ERP\n- L-PG-PROGRESS-M1: [llm] M1\n- L-PG-PROGRESS-M2: [llm] M2\n- L-PG-CONVENTION-AC-CITE: [llm] AC Citation Convention\n- L-PG-CONVENTION-US-ID: [llm] US ID Convention\n- L-PG-ORG-BA: [llm] BA\n- L-PG-ORG-FINANCE: [llm] Finance\n- L-PG-ORG-PO: [llm] Product Owner\n- L-PG-ORG-WAREHOUSE: [llm] Warehouse\n- … +15 more approved pages\n\nCoverage: 4 UC · 4 BR · 3 exception · 27 wiki pages.\nVA **không sửa** artifact BA. Muốn đổi gói hãy mở BA chat (nếu chưa freeze).\n\n---\n**Validation Agent (gợi ý):**\nChào PO/BA,\n\nDưới đây là giải thích chi tiết về báo cáo validate hiện tại.\n\n### 📊 Tổng quan kết quả\n*   **Trạng thái:** `passed_with_warnings` (Đạt với cảnh báo).\n*   **Ý nghĩa:** Các tài liệu cốt lõi (Business Rules, Use Cases, Workflow) đã đủ độ bao phủ và logic cơ bản. Tuy nhiên, có sự **mất đồng bộ (misalignment)** giữa mô tả hành vi trong Acceptance Criteria (AC) và các bước trong Workflow (WF).\n*   **Hành động:** Bạn **có thể xuất (Export)** gói tài liệu này vì không có lỗi nghiêm trọng (failed checks). Tuy nhiên, để tài liệu chính xác 100% và dễ dàng cho Dev/Test, nên sửa các cảnh báo dưới đây.\n\n---\n\n### 🔍 Chi tiết các cảnh báo (Warnings)\n**Check ID:** `V-05` (UC-WF alignment)\n\nPython rules phát hiện 4 trường hợp mà **Acceptance Criteria (AC)** mô tả một hành vi cụ thể, nhưng **Workflow (WF)** không có bước hoặc từ khóa tương ứng để \"chứng minh\" hành vi đó. Điều này gây khó khăn cho việc traceability (truy vết) từ yêu cầu sang quy trình.\n\n#### 1. US-01, AC-01: Thêm vào giỏ hàng & Thông báo thành công\n*   **Vấn đề:** AC-01 yêu cầu: *\"sản phẩm được thêm vào giỏ hàng và tôi thấy thông báo thành công\"*.\n*   **Thực tế WF:** Bước 3 chỉ ghi *\"Adds in-stock flag to cart\"*. Không có bước nào mô tả việc hiển thị \"thông báo thành công\" (success toast/modal).\n*   **Gợi ý sửa (BA Chat):**\n    *   **Phương án A (Khuyên dùng):** Cập nhật Workflow. Thêm một bước con hoặc mô tả chi tiết ở Bước 3: *\"System displays 'Added to cart' success message.\"*\n    *   **Phương án B:** Nếu thông báo này là UI standard (có sẵn ở mọi nơi), hãy cập nhật AC-01 để nói rõ *\"System adds to cart (standard success feedback applies)\"* hoặc thêm tham chiếu đến UI component.\n\n#### 2. US-02, AC-03: Áp dụng giảm giá 15% & Đánh dấu đã dùng\n*   **Vấn đề:** AC-03 yêu cầu: *\"giảm giá 15% được áp dụng... và mã được đánh dấu là đã sử dụng cho email này\"*.\n*   **Thực tế WF:** Bước 4 chỉ ghi *\"Checks out and pays\"*. Không thấy bước nào mô tả việc hệ thống kiểm tra email, áp dụng mã JULY4, hay đánh dấu trạng thái \"used\" cho email đó.\n*   **Gợi ý sửa (BA Chat):**\n    *   **Cập nhật Workflow:** Tại Bước 4 (Checkout), cần thêm chi tiết logic: *\"System validates promo code JULY4 against customer email. If valid and unused, applies 15% discount. Marks email as used.\"*\n    *   **Lưu ý:** BR-04 đã nói rõ rule này, nhưng WF cần \"biên dịch\" rule đó thành hành động cụ thể.\n\n#### 3. US-03, AC-06: Giao dịch & Giảm tồn kho\n*   **Vấn đề:** AC-06 yêu cầu: *\"hệ thống cho phép giao dịch và giảm số lượng tồn kho khả dụng\"*.\n*   **Thực tế WF:** Bước 5 là *\"Picks, packs, ships...\"* (của OPS). Bước 4 là *\"Checks out and pays\"* (của Customer). Không có bước nào mô tả việc **trừ tồn kho** (inventory deduction) ngay khi giao dịch thành công.\n*   **Gợi ý sửa (BA Chat):**\n    *   **Cập nhật Workflow:** Thêm bước hoặc mô tả ở Bước 4: *\"System reserves inventory and decrements available stock upon successful payment.\"*\n    *   **Hoặc:** Nếu việc trừ tồn kho xảy ra ở bước \"Pick/Pack\" (Bước 5), thì AC-06 cần được điều chỉnh lại cho đúng với quy trình thực tế (ví dụ: \"tồn kho được cập nhật khi đơn hàng được đóng gói\"). *Cần PO xác nhận lại quy trình trừ kho.*\n\n#### 4. US-04, AC-05: Không hiển thị 'Made in USA'\n*   **Vấn đề:** AC-05 yêu cầu: *\"không hiển thị tuyên bố 'Made in USA' cho sản phẩm này\"*.\n*   **Thực tế WF:** Bước 1 & 2 chỉ mô tả việc hiển thị banner/campaign. Không có bước nào mô tả logic ẩn/hiện nhãn \"Made in USA\" dựa trên thuộc tính SKU.\n*   **Gợi ý sửa (BA Chat):**\n    *   **Cập nhật Workflow:** Tại Bước 1 (Browse), thêm mô tả: *\"System checks SKU attribute `is_made_in_usa`. If false, hides 'Made in USA' label.\"*\n\n---\n\n### ✅ Các kiểm tra đã PASS (Không cần sửa)\nCác kiểm tra sau đây đã đạt yêu cầu, bạn có thể yên tâm:\n*   `V-02` (BR-WF traceability): Các Business Rules đã được liên kết đúng với Workflow.\n*   `V-03` (UC actor validity): Các Actor (Customer, Merch, Ops) được sử dụng đúng vai trò.\n*   `V-07` (Exception flow coverage): Các luồng ngoại lệ (E-01, E-02, E-03) đã được bao phủ.\n*   `V-09` (Touchpoint-UC mapping): Các điểm chạm UI đã được ánh xạ.\n\n---\n\n### 📚 Bằng chứng từ Wiki (Evidence)\nCác cảnh báo trên không liên quan đến lỗi dữ liệu Wiki, nhưng dưới đây là một số trang Wiki quan trọng đang được tham chiếu, bạn có thể kiểm tra lại nếu cần:\n*   `L-PG-CONSTRAINT-APPROVAL`: Liên quan đến quy trình phê duyệt (không ảnh hưởng trực tiếp đến cảnh báo V-05 này).\n*   `L-PG-CONVENTION-AC-CITE`: Quy ước trích dẫn AC.\n*   `L-PG-GLOSS-AC`: Định nghĩa AC.\n\n---\n\n### ❓ Câu hỏi làm rõ (Open Questions)\nĐể giải quyết cảnh báo **US-03, AC-06** (vấn đề trừ tồn kho), PO/BA cần xác nhận:\n1.  **Khi nào hệ thống trừ tồn kho?**\n    *   Ngay khi khách hàng nhấn \"Thanh toán thành công\" (Reservation/Decrement at Checkout)? -> *Cần sửa WF Bước 4.*\n    *   Hay khi đơn hàng chuyển sang trạng thái \"Đang đóng gói\" (Decrement at Fulfillment)? -> *Cần sửa AC-06 để phản ánh đúng thời điểm.*\n\n2.  **Về thông báo \"Made in USA\" (US-04):**\n    *   Việc ẩn nhãn này có cần một bước riêng trong Workflow không, hay nó là một phần của \"Bước 1: Browse\"? Nếu là phần của Browse, hãy thêm mô tả chi tiết vào Bước 1 trong WF.\n\n---\n\n### 🛠 Hướng dẫn sửa lỗi (Action Plan)\nVì `package_exported` là `false`, bạn **có thể mở lại BA Chat** để sửa các tài liệu này.\n\n1.  Mở **BA Chat**.\n2.  Yêu cầu BA cập nhật **Workflow (WF-001)** để thêm các mô tả hành vi thiếu hụt (như gợi ý ở phần Chi tiết cảnh báo).\n3.  Hoặc, nếu quy trình thực tế khác, yêu cầu BA cập nhật lại **Use Cases (AC)** cho khớp với Workflow hiện tại.\n4.  Sau khi sửa, chạy lại Validate để chuyển từ `passed_with_warnings` sang `passed` (tùy mức độ nghiêm trọng bạn mong muốn).\n\n*Lưu ý: VA không tự động sửa artifact. Việc sửa đổi nằm trong trách nhiệm của BA/PO trên BA Chat.*",
+      "llm_commentary": "Chào PO/BA,\n\nDưới đây là giải thích chi tiết về báo cáo validate hiện tại.\n\n### 📊 Tổng quan kết quả\n*   **Trạng thái:** `passed_with_warnings` (Đạt với cảnh báo).\n*   **Ý nghĩa:** Các tài liệu cốt lõi (Business Rules, Use Cases, Workflow) đã đủ độ bao phủ và logic cơ bản. Tuy nhiên, có sự **mất đồng bộ (misalignment)** giữa mô tả hành vi trong Acceptance Criteria (AC) và các bước trong Workflow (WF).\n*   **Hành động:** Bạn **có thể xuất (Export)** gói tài liệu này vì không có lỗi nghiêm trọng (failed checks). Tuy nhiên, để tài liệu chính xác 100% và dễ dàng cho Dev/Test, nên sửa các cảnh báo dưới đây.\n\n---\n\n### 🔍 Chi tiết các cảnh báo (Warnings)\n**Check ID:** `V-05` (UC-WF alignment)\n\nPython rules phát hiện 4 trường hợp mà **Acceptance Criteria (AC)** mô tả một hành vi cụ thể, nhưng **Workflow (WF)** không có bước hoặc từ khóa tương ứng để \"chứng minh\" hành vi đó. Điều này gây khó khăn cho việc traceability (truy vết) từ yêu cầu sang quy trình.\n\n#### 1. US-01, AC-01: Thêm vào giỏ hàng & Thông báo thành công\n*   **Vấn đề:** AC-01 yêu cầu: *\"sản phẩm được thêm vào giỏ hàng và tôi thấy thông báo thành công\"*.\n*   **Thực tế WF:** Bước 3 chỉ ghi *\"Adds in-stock flag to cart\"*. Không có bước nào mô tả việc hiển thị \"thông báo thành công\" (success toast/modal).\n*   **Gợi ý sửa (BA Chat):**\n    *   **Phương án A (Khuyên dùng):** Cập nhật Workflow. Thêm một bước con hoặc mô tả chi tiết ở Bước 3: *\"System displays 'Added to cart' success message.\"*\n    *   **Phương án B:** Nếu thông báo này là UI standard (có sẵn ở mọi nơi), hãy cập nhật AC-01 để nói rõ *\"System adds to cart (standard success feedback applies)\"* hoặc thêm tham chiếu đến UI component.\n\n#### 2. US-02, AC-03: Áp dụng giảm giá 15% & Đánh dấu đã dùng\n*   **Vấn đề:** AC-03 yêu cầu: *\"giảm giá 15% được áp dụng... và mã được đánh dấu là đã sử dụng cho email này\"*.\n*   **Thực tế WF:** Bước 4 chỉ ghi *\"Checks out and pays\"*. Không thấy bước nào mô tả việc hệ thống kiểm tra email, áp dụng mã JULY4, hay đánh dấu trạng thái \"used\" cho email đó.\n*   **Gợi ý sửa (BA Chat):**\n    *   **Cập nhật Workflow:** Tại Bước 4 (Checkout), cần thêm chi tiết logic: *\"System validates promo code JULY4 against customer email. If valid and unused, applies 15% discount. Marks email as used.\"*\n    *   **Lưu ý:** BR-04 đã nói rõ rule này, nhưng WF cần \"biên dịch\" rule đó thành hành động cụ thể.\n\n#### 3. US-03, AC-06: Giao dịch & Giảm tồn kho\n*   **Vấn đề:** AC-06 yêu cầu: *\"hệ thống cho phép giao dịch và giảm số lượng tồn kho khả dụng\"*.\n*   **Thực tế WF:** Bước 5 là *\"Picks, packs, ships...\"* (của OPS). Bước 4 là *\"Checks out and pays\"* (của Customer). Không có bước nào mô tả việc **trừ tồn kho** (inventory deduction) ngay khi giao dịch thành công.\n*   **Gợi ý sửa (BA Chat):**\n    *   **Cập nhật Workflow:** Thêm bước hoặc mô tả ở Bước 4: *\"System reserves inventory and decrements available stock upon successful payment.\"*\n    *   **Hoặc:** Nếu việc trừ tồn kho xảy ra ở bước \"Pick/Pack\" (Bước 5), thì AC-06 cần được điều chỉnh lại cho đúng với quy trình thực tế (ví dụ: \"tồn kho được cập nhật khi đơn hàng được đóng gói\"). *Cần PO xác nhận lại quy trình trừ kho.*\n\n#### 4. US-04, AC-05: Không hiển thị 'Made in USA'\n*   **Vấn đề:** AC-05 yêu cầu: *\"không hiển thị tuyên bố 'Made in USA' cho sản phẩm này\"*.\n*   **Thực tế WF:** Bước 1 & 2 chỉ mô tả việc hiển thị banner/campaign. Không có bước nào mô tả logic ẩn/hiện nhãn \"Made in USA\" dựa trên thuộc tính SKU.\n*   **Gợi ý sửa (BA Chat):**\n    *   **Cập nhật Workflow:** Tại Bước 1 (Browse), thêm mô tả: *\"System checks SKU attribute `is_made_in_usa`. If false, hides 'Made in USA' label.\"*\n\n---\n\n### ✅ Các kiểm tra đã PASS (Không cần sửa)\nCác kiểm tra sau đây đã đạt yêu cầu, bạn có thể yên tâm:\n*   `V-02` (BR-WF traceability): Các Business Rules đã được liên kết đúng với Workflow.\n*   `V-03` (UC actor validity): Các Actor (Customer, Merch, Ops) được sử dụng đúng vai trò.\n*   `V-07` (Exception flow coverage): Các luồng ngoại lệ (E-01, E-02, E-03) đã được bao phủ.\n*   `V-09` (Touchpoint-UC mapping): Các điểm chạm UI đã được ánh xạ.\n\n---\n\n### 📚 Bằng chứng từ Wiki (Evidence)\nCác cảnh báo trên không liên quan đến lỗi dữ liệu Wiki, nhưng dưới đây là một số trang Wiki quan trọng đang được tham chiếu, bạn có thể kiểm tra lại nếu cần:\n*   `L-PG-CONSTRAINT-APPROVAL`: Liên quan đến quy trình phê duyệt (không ảnh hưởng trực tiếp đến cảnh báo V-05 này).\n*   `L-PG-CONVENTION-AC-CITE`: Quy ước trích dẫn AC.\n*   `L-PG-GLOSS-AC`: Định nghĩa AC.\n\n---\n\n### ❓ Câu hỏi làm rõ (Open Questions)\nĐể giải quyết cảnh báo **US-03, AC-06** (vấn đề trừ tồn kho), PO/BA cần xác nhận:\n1.  **Khi nào hệ thống trừ tồn kho?**\n    *   Ngay khi khách hàng nhấn \"Thanh toán thành công\" (Reservation/Decrement at Checkout)? -> *Cần sửa WF Bước 4.*\n    *   Hay khi đơn hàng chuyển sang trạng thái \"Đang đóng gói\" (Decrement at Fulfillment)? -> *Cần sửa AC-06 để phản ánh đúng thời điểm.*\n\n2.  **Về thông báo \"Made in USA\" (US-04):**\n    *   Việc ẩn nhãn này có cần một bước riêng trong Workflow không, hay nó là một phần của \"Bước 1: Browse\"? Nếu là phần của Browse, hãy thêm mô tả chi tiết vào Bước 1 trong WF.\n\n---\n\n### 🛠 Hướng dẫn sửa lỗi (Action Plan)\nVì `package_exported` là `false`, bạn **có thể mở lại BA Chat** để sửa các tài liệu này.\n\n1.  Mở **BA Chat**.\n2.  Yêu cầu BA cập nhật **Workflow (WF-001)** để thêm các mô tả hành vi thiếu hụt (như gợi ý ở phần Chi tiết cảnh báo).\n3.  Hoặc, nếu quy trình thực tế khác, yêu cầu BA cập nhật lại **Use Cases (AC)** cho khớp với Workflow hiện tại.\n4.  Sau khi sửa, chạy lại Validate để chuyển từ `passed_with_warnings` sang `passed` (tùy mức độ nghiêm trọng bạn mong muốn).\n\n*Lưu ý: VA không tự động sửa artifact. Việc sửa đổi nằm trong trách nhiệm của BA/PO trên BA Chat.*",
+      "change_detected": true,
+      "ruleset_version": "ba-va-1.0.0",
+      "coverage_summary": {
+        "fd_actors": 3,
+        "use_cases": 4,
+        "wiki_pages": 27,
+        "bpmn_present": true,
+        "business_rules": 4,
+        "ui_touchpoints": 5,
+        "exception_flows": 3,
+        "ruleset_version": "ba-va-1.0.0"
+      },
+      "evidence_references": [
+        {
+          "title": "[llm] M3",
+          "page_id": "L-PG-PROGRESS-M3",
+          "snippet": "M3 SKU rows stay in ERP; wiki fetch stays constrain.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] Amount Field Requirement",
+          "page_id": "L-PG-CONSTRAINT-AMOUNT",
+          "snippet": "Amount field is required on the don. Missing amount is\nnot a Designer problem; it is a BA gap vs this policy.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] Approval Constraints",
+          "page_id": "L-PG-CONSTRAINT-APPROVAL",
+          "snippet": "wh.clerk cannot self-approve. Shift supervisor is not a\nsecond spend approver for vat tu (materials).",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] Wiki is not ERP",
+          "page_id": "L-PG-CONSTRAINT-WIKI-ERP",
+          "snippet": "Constraint\n- SKU master, on-hand qty, lot, location = ERP / WMS.\n  Do not ingest a sample SKU table as a wiki page.\n- Wiki may state: sku = VT-<family>-<seq> (o...",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] M1",
+          "page_id": "L-PG-PROGRESS-M1",
+          "snippet": "M1 this policy issued for BA demo (company namespace).",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] M2",
+          "page_id": "L-PG-PROGRESS-M2",
+          "snippet": "M2 BA maps F-002 kho vat tu US against this file.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] AC Citation Convention",
+          "page_id": "L-PG-CONVENTION-AC-CITE",
+          "snippet": "Cite in AC = POL-WH-001 + F-001 BR-02",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] US ID Convention",
+          "page_id": "L-PG-CONVENTION-US-ID",
+          "snippet": "US id still follows the feature BRD (US-F-002-nn), not POL.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] BA",
+          "page_id": "L-PG-ORG-BA",
+          "snippet": "BA owns mapping PO US/AC onto these two facts.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] Finance",
+          "page_id": "L-PG-ORG-FINANCE",
+          "snippet": "Finance owns the 50 trieu VND nguong.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] Product Owner",
+          "page_id": "L-PG-ORG-PO",
+          "snippet": "PO owns the feature list, not the company spend rule.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] Warehouse",
+          "page_id": "L-PG-ORG-WAREHOUSE",
+          "snippet": "Warehouse owns who may propose (wh.clerk).",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] Policy ID Convention",
+          "page_id": "L-PG-CONVENTION-POL",
+          "snippet": "Policy id = POL-<domain>-<seq> (this file: POL-WH-001)",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] AC",
+          "page_id": "L-PG-GLOSS-AC",
+          "snippet": "BA reads this page when PO dua nhu cau chuc nang (US/AC) ve kho vat tu.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] BR",
+          "page_id": "L-PG-GLOSS-BR",
+          "snippet": "Related: F-001 BR-02 (cite; do not redefine threshold here)",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] PO",
+          "page_id": "L-PG-GLOSS-PO",
+          "snippet": "Actor = wh.clerk. Approver above nguong = Product Owner. Do not write PO = Purchase Order (glossary F-001).",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] UAPDF",
+          "page_id": "L-PG-GLOSS-UAPDF",
+          "snippet": "You are the Wiki Knowledge Module sorter for UAPDF-WKM-001.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[heuristic] constraint from SRC-07D9FE7C",
+          "page_id": "H-PG-CONS-07D9FE7C",
+          "snippet": "Section constraint detected in extract of SRC-07D9FE7C. Review before approve.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[heuristic] convention from SRC-07D9FE7C",
+          "page_id": "H-PG-CONV-07D9FE7C",
+          "snippet": "Section convention detected in extract of SRC-07D9FE7C. Review before approve.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[heuristic] org from SRC-07D9FE7C",
+          "page_id": "H-PG-ORG-07D9FE7C",
+          "snippet": "Section org detected in extract of SRC-07D9FE7C. Review before approve.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[heuristic] progress from SRC-07D9FE7C",
+          "page_id": "H-PG-PROG-07D9FE7C",
+          "snippet": "Section progress detected in extract of SRC-07D9FE7C. Review before approve.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[llm] US",
+          "page_id": "L-PG-GLOSS-US",
+          "snippet": "BA reads this page when PO dua nhu cau chuc nang (US/AC) ve kho vat tu.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[heuristic] BR --- Business Rule",
+          "page_id": "H-PG-GLOSS-BR",
+          "snippet": "Rule da chot, co nguon. Agent fetch lam constrain.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[heuristic] PO --- Product Owner",
+          "page_id": "H-PG-GLOSS-PO",
+          "snippet": "Nguoi phe duyet Business Analysis Package.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[heuristic] US --- User Story",
+          "page_id": "H-PG-GLOSS-US",
+          "snippet": "As a <role> I want <action> so that <value>. Moi US keo theo AC.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[heuristic] Moi don can mot nguoi phe duyet",
+          "page_id": "H-PG-RULE-E7C",
+          "snippet": "Moi don can mot nguoi phe duyet. Nguon: extract lossless, chua paraphrase.",
+          "version": "1.0.0"
+        },
+        {
+          "title": "[heuristic] AC --- Acceptance Criterion",
+          "page_id": "H-PG-GLOSS-AC",
+          "snippet": "Dieu kien kiem chung User Story; moi AC gan dung mot story.",
+          "version": "1.0.0"
+        }
+      ]
+    }
+  },
+  "validation": {
+    "schema_valid": true,
+    "errors": [],
+    "outcome": "passed_with_warnings"
+  },
+  "provenance": {
+    "run_id": "c0764733-ba82-4fd2-86eb-c716cd44489b",
+    "created_at": "2026-09-08T02:05:38Z"
+  },
+  "handoff": {
+    "to": "designer-agent",
+    "gate": "G1",
+    "mode": "feature_design",
+    "ready": true,
+    "note": "Control-plane handoff after VALIDATED. Proposal G1 still requires human APPROVED + BPMN before a live Designer run."
+  }
+}

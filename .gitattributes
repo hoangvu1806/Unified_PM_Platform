@@ -1,0 +1,11 @@
+# Containers run Linux: keep LF in the repo and in working trees for scripts.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+*.png binary
+*.jpg binary
+*.pdf binary
+*.fig binary
+*.docx binary
+*.pptx binary

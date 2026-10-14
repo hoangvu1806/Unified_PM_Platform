@@ -1,0 +1,2 @@
+{"active_section": "feature_definition", "user_message": "Goal: onboarding nhan su moi — HR checklist, IT access, manager buddy. Actors: ACT-HR, ACT-IT, ACT-MANAGER, ACT-NEWHIRE, ACT-PO. Scope-in: case, checklist, provision, buddy. Scope-out: offboarding, payroll."}
+{"active_section": "feature_definition", "user_message": "Xac nhan FD du: goal/actors/scope-in/scope-out nhu tren. Dong OQ critical neu con. Chuyen sang Business Rules khi du."}

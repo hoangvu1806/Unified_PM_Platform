@@ -1,0 +1,2 @@
+{"active_section": "feature_definition", "user_message": "Goal: quy trinh don vat tu — tao don, phe duyet 1 nguoi, pick-pack kho. Actors: ACT-REQUESTER, ACT-WH, ACT-PO. Scope-in: request, approve, pick, pack. Scope-out: mua hang nha cung cap."}
+{"active_section": "feature_definition", "user_message": "Xac nhan FD du: goal/actors/scope-in/scope-out nhu tren. Dong OQ critical neu con. Chuyen sang Business Rules khi du."}

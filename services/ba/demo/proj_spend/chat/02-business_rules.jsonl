@@ -1,0 +1,1 @@
+{"active_section": "business_rules", "user_message": "Ghi BR khop wiki spend thresholds RULE (so 500 + approval):\nBR-01: Spend under 500 may use single ACT-MANAGER approval.\nBR-02: Spend 500 or above requires ACT-PO approval.\nBR-03: Split invoices to bypass threshold are not allowed.\nBR-04: Finance posts only after approval.\nBR-05: ACT-PO phe duyet / approval BA package."}

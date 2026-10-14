@@ -1,0 +1,1 @@
+{"active_section": "workflow", "user_message": "Main Flow:\n1|ACT-END-USER|Upload fridge photo||\n2|ACT-AIML-ENGINE|Detect ingredients|BR-01|XOR\n3a|ACT-END-USER|Manual fix ingredients|BR-02|\n3b|ACT-AIML-ENGINE|Accept detections|BR-01|\n4|ACT-AIML-ENGINE|Suggest recipes + safety|BR-03|\n5|ACT-PO|Review BA|BR-05|\nXOR khi confidence thap."}

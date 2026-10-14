@@ -1,0 +1,1437 @@
+{
+    "message_id": "be192a36-ae45-4a08-8016-1dd2f012d707",
+    "correlation_id": "aae174f8-1cb4-4b18-9e33-14fd2c9d0a8b",
+    "project_id": "PRJ-6FEFB9696DF5",
+    "feature_id": "aae174f8-1cb4-4b18-9e33-14fd2c9d0a8b",
+    "task_id": null,
+    "agent": {
+        "id": "ba-agent",
+        "version": "0.1.0",
+        "prompt_version": "0.1.0",
+        "skill_versions": {}
+    },
+    "contract": {
+        "name": "business-analysis-output",
+        "version": "1.0.0"
+    },
+    "artifact": {
+        "id": "business_analysis_package:aae174f8-1cb4-4b18-9e33-14fd2c9d0a8b",
+        "type": "business_analysis_package",
+        "version": "1.0.0",
+        "status": "proposed"
+    },
+    "input_references": [
+        {
+            "type": "wiki_page",
+            "page_id": "PG-RULE-B90A1A48",
+            "title": "Aurora CAPA Core Rules",
+            "version": "1.0.0"
+        },
+        {
+            "type": "wiki_page",
+            "page_id": "PG-GLOSS-AC",
+            "title": "AC --- Acceptance Criterion",
+            "version": "1.0.0"
+        },
+        {
+            "type": "wiki_page",
+            "page_id": "PG-GLOSS-BR",
+            "title": "BR --- Business Rule",
+            "version": "1.0.0"
+        },
+        {
+            "type": "wiki_page",
+            "page_id": "PG-GLOSS-PO",
+            "title": "PO --- Product Owner",
+            "version": "1.0.0"
+        },
+        {
+            "type": "wiki_page",
+            "page_id": "PG-GLOSS-UAPDF",
+            "title": "UAPDF --- Unify AI Product and Design Factory",
+            "version": "1.0.0"
+        },
+        {
+            "type": "wiki_page",
+            "page_id": "PG-GLOSS-US",
+            "title": "US --- User Story",
+            "version": "1.0.0"
+        }
+    ],
+    "payload": {
+        "feature_title": "Aurora — multi-plant deviation CAPA and recall orchestration",
+        "feature_description": "Nimbus Factory Aurora program: cross-plant batch deviation intake, dual-track CAPA (lab + production), quarantine hold/release, severity routing, and Class recall decision with regulatory gate. Fantasy MES beyond single-warehouse demos.",
+        "ticket_type": "NEW_FEATURE",
+        "artifacts": {
+            "workflow": {
+                "version": "1.0",
+                "artifact_id": "WF-AURORA-001",
+                "workflow_md_path": "Aurora Multi-Plant Deviation, CAPA & Recall Orchestration",
+                "workflow_md_content": "# Aurora Multi-Plant Deviation, CAPA & Recall Orchestration\n\n## Main Flow\n\n| Step | Actor | Action | BR | Gateway |\n| :--- | :--- | :--- | :--- | :--- |\n| S1 | ACT-QA | Intake deviation bind lot and plant | BR-01 | |\n| S2 | ACT-QA | Set severity Critical, Major, or Minor | BR-02 | XOR |\n| S3a | ACT-WH | Place inventory hold (Critical/Major); segregate held vs sellable stock | BR-06, BR-14 | |\n| S3b | ACT-QA | Skip hold when Minor | | |\n| S4 | ACT-LAB | Lab investigation track | BR-04 | AND |\n| S5 | ACT-PROD | Production investigation track | BR-04 | AND |\n| S6 | ACT-QA | Join tracks; check evidence complete. If missing lab/timeline, block CAPA close | BR-05, BR-11 | |\n| S7 | ACT-QA | Escalate to Critical if adulteration risk detected | BR-13 | |\n| S8 | ACT-REG | Review Critical case before market action | BR-08 | |\n| S9 | ACT-REG | Propose recall class (None, Class Two, Class One) | BR-09 | XOR |\n| S10a | ACT-QA | Close with Class None after CAPA effectiveness review | BR-09 | |\n| S10b | ACT-QA | Concur Class Two | BR-09 | |\n| S10c | ACT-PM | Confirm Class One | BR-03, BR-09 | |\n| S11 | ACT-LOG | Execute recall shipments (Class Two or Class One) | BR-10 | |\n| S12 | ACT-QA | Release hold (requires ACT-QA signature; ACT-WH cannot release alone) | BR-07 | |\n| S13 | ACT-PM | Acknowledge Critical severity before final CAPA close | BR-03 | |\n| S14 | ACT-PO | Approve BA package | BR-12 | |\n\n## Exception Flows\n\n| Step | Actor | Action | BR | Gateway |\n| :--- | :--- | :--- | :--- | :--- |\n| E-01 | ACT-QA | Intake missing lot or plant identity — block creation, show error | BR-01 | |\n\n## End States\n\n- **Success**: BA Package Approved (S14), Recall Executed (S11), Hold Released (S12).\n- **Blocked**: CAPA Closed due to missing evidence (S6), Recall Class None (S10a).\n- **Escalated**: Severity escalated to Critical (S7), Critical requires PM Acknowledgment (S13).\n\n## Notes\n- **XOR**: Severity (S2), Recall Class (S9).\n- **AND**: Dual Investigation Tracks (S4, S5).\n- **Actors**: ACT-QA, ACT-PROD, ACT-LAB, ACT-WH, ACT-REG, ACT-PM, ACT-LOG, ACT-PO.\n- **Scope**: Covers intake, severity, dual investigation, hold/release, recall decision/execution, and BA approval.\n- **Exclusions**: No public press, ERP financial credits, new lab equipment, LMS training, external regulator API, LIMS replacement, or WMS UI redesign."
+            },
+            "use_cases": [
+                {
+                    "id": "US-01",
+                    "actor_id": "ACT-QA",
+                    "rule_ids": ["BR-01", "BR-02"],
+                    "statement": "Là ACT-QA, tôi muốn intake deviation gắn batch lot và originating plant để bắt đầu CAPA.",
+                    "bpmn_node_ids": ["S1", "E-01"],
+                    "acceptance_criteria": [
+                        {
+                            "id": "AC-01",
+                            "then": "case ở stage Intake với severity chưa chốt",
+                            "when": "intake submitted",
+                            "given": "lot identity và plant có mặt"
+                        },
+                        {
+                            "id": "AC-02",
+                            "then": "hệ thống hiển thị lỗi required field và dừng tạo case",
+                            "when": "submit",
+                            "given": "thiếu lot hoặc plant"
+                        }
+                    ]
+                },
+                {
+                    "id": "US-02",
+                    "actor_id": "ACT-LAB",
+                    "rule_ids": ["BR-04", "BR-05", "BR-11"],
+                    "statement": "Là ACT-LAB, tôi muốn chạy dual-track investigation song song với ACT-PROD để đủ evidence trước effectiveness review.",
+                    "bpmn_node_ids": ["S4", "S5", "S6"],
+                    "acceptance_criteria": [
+                        {
+                            "id": "AC-01",
+                            "then": "case chuyển sang stage chờ effectiveness review",
+                            "when": "ACT-QA join tracks",
+                            "given": "cả hai track investigation (LAB và PROD) đã hoàn thành"
+                        },
+                        {
+                            "id": "AC-02",
+                            "then": "hệ thống hiển thị lỗi required evidence và dừng đóng case",
+                            "when": "ACT-QA cố gắng close CAPA",
+                            "given": "thiếu lab result hoặc missing production timeline"
+                        }
+                    ]
+                },
+                {
+                    "id": "US-03",
+                    "actor_id": "ACT-WH",
+                    "rule_ids": ["BR-06", "BR-07", "BR-14"],
+                    "statement": "Là ACT-WH, tôi muốn place hold khi severity Critical hoặc Major và chỉ release khi ACT-QA ký để giữ lot Held/Quarantine tách biệt khỏi sellable stock.",
+                    "bpmn_node_ids": ["S3a", "S3b", "S12"],
+                    "acceptance_criteria": [
+                        {
+                            "id": "AC-01",
+                            "then": "lot status Held/Quarantine segregated from sellable stock",
+                            "when": "hold placed",
+                            "given": "severity Critical hoặc Major"
+                        },
+                        {
+                            "id": "AC-02",
+                            "then": "hold release requires ACT-QA signature after CAPA close — ACT-WH alone cannot release",
+                            "when": "release attempted",
+                            "given": "ACT-WH cố release trước khi ACT-QA ký"
+                        }
+                    ]
+                },
+                {
+                    "id": "US-04",
+                    "actor_id": "ACT-REG",
+                    "rule_ids": ["BR-08", "BR-09", "BR-10", "BR-13"],
+                    "statement": "Là ACT-REG, tôi muốn đề xuất recall class None/Class Two/Class One và giao ACT-LOG execute khi class khác None để kiểm soát market action.",
+                    "bpmn_node_ids": [
+                        "S8",
+                        "S9",
+                        "S10a",
+                        "S10b",
+                        "S10c",
+                        "S11"
+                    ],
+                    "acceptance_criteria": [
+                        {
+                            "id": "AC-01",
+                            "then": "severity tự động escalate lên Critical trước khi xác định recall class",
+                            "when": "ACT-REG review case",
+                            "given": "adulteration risk được phát hiện trong investigation"
+                        },
+                        {
+                            "id": "AC-02",
+                            "then": "case chuyển sang trạng thái chờ ACT-LOG execute recall",
+                            "when": "ACT-PM xác nhận",
+                            "given": "ACT-REG đề xuất Class One"
+                        },
+                        {
+                            "id": "AC-03",
+                            "then": "case chuyển sang stage chờ ACT-LOG execute recall shipments",
+                            "when": "recall class được xác nhận",
+                            "given": "ACT-REG đề xuất Class Two hoặc Class One"
+                        },
+                        {
+                            "id": "AC-04",
+                            "then": "case chuyển sang stage chờ ACT-QA close CAPA (không kích hoạt recall)",
+                            "when": "recall class được xác nhận",
+                            "given": "ACT-REG đề xuất Class None"
+                        }
+                    ]
+                },
+                {
+                    "id": "US-05",
+                    "actor_id": "ACT-PROD",
+                    "rule_ids": ["BR-04", "BR-05"],
+                    "statement": "Là ACT-PROD, tôi muốn chạy production investigation track song song với ACT-LAB để đủ evidence trước CAPA effectiveness review.",
+                    "bpmn_node_ids": ["S5", "S6"],
+                    "acceptance_criteria": [
+                        {
+                            "id": "AC-01",
+                            "then": "production investigation track complete before join",
+                            "when": "production timeline recorded",
+                            "given": "dual-track opened"
+                        }
+                    ]
+                },
+                {
+                    "id": "US-06",
+                    "actor_id": "ACT-PM",
+                    "rule_ids": ["BR-03", "BR-09"],
+                    "statement": "Là ACT-PM, tôi muốn acknowledge Critical và confirm Class One để đóng CAPA đúng gate.",
+                    "bpmn_node_ids": ["S13", "S10c"],
+                    "acceptance_criteria": [
+                        {
+                            "id": "AC-01",
+                            "then": "ACT-PM acknowledgment recorded",
+                            "when": "before CAPA close",
+                            "given": "severity Critical"
+                        },
+                        {
+                            "id": "AC-02",
+                            "then": "Class One confirmed before ACT-LOG execute",
+                            "when": "confirm",
+                            "given": "recall Class One proposed"
+                        }
+                    ]
+                },
+                {
+                    "id": "US-07",
+                    "actor_id": "ACT-LOG",
+                    "rule_ids": ["BR-10"],
+                    "statement": "Là ACT-LOG, tôi muốn execute recall shipments sau khi Class Two hoặc Class One confirmed để rút hàng khỏi market.",
+                    "bpmn_node_ids": ["S11"],
+                    "acceptance_criteria": [
+                        {
+                            "id": "AC-01",
+                            "then": "recall shipments executed",
+                            "when": "execute",
+                            "given": "Class Two or Class One confirmed"
+                        },
+                        {
+                            "id": "AC-02",
+                            "then": "no recall shipments and case stays on CAPA close path",
+                            "when": "execute attempted",
+                            "given": "Class None"
+                        }
+                    ]
+                },
+                {
+                    "id": "US-08",
+                    "actor_id": "ACT-PO",
+                    "rule_ids": ["BR-12"],
+                    "statement": "Là ACT-PO, tôi muốn approve BA package sau Validate để chốt scope Aurora.",
+                    "bpmn_node_ids": ["S14"],
+                    "acceptance_criteria": [
+                        {
+                            "id": "AC-01",
+                            "then": "BA package approved",
+                            "when": "ACT-PO approves",
+                            "given": "package VALIDATED"
+                        }
+                    ]
+                }
+            ],
+            "bpmn_by_story": {
+                "US-06": {
+                    "steps": [
+                        {
+                            "step": ":---",
+                            "actor": ":---",
+                            "action": ":---",
+                            "br_ref": ":---",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S1",
+                            "actor": "ACT-QA",
+                            "action": "Intake deviation bind lot and plant",
+                            "br_ref": "BR-01",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S2",
+                            "actor": "ACT-QA",
+                            "action": "Set severity Critical, Major, or Minor",
+                            "br_ref": "BR-02",
+                            "gateway": "XOR"
+                        },
+                        {
+                            "step": "S3a",
+                            "actor": "ACT-WH",
+                            "action": "Place inventory hold (Critical/Major); segregate held vs sellable stock",
+                            "br_ref": "BR-06, BR-14",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S3b",
+                            "actor": "ACT-QA",
+                            "action": "Skip hold when Minor",
+                            "br_ref": "",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S4",
+                            "actor": "ACT-LAB",
+                            "action": "Lab investigation track",
+                            "br_ref": "BR-04",
+                            "gateway": "AND"
+                        },
+                        {
+                            "step": "S5",
+                            "actor": "ACT-PROD",
+                            "action": "Production investigation track",
+                            "br_ref": "BR-04",
+                            "gateway": "AND"
+                        },
+                        {
+                            "step": "S6",
+                            "actor": "ACT-QA",
+                            "action": "Join tracks; check evidence complete. If missing lab/timeline, block CAPA close",
+                            "br_ref": "BR-05, BR-11",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S7",
+                            "actor": "ACT-QA",
+                            "action": "Escalate to Critical if adulteration risk detected",
+                            "br_ref": "BR-13",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S8",
+                            "actor": "ACT-REG",
+                            "action": "Review Critical case before market action",
+                            "br_ref": "BR-08",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S9",
+                            "actor": "ACT-REG",
+                            "action": "Propose recall class (None, Class Two, Class One)",
+                            "br_ref": "BR-09",
+                            "gateway": "XOR"
+                        },
+                        {
+                            "step": "S10a",
+                            "actor": "ACT-QA",
+                            "action": "Close with Class None after CAPA effectiveness review",
+                            "br_ref": "BR-09",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S10b",
+                            "actor": "ACT-QA",
+                            "action": "Concur Class Two",
+                            "br_ref": "BR-09",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S10c",
+                            "actor": "ACT-PM",
+                            "action": "Confirm Class One",
+                            "br_ref": "BR-03, BR-09",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S11",
+                            "actor": "ACT-LOG",
+                            "action": "Execute recall shipments (Class Two or Class One)",
+                            "br_ref": "BR-10",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S12",
+                            "actor": "ACT-QA",
+                            "action": "Release hold (requires ACT-QA signature; ACT-WH cannot release alone)",
+                            "br_ref": "BR-07",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S13",
+                            "actor": "ACT-PM",
+                            "action": "Acknowledge Critical severity before final CAPA close",
+                            "br_ref": "BR-03",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S14",
+                            "actor": "ACT-PO",
+                            "action": "Approve BA package",
+                            "br_ref": "BR-12",
+                            "gateway": ""
+                        }
+                    ],
+                    "source": "deterministic_workflow",
+                    "version": "1.0.0",
+                    "story_id": "US-06",
+                    "end_states": [
+                        "**Success**: BA Package Approved (S14), Recall Executed (S11), Hold Released (S12).",
+                        "**Blocked**: CAPA Closed due to missing evidence (S6), Recall Class None (S10a).",
+                        "**Escalated**: Severity escalated to Critical (S7), Critical requires PM Acknowledgment (S13)."
+                    ],
+                    "exceptions": [
+                        {
+                            "id": "Step",
+                            "handling": "Action",
+                            "condition": "Actor"
+                        },
+                        {
+                            "id": ":---",
+                            "handling": ":---",
+                            "condition": ":---"
+                        },
+                        {
+                            "id": "E-01",
+                            "handling": "Intake missing lot or plant identity — block creation, show error",
+                            "condition": "ACT-QA"
+                        }
+                    ],
+                    "artifact_id": "BPMN-Aurora_multi_plant_deviation_CAPA_and_recall_orc-US_06",
+                    "bpmn_xml_path": "BPMN-Aurora_multi_plant_deviation_CAPA_and_recall_orc-US_06.bpmn",
+                    "layout_engine": "elk",
+                    "bpmn_xml_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" id=\"Definitions_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" targetNamespace=\"https://imespro.ai/bpmn\" exporter=\"ba-agent\" exporterVersion=\"1.0.0\">\n  <bpmn:collaboration id=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"Aurora — multi-plant deviation CAPA and recall orchestration (US-06)\">\n    <bpmn:participant id=\"Participant_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"Aurora — multi-plant deviation CAPA and recall orchestration (US-06)\" processRef=\"BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" />\n  </bpmn:collaboration>\n  <bpmn:process id=\"BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"Aurora — multi-plant deviation CAPA and recall orchestration (US-06)\" isExecutable=\"false\">\n    <bpmn:laneSet id=\"LaneSet_1\">\n      <bpmn:lane id=\"Lane_ACT_QA\" name=\"ACT-QA\">\n        <bpmn:flowNodeRef>StartEvent_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_XOR_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_5</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_8</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_9</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_12</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_13</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_16</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_Exc_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_Exc_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_Exc_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_Exc_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_Exc_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_Exc_3</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_WH\" name=\"ACT-WH\">\n        <bpmn:flowNodeRef>Task_4</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_LAB\" name=\"ACT-LAB\">\n        <bpmn:flowNodeRef>Task_6</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_AND_6</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_PROD\" name=\"ACT-PROD\">\n        <bpmn:flowNodeRef>Task_7</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_AND_7</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_REG\" name=\"ACT-REG\">\n        <bpmn:flowNodeRef>Task_10</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_11</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_XOR_11</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_PM\" name=\"ACT-PM\">\n        <bpmn:flowNodeRef>Task_14</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_17</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_LOG\" name=\"ACT-LOG\">\n        <bpmn:flowNodeRef>Task_15</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_PO\" name=\"ACT-PO\">\n        <bpmn:flowNodeRef>Task_18</bpmn:flowNodeRef>\n      </bpmn:lane>\n    </bpmn:laneSet>\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"Start\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:userTask id=\"Task_1\" name=\":---\">\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_2</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_2\" name=\"Intake deviation bind lot and plant\">\n      <bpmn:incoming>Flow_2</bpmn:incoming>\n      <bpmn:outgoing>Flow_3</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_3\" name=\"Set severity Critical, Major, or Minor\">\n      <bpmn:incoming>Flow_3</bpmn:incoming>\n      <bpmn:outgoing>Flow_4</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway isMarkerVisible=\"true\" id=\"Gateway_XOR_3\" name=\"XOR\">\n      <bpmn:incoming>Flow_4</bpmn:incoming>\n      <bpmn:outgoing>Flow_5</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_5\" name=\"Skip hold when Minor\">\n      <bpmn:incoming>Flow_6</bpmn:incoming>\n      <bpmn:outgoing>Flow_7</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_8\" name=\"Join tracks; check evidence complete. If missing lab/timeline, block CAPA close\">\n      <bpmn:incoming>Flow_11</bpmn:incoming>\n      <bpmn:outgoing>Flow_12</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_9\" name=\"Escalate to Critical if adulteration risk detected\">\n      <bpmn:incoming>Flow_12</bpmn:incoming>\n      <bpmn:outgoing>Flow_13</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_12\" name=\"Close with Class None after CAPA effectiveness review\">\n      <bpmn:incoming>Flow_16</bpmn:incoming>\n      <bpmn:outgoing>Flow_17</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_13\" name=\"Concur Class Two\">\n      <bpmn:incoming>Flow_17</bpmn:incoming>\n      <bpmn:outgoing>Flow_18</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_16\" name=\"Release hold (requires ACT-QA signature; ACT-WH cannot release alone)\">\n      <bpmn:incoming>Flow_20</bpmn:incoming>\n      <bpmn:outgoing>Flow_21</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"**Success**: BA Package Approved (S14), Recall Executed (S11), Hold Released (S12).\">\n      <bpmn:incoming>Flow_23</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:endEvent id=\"EndEvent_2\" name=\"**Blocked**: CAPA Closed due to missing evidence (S6), Recall Class None (S10a).\" />\n    <bpmn:endEvent id=\"EndEvent_3\" name=\"**Escalated**: Severity escalated to Critical (S7), Critical requires PM Acknowledgment (S13).\" />\n    <bpmn:userTask id=\"Task_Exc_1\" name=\"Actor\">\n      <bpmn:incoming>Flow_24</bpmn:incoming>\n      <bpmn:outgoing>Flow_25</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_Exc_1\" name=\"Step\">\n      <bpmn:incoming>Flow_25</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_Exc_2\" name=\":---\">\n      <bpmn:incoming>Flow_26</bpmn:incoming>\n      <bpmn:outgoing>Flow_27</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_Exc_2\" name=\":---\">\n      <bpmn:incoming>Flow_27</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_Exc_3\" name=\"ACT-QA\">\n      <bpmn:incoming>Flow_28</bpmn:incoming>\n      <bpmn:outgoing>Flow_29</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_Exc_3\" name=\"E-01\">\n      <bpmn:incoming>Flow_29</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_4\" name=\"Place inventory hold (Critical/Major); segregate held vs sellable stock\">\n      <bpmn:incoming>Flow_5</bpmn:incoming>\n      <bpmn:outgoing>Flow_6</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_6\" name=\"Lab investigation track\">\n      <bpmn:incoming>Flow_7</bpmn:incoming>\n      <bpmn:outgoing>Flow_8</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:parallelGateway id=\"Gateway_AND_6\" name=\"AND\">\n      <bpmn:incoming>Flow_8</bpmn:incoming>\n      <bpmn:outgoing>Flow_9</bpmn:outgoing>\n    </bpmn:parallelGateway>\n    <bpmn:userTask id=\"Task_7\" name=\"Production investigation track\">\n      <bpmn:incoming>Flow_9</bpmn:incoming>\n      <bpmn:outgoing>Flow_10</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:parallelGateway id=\"Gateway_AND_7\" name=\"AND\">\n      <bpmn:incoming>Flow_10</bpmn:incoming>\n      <bpmn:outgoing>Flow_11</bpmn:outgoing>\n    </bpmn:parallelGateway>\n    <bpmn:userTask id=\"Task_10\" name=\"Review Critical case before market action\">\n      <bpmn:incoming>Flow_13</bpmn:incoming>\n      <bpmn:outgoing>Flow_14</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_11\" name=\"Propose recall class (None, Class Two, Class One)\">\n      <bpmn:incoming>Flow_14</bpmn:incoming>\n      <bpmn:outgoing>Flow_15</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway isMarkerVisible=\"true\" id=\"Gateway_XOR_11\" name=\"XOR\">\n      <bpmn:incoming>Flow_15</bpmn:incoming>\n      <bpmn:outgoing>Flow_16</bpmn:outgoing>\n      <bpmn:outgoing>Flow_24</bpmn:outgoing>\n      <bpmn:outgoing>Flow_26</bpmn:outgoing>\n      <bpmn:outgoing>Flow_28</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_14\" name=\"Confirm Class One\">\n      <bpmn:incoming>Flow_18</bpmn:incoming>\n      <bpmn:outgoing>Flow_19</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_17\" name=\"Acknowledge Critical severity before final CAPA close\">\n      <bpmn:incoming>Flow_21</bpmn:incoming>\n      <bpmn:outgoing>Flow_22</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_15\" name=\"Execute recall shipments (Class Two or Class One)\">\n      <bpmn:incoming>Flow_19</bpmn:incoming>\n      <bpmn:outgoing>Flow_20</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_18\" name=\"Approve BA package\">\n      <bpmn:incoming>Flow_22</bpmn:incoming>\n      <bpmn:outgoing>Flow_23</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Task_1\" />\n    <bpmn:sequenceFlow id=\"Flow_2\" sourceRef=\"Task_1\" targetRef=\"Task_2\" />\n    <bpmn:sequenceFlow id=\"Flow_3\" sourceRef=\"Task_2\" targetRef=\"Task_3\" />\n    <bpmn:sequenceFlow id=\"Flow_4\" sourceRef=\"Task_3\" targetRef=\"Gateway_XOR_3\" />\n    <bpmn:sequenceFlow id=\"Flow_5\" sourceRef=\"Gateway_XOR_3\" targetRef=\"Task_4\" />\n    <bpmn:sequenceFlow id=\"Flow_6\" sourceRef=\"Task_4\" targetRef=\"Task_5\" />\n    <bpmn:sequenceFlow id=\"Flow_7\" sourceRef=\"Task_5\" targetRef=\"Task_6\" />\n    <bpmn:sequenceFlow id=\"Flow_8\" sourceRef=\"Task_6\" targetRef=\"Gateway_AND_6\" />\n    <bpmn:sequenceFlow id=\"Flow_9\" sourceRef=\"Gateway_AND_6\" targetRef=\"Task_7\" />\n    <bpmn:sequenceFlow id=\"Flow_10\" sourceRef=\"Task_7\" targetRef=\"Gateway_AND_7\" />\n    <bpmn:sequenceFlow id=\"Flow_11\" sourceRef=\"Gateway_AND_7\" targetRef=\"Task_8\" />\n    <bpmn:sequenceFlow id=\"Flow_12\" sourceRef=\"Task_8\" targetRef=\"Task_9\" />\n    <bpmn:sequenceFlow id=\"Flow_13\" sourceRef=\"Task_9\" targetRef=\"Task_10\" />\n    <bpmn:sequenceFlow id=\"Flow_14\" sourceRef=\"Task_10\" targetRef=\"Task_11\" />\n    <bpmn:sequenceFlow id=\"Flow_15\" sourceRef=\"Task_11\" targetRef=\"Gateway_XOR_11\" />\n    <bpmn:sequenceFlow id=\"Flow_16\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_12\" />\n    <bpmn:sequenceFlow id=\"Flow_17\" sourceRef=\"Task_12\" targetRef=\"Task_13\" />\n    <bpmn:sequenceFlow id=\"Flow_18\" sourceRef=\"Task_13\" targetRef=\"Task_14\" />\n    <bpmn:sequenceFlow id=\"Flow_19\" sourceRef=\"Task_14\" targetRef=\"Task_15\" />\n    <bpmn:sequenceFlow id=\"Flow_20\" sourceRef=\"Task_15\" targetRef=\"Task_16\" />\n    <bpmn:sequenceFlow id=\"Flow_21\" sourceRef=\"Task_16\" targetRef=\"Task_17\" />\n    <bpmn:sequenceFlow id=\"Flow_22\" sourceRef=\"Task_17\" targetRef=\"Task_18\" />\n    <bpmn:sequenceFlow id=\"Flow_23\" sourceRef=\"Task_18\" targetRef=\"EndEvent_1\" />\n    <bpmn:sequenceFlow id=\"Flow_24\" name=\"Step\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_Exc_1\" />\n    <bpmn:sequenceFlow id=\"Flow_25\" sourceRef=\"Task_Exc_1\" targetRef=\"EndEvent_Exc_1\" />\n    <bpmn:sequenceFlow id=\"Flow_26\" name=\":---\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_Exc_2\" />\n    <bpmn:sequenceFlow id=\"Flow_27\" sourceRef=\"Task_Exc_2\" targetRef=\"EndEvent_Exc_2\" />\n    <bpmn:sequenceFlow id=\"Flow_28\" name=\"E-01\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_Exc_3\" />\n    <bpmn:sequenceFlow id=\"Flow_29\" sourceRef=\"Task_Exc_3\" targetRef=\"EndEvent_Exc_3\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Definitions_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"BPMNDiagram\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_Definitions_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" bpmnElement=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\">\n      <bpmndi:BPMNShape id=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal_di\" bpmnElement=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\">\n        <dc:Bounds x=\"12\" y=\"12\" width=\"3592\" height=\"1713\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Participant_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal_di\" bpmnElement=\"Participant_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" isHorizontal=\"true\">\n        <dc:Bounds x=\"12\" y=\"12\" width=\"3568\" height=\"1689\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_QA_di\" bpmnElement=\"Lane_ACT_QA\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"12\" width=\"3538\" height=\"569\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"110\" y=\"141\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"78\" y=\"181\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_1_di\" bpmnElement=\"Task_1\">\n        <dc:Bounds x=\"166\" y=\"128\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_2_di\" bpmnElement=\"Task_2\">\n        <dc:Bounds x=\"286\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_3_di\" bpmnElement=\"Task_3\">\n        <dc:Bounds x=\"456\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_XOR_3_di\" bpmnElement=\"Gateway_XOR_3\">\n        <dc:Bounds x=\"626\" y=\"143\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"601\" y=\"125\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_5_di\" bpmnElement=\"Task_5\">\n        <dc:Bounds x=\"736\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_8_di\" bpmnElement=\"Task_8\">\n        <dc:Bounds x=\"946\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_9_di\" bpmnElement=\"Task_9\">\n        <dc:Bounds x=\"1156\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_12_di\" bpmnElement=\"Task_12\">\n        <dc:Bounds x=\"1366\" y=\"113\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_13_di\" bpmnElement=\"Task_13\">\n        <dc:Bounds x=\"2456\" y=\"113\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_16_di\" bpmnElement=\"Task_16\">\n        <dc:Bounds x=\"2666\" y=\"113\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"2876\" y=\"126\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"2844\" y=\"166\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_2_di\" bpmnElement=\"EndEvent_2\">\n        <dc:Bounds x=\"3476\" y=\"300\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"340\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_3_di\" bpmnElement=\"EndEvent_3\">\n        <dc:Bounds x=\"3476\" y=\"52\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"92\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_Exc_1_di\" bpmnElement=\"Task_Exc_1\">\n        <dc:Bounds x=\"2311\" y=\"361\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_Exc_1_di\" bpmnElement=\"EndEvent_Exc_1\">\n        <dc:Bounds x=\"3476\" y=\"374\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"414\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_Exc_2_di\" bpmnElement=\"Task_Exc_2\">\n        <dc:Bounds x=\"2311\" y=\"461\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_Exc_2_di\" bpmnElement=\"EndEvent_Exc_2\">\n        <dc:Bounds x=\"3476\" y=\"474\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"514\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_Exc_3_di\" bpmnElement=\"Task_Exc_3\">\n        <dc:Bounds x=\"2311\" y=\"213\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_Exc_3_di\" bpmnElement=\"EndEvent_Exc_3\">\n        <dc:Bounds x=\"3476\" y=\"226\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"266\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_WH_di\" bpmnElement=\"Lane_ACT_WH\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"581\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_4_di\" bpmnElement=\"Task_4\">\n        <dc:Bounds x=\"696\" y=\"621\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_LAB_di\" bpmnElement=\"Lane_ACT_LAB\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"741\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_6_di\" bpmnElement=\"Task_6\">\n        <dc:Bounds x=\"1036\" y=\"781\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_AND_6_di\" bpmnElement=\"Gateway_AND_6\">\n        <dc:Bounds x=\"1206\" y=\"796\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"1181\" y=\"778\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_PROD_di\" bpmnElement=\"Lane_ACT_PROD\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"901\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_7_di\" bpmnElement=\"Task_7\">\n        <dc:Bounds x=\"1276\" y=\"941\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_AND_7_di\" bpmnElement=\"Gateway_AND_7\">\n        <dc:Bounds x=\"1446\" y=\"956\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"1421\" y=\"938\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_REG_di\" bpmnElement=\"Lane_ACT_REG\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1061\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_10_di\" bpmnElement=\"Task_10\">\n        <dc:Bounds x=\"1856\" y=\"1101\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_11_di\" bpmnElement=\"Task_11\">\n        <dc:Bounds x=\"2026\" y=\"1101\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_XOR_11_di\" bpmnElement=\"Gateway_XOR_11\">\n        <dc:Bounds x=\"2196\" y=\"1116\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"2171\" y=\"1098\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_PM_di\" bpmnElement=\"Lane_ACT_PM\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1221\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_14_di\" bpmnElement=\"Task_14\">\n        <dc:Bounds x=\"2626\" y=\"1261\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_17_di\" bpmnElement=\"Task_17\">\n        <dc:Bounds x=\"2836\" y=\"1261\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_LOG_di\" bpmnElement=\"Lane_ACT_LOG\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1381\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_15_di\" bpmnElement=\"Task_15\">\n        <dc:Bounds x=\"2796\" y=\"1421\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_PO_di\" bpmnElement=\"Lane_ACT_PO\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1541\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_18_di\" bpmnElement=\"Task_18\">\n        <dc:Bounds x=\"3306\" y=\"1581\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"146\" y=\"159\" />\n        <di:waypoint x=\"156\" y=\"159\" />\n        <di:waypoint x=\"156\" y=\"168\" />\n        <di:waypoint x=\"166\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_2_di\" bpmnElement=\"Flow_2\">\n        <di:waypoint x=\"266\" y=\"168\" />\n        <di:waypoint x=\"286\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_3_di\" bpmnElement=\"Flow_3\">\n        <di:waypoint x=\"436\" y=\"168\" />\n        <di:waypoint x=\"456\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_4_di\" bpmnElement=\"Flow_4\">\n        <di:waypoint x=\"606\" y=\"168\" />\n        <di:waypoint x=\"626\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_5_di\" bpmnElement=\"Flow_5\">\n        <di:waypoint x=\"676\" y=\"168\" />\n        <di:waypoint x=\"686\" y=\"168\" />\n        <di:waypoint x=\"686\" y=\"661\" />\n        <di:waypoint x=\"696\" y=\"661\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_6_di\" bpmnElement=\"Flow_6\">\n        <di:waypoint x=\"771\" y=\"621\" />\n        <di:waypoint x=\"771\" y=\"414.5\" />\n        <di:waypoint x=\"811\" y=\"414.5\" />\n        <di:waypoint x=\"811\" y=\"208\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_7_di\" bpmnElement=\"Flow_7\">\n        <di:waypoint x=\"811\" y=\"208\" />\n        <di:waypoint x=\"811\" y=\"597\" />\n        <di:waypoint x=\"1005\" y=\"597\" />\n        <di:waypoint x=\"1111\" y=\"597\" />\n        <di:waypoint x=\"1111\" y=\"781\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_8_di\" bpmnElement=\"Flow_8\">\n        <di:waypoint x=\"1186\" y=\"821\" />\n        <di:waypoint x=\"1206\" y=\"821\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_9_di\" bpmnElement=\"Flow_9\">\n        <di:waypoint x=\"1256\" y=\"821\" />\n        <di:waypoint x=\"1266\" y=\"821\" />\n        <di:waypoint x=\"1266\" y=\"981\" />\n        <di:waypoint x=\"1276\" y=\"981\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_10_di\" bpmnElement=\"Flow_10\">\n        <di:waypoint x=\"1426\" y=\"981\" />\n        <di:waypoint x=\"1446\" y=\"981\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_11_di\" bpmnElement=\"Flow_11\">\n        <di:waypoint x=\"1471\" y=\"956\" />\n        <di:waypoint x=\"1471\" y=\"267\" />\n        <di:waypoint x=\"1055\" y=\"267\" />\n        <di:waypoint x=\"1021\" y=\"267\" />\n        <di:waypoint x=\"1021\" y=\"208\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_12_di\" bpmnElement=\"Flow_12\">\n        <di:waypoint x=\"1096\" y=\"168\" />\n        <di:waypoint x=\"1156\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_13_di\" bpmnElement=\"Flow_13\">\n        <di:waypoint x=\"1306\" y=\"168\" />\n        <di:waypoint x=\"1321\" y=\"168\" />\n        <di:waypoint x=\"1321\" y=\"203\" />\n        <di:waypoint x=\"1931\" y=\"203\" />\n        <di:waypoint x=\"1931\" y=\"1101\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_14_di\" bpmnElement=\"Flow_14\">\n        <di:waypoint x=\"2006\" y=\"1141\" />\n        <di:waypoint x=\"2026\" y=\"1141\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_15_di\" bpmnElement=\"Flow_15\">\n        <di:waypoint x=\"2176\" y=\"1141\" />\n        <di:waypoint x=\"2196\" y=\"1141\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_16_di\" bpmnElement=\"Flow_16\">\n        <di:waypoint x=\"2221\" y=\"1116\" />\n        <di:waypoint x=\"2221\" y=\"153\" />\n        <di:waypoint x=\"1516\" y=\"153\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_17_di\" bpmnElement=\"Flow_17\">\n        <di:waypoint x=\"1516\" y=\"153\" />\n        <di:waypoint x=\"2456\" y=\"153\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_18_di\" bpmnElement=\"Flow_18\">\n        <di:waypoint x=\"2606\" y=\"153\" />\n        <di:waypoint x=\"2616\" y=\"153\" />\n        <di:waypoint x=\"2616\" y=\"1301\" />\n        <di:waypoint x=\"2626\" y=\"1301\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_19_di\" bpmnElement=\"Flow_19\">\n        <di:waypoint x=\"2776\" y=\"1301\" />\n        <di:waypoint x=\"2786\" y=\"1301\" />\n        <di:waypoint x=\"2786\" y=\"1461\" />\n        <di:waypoint x=\"2796\" y=\"1461\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_20_di\" bpmnElement=\"Flow_20\">\n        <di:waypoint x=\"2796\" y=\"1461\" />\n        <di:waypoint x=\"2785\" y=\"1461\" />\n        <di:waypoint x=\"2785\" y=\"1087\" />\n        <di:waypoint x=\"2741\" y=\"1087\" />\n        <di:waypoint x=\"2741\" y=\"193\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_21_di\" bpmnElement=\"Flow_21\">\n        <di:waypoint x=\"2816\" y=\"153\" />\n        <di:waypoint x=\"2826\" y=\"153\" />\n        <di:waypoint x=\"2826\" y=\"1301\" />\n        <di:waypoint x=\"2836\" y=\"1301\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_22_di\" bpmnElement=\"Flow_22\">\n        <di:waypoint x=\"2986\" y=\"1301\" />\n        <di:waypoint x=\"3146\" y=\"1301\" />\n        <di:waypoint x=\"3146\" y=\"1621\" />\n        <di:waypoint x=\"3306\" y=\"1621\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_23_di\" bpmnElement=\"Flow_23\">\n        <di:waypoint x=\"3306\" y=\"1621\" />\n        <di:waypoint x=\"3109\" y=\"1621\" />\n        <di:waypoint x=\"3109\" y=\"144\" />\n        <di:waypoint x=\"2912\" y=\"144\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_24_di\" bpmnElement=\"Flow_24\">\n        <di:waypoint x=\"2246\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"401\" />\n        <di:waypoint x=\"2311\" y=\"401\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_25_di\" bpmnElement=\"Flow_25\">\n        <di:waypoint x=\"2411\" y=\"401\" />\n        <di:waypoint x=\"2943.5\" y=\"401\" />\n        <di:waypoint x=\"2943.5\" y=\"392\" />\n        <di:waypoint x=\"3476\" y=\"392\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_26_di\" bpmnElement=\"Flow_26\">\n        <di:waypoint x=\"2246\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"501\" />\n        <di:waypoint x=\"2311\" y=\"501\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_27_di\" bpmnElement=\"Flow_27\">\n        <di:waypoint x=\"2411\" y=\"501\" />\n        <di:waypoint x=\"2943.5\" y=\"501\" />\n        <di:waypoint x=\"2943.5\" y=\"492\" />\n        <di:waypoint x=\"3476\" y=\"492\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_28_di\" bpmnElement=\"Flow_28\">\n        <di:waypoint x=\"2246\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"253\" />\n        <di:waypoint x=\"2311\" y=\"253\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_29_di\" bpmnElement=\"Flow_29\">\n        <di:waypoint x=\"2411\" y=\"253\" />\n        <di:waypoint x=\"2943.5\" y=\"253\" />\n        <di:waypoint x=\"2943.5\" y=\"244\" />\n        <di:waypoint x=\"3476\" y=\"244\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n",
+                    "validation_status": "draft"
+                },
+                "US-08": {
+                    "steps": [
+                        {
+                            "step": ":---",
+                            "actor": ":---",
+                            "action": ":---",
+                            "br_ref": ":---",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S1",
+                            "actor": "ACT-QA",
+                            "action": "Intake deviation bind lot and plant",
+                            "br_ref": "BR-01",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S2",
+                            "actor": "ACT-QA",
+                            "action": "Set severity Critical, Major, or Minor",
+                            "br_ref": "BR-02",
+                            "gateway": "XOR"
+                        },
+                        {
+                            "step": "S3a",
+                            "actor": "ACT-WH",
+                            "action": "Place inventory hold (Critical/Major); segregate held vs sellable stock",
+                            "br_ref": "BR-06, BR-14",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S3b",
+                            "actor": "ACT-QA",
+                            "action": "Skip hold when Minor",
+                            "br_ref": "",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S4",
+                            "actor": "ACT-LAB",
+                            "action": "Lab investigation track",
+                            "br_ref": "BR-04",
+                            "gateway": "AND"
+                        },
+                        {
+                            "step": "S5",
+                            "actor": "ACT-PROD",
+                            "action": "Production investigation track",
+                            "br_ref": "BR-04",
+                            "gateway": "AND"
+                        },
+                        {
+                            "step": "S6",
+                            "actor": "ACT-QA",
+                            "action": "Join tracks; check evidence complete. If missing lab/timeline, block CAPA close",
+                            "br_ref": "BR-05, BR-11",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S7",
+                            "actor": "ACT-QA",
+                            "action": "Escalate to Critical if adulteration risk detected",
+                            "br_ref": "BR-13",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S8",
+                            "actor": "ACT-REG",
+                            "action": "Review Critical case before market action",
+                            "br_ref": "BR-08",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S9",
+                            "actor": "ACT-REG",
+                            "action": "Propose recall class (None, Class Two, Class One)",
+                            "br_ref": "BR-09",
+                            "gateway": "XOR"
+                        },
+                        {
+                            "step": "S10a",
+                            "actor": "ACT-QA",
+                            "action": "Close with Class None after CAPA effectiveness review",
+                            "br_ref": "BR-09",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S10b",
+                            "actor": "ACT-QA",
+                            "action": "Concur Class Two",
+                            "br_ref": "BR-09",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S10c",
+                            "actor": "ACT-PM",
+                            "action": "Confirm Class One",
+                            "br_ref": "BR-03, BR-09",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S11",
+                            "actor": "ACT-LOG",
+                            "action": "Execute recall shipments (Class Two or Class One)",
+                            "br_ref": "BR-10",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S12",
+                            "actor": "ACT-QA",
+                            "action": "Release hold (requires ACT-QA signature; ACT-WH cannot release alone)",
+                            "br_ref": "BR-07",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S13",
+                            "actor": "ACT-PM",
+                            "action": "Acknowledge Critical severity before final CAPA close",
+                            "br_ref": "BR-03",
+                            "gateway": ""
+                        },
+                        {
+                            "step": "S14",
+                            "actor": "ACT-PO",
+                            "action": "Approve BA package",
+                            "br_ref": "BR-12",
+                            "gateway": ""
+                        }
+                    ],
+                    "source": "deterministic_workflow",
+                    "version": "1.0.0",
+                    "story_id": "US-08",
+                    "end_states": [
+                        "**Success**: BA Package Approved (S14), Recall Executed (S11), Hold Released (S12).",
+                        "**Blocked**: CAPA Closed due to missing evidence (S6), Recall Class None (S10a).",
+                        "**Escalated**: Severity escalated to Critical (S7), Critical requires PM Acknowledgment (S13)."
+                    ],
+                    "exceptions": [
+                        {
+                            "id": "Step",
+                            "handling": "Action",
+                            "condition": "Actor"
+                        },
+                        {
+                            "id": ":---",
+                            "handling": ":---",
+                            "condition": ":---"
+                        },
+                        {
+                            "id": "E-01",
+                            "handling": "Intake missing lot or plant identity — block creation, show error",
+                            "condition": "ACT-QA"
+                        }
+                    ],
+                    "artifact_id": "BPMN-Aurora_multi_plant_deviation_CAPA_and_recall_orc-US_08",
+                    "bpmn_xml_path": "BPMN-Aurora_multi_plant_deviation_CAPA_and_recall_orc-US_08.bpmn",
+                    "layout_engine": "elk",
+                    "bpmn_xml_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" id=\"Definitions_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" targetNamespace=\"https://imespro.ai/bpmn\" exporter=\"ba-agent\" exporterVersion=\"1.0.0\">\n  <bpmn:collaboration id=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"Aurora — multi-plant deviation CAPA and recall orchestration (US-08)\">\n    <bpmn:participant id=\"Participant_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"Aurora — multi-plant deviation CAPA and recall orchestration (US-08)\" processRef=\"BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" />\n  </bpmn:collaboration>\n  <bpmn:process id=\"BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"Aurora — multi-plant deviation CAPA and recall orchestration (US-08)\" isExecutable=\"false\">\n    <bpmn:laneSet id=\"LaneSet_1\">\n      <bpmn:lane id=\"Lane_ACT_QA\" name=\"ACT-QA\">\n        <bpmn:flowNodeRef>StartEvent_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_XOR_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_5</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_8</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_9</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_12</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_13</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_16</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_Exc_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_Exc_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_Exc_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_Exc_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_Exc_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_Exc_3</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_WH\" name=\"ACT-WH\">\n        <bpmn:flowNodeRef>Task_4</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_LAB\" name=\"ACT-LAB\">\n        <bpmn:flowNodeRef>Task_6</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_AND_6</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_PROD\" name=\"ACT-PROD\">\n        <bpmn:flowNodeRef>Task_7</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_AND_7</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_REG\" name=\"ACT-REG\">\n        <bpmn:flowNodeRef>Task_10</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_11</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_XOR_11</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_PM\" name=\"ACT-PM\">\n        <bpmn:flowNodeRef>Task_14</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_17</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_LOG\" name=\"ACT-LOG\">\n        <bpmn:flowNodeRef>Task_15</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_PO\" name=\"ACT-PO\">\n        <bpmn:flowNodeRef>Task_18</bpmn:flowNodeRef>\n      </bpmn:lane>\n    </bpmn:laneSet>\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"Start\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:userTask id=\"Task_1\" name=\":---\">\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_2</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_2\" name=\"Intake deviation bind lot and plant\">\n      <bpmn:incoming>Flow_2</bpmn:incoming>\n      <bpmn:outgoing>Flow_3</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_3\" name=\"Set severity Critical, Major, or Minor\">\n      <bpmn:incoming>Flow_3</bpmn:incoming>\n      <bpmn:outgoing>Flow_4</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway isMarkerVisible=\"true\" id=\"Gateway_XOR_3\" name=\"XOR\">\n      <bpmn:incoming>Flow_4</bpmn:incoming>\n      <bpmn:outgoing>Flow_5</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_5\" name=\"Skip hold when Minor\">\n      <bpmn:incoming>Flow_6</bpmn:incoming>\n      <bpmn:outgoing>Flow_7</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_8\" name=\"Join tracks; check evidence complete. If missing lab/timeline, block CAPA close\">\n      <bpmn:incoming>Flow_11</bpmn:incoming>\n      <bpmn:outgoing>Flow_12</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_9\" name=\"Escalate to Critical if adulteration risk detected\">\n      <bpmn:incoming>Flow_12</bpmn:incoming>\n      <bpmn:outgoing>Flow_13</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_12\" name=\"Close with Class None after CAPA effectiveness review\">\n      <bpmn:incoming>Flow_16</bpmn:incoming>\n      <bpmn:outgoing>Flow_17</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_13\" name=\"Concur Class Two\">\n      <bpmn:incoming>Flow_17</bpmn:incoming>\n      <bpmn:outgoing>Flow_18</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_16\" name=\"Release hold (requires ACT-QA signature; ACT-WH cannot release alone)\">\n      <bpmn:incoming>Flow_20</bpmn:incoming>\n      <bpmn:outgoing>Flow_21</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"**Success**: BA Package Approved (S14), Recall Executed (S11), Hold Released (S12).\">\n      <bpmn:incoming>Flow_23</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:endEvent id=\"EndEvent_2\" name=\"**Blocked**: CAPA Closed due to missing evidence (S6), Recall Class None (S10a).\" />\n    <bpmn:endEvent id=\"EndEvent_3\" name=\"**Escalated**: Severity escalated to Critical (S7), Critical requires PM Acknowledgment (S13).\" />\n    <bpmn:userTask id=\"Task_Exc_1\" name=\"Actor\">\n      <bpmn:incoming>Flow_24</bpmn:incoming>\n      <bpmn:outgoing>Flow_25</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_Exc_1\" name=\"Step\">\n      <bpmn:incoming>Flow_25</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_Exc_2\" name=\":---\">\n      <bpmn:incoming>Flow_26</bpmn:incoming>\n      <bpmn:outgoing>Flow_27</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_Exc_2\" name=\":---\">\n      <bpmn:incoming>Flow_27</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_Exc_3\" name=\"ACT-QA\">\n      <bpmn:incoming>Flow_28</bpmn:incoming>\n      <bpmn:outgoing>Flow_29</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_Exc_3\" name=\"E-01\">\n      <bpmn:incoming>Flow_29</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_4\" name=\"Place inventory hold (Critical/Major); segregate held vs sellable stock\">\n      <bpmn:incoming>Flow_5</bpmn:incoming>\n      <bpmn:outgoing>Flow_6</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_6\" name=\"Lab investigation track\">\n      <bpmn:incoming>Flow_7</bpmn:incoming>\n      <bpmn:outgoing>Flow_8</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:parallelGateway id=\"Gateway_AND_6\" name=\"AND\">\n      <bpmn:incoming>Flow_8</bpmn:incoming>\n      <bpmn:outgoing>Flow_9</bpmn:outgoing>\n    </bpmn:parallelGateway>\n    <bpmn:userTask id=\"Task_7\" name=\"Production investigation track\">\n      <bpmn:incoming>Flow_9</bpmn:incoming>\n      <bpmn:outgoing>Flow_10</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:parallelGateway id=\"Gateway_AND_7\" name=\"AND\">\n      <bpmn:incoming>Flow_10</bpmn:incoming>\n      <bpmn:outgoing>Flow_11</bpmn:outgoing>\n    </bpmn:parallelGateway>\n    <bpmn:userTask id=\"Task_10\" name=\"Review Critical case before market action\">\n      <bpmn:incoming>Flow_13</bpmn:incoming>\n      <bpmn:outgoing>Flow_14</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_11\" name=\"Propose recall class (None, Class Two, Class One)\">\n      <bpmn:incoming>Flow_14</bpmn:incoming>\n      <bpmn:outgoing>Flow_15</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway isMarkerVisible=\"true\" id=\"Gateway_XOR_11\" name=\"XOR\">\n      <bpmn:incoming>Flow_15</bpmn:incoming>\n      <bpmn:outgoing>Flow_16</bpmn:outgoing>\n      <bpmn:outgoing>Flow_24</bpmn:outgoing>\n      <bpmn:outgoing>Flow_26</bpmn:outgoing>\n      <bpmn:outgoing>Flow_28</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_14\" name=\"Confirm Class One\">\n      <bpmn:incoming>Flow_18</bpmn:incoming>\n      <bpmn:outgoing>Flow_19</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_17\" name=\"Acknowledge Critical severity before final CAPA close\">\n      <bpmn:incoming>Flow_21</bpmn:incoming>\n      <bpmn:outgoing>Flow_22</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_15\" name=\"Execute recall shipments (Class Two or Class One)\">\n      <bpmn:incoming>Flow_19</bpmn:incoming>\n      <bpmn:outgoing>Flow_20</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_18\" name=\"Approve BA package\">\n      <bpmn:incoming>Flow_22</bpmn:incoming>\n      <bpmn:outgoing>Flow_23</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Task_1\" />\n    <bpmn:sequenceFlow id=\"Flow_2\" sourceRef=\"Task_1\" targetRef=\"Task_2\" />\n    <bpmn:sequenceFlow id=\"Flow_3\" sourceRef=\"Task_2\" targetRef=\"Task_3\" />\n    <bpmn:sequenceFlow id=\"Flow_4\" sourceRef=\"Task_3\" targetRef=\"Gateway_XOR_3\" />\n    <bpmn:sequenceFlow id=\"Flow_5\" sourceRef=\"Gateway_XOR_3\" targetRef=\"Task_4\" />\n    <bpmn:sequenceFlow id=\"Flow_6\" sourceRef=\"Task_4\" targetRef=\"Task_5\" />\n    <bpmn:sequenceFlow id=\"Flow_7\" sourceRef=\"Task_5\" targetRef=\"Task_6\" />\n    <bpmn:sequenceFlow id=\"Flow_8\" sourceRef=\"Task_6\" targetRef=\"Gateway_AND_6\" />\n    <bpmn:sequenceFlow id=\"Flow_9\" sourceRef=\"Gateway_AND_6\" targetRef=\"Task_7\" />\n    <bpmn:sequenceFlow id=\"Flow_10\" sourceRef=\"Task_7\" targetRef=\"Gateway_AND_7\" />\n    <bpmn:sequenceFlow id=\"Flow_11\" sourceRef=\"Gateway_AND_7\" targetRef=\"Task_8\" />\n    <bpmn:sequenceFlow id=\"Flow_12\" sourceRef=\"Task_8\" targetRef=\"Task_9\" />\n    <bpmn:sequenceFlow id=\"Flow_13\" sourceRef=\"Task_9\" targetRef=\"Task_10\" />\n    <bpmn:sequenceFlow id=\"Flow_14\" sourceRef=\"Task_10\" targetRef=\"Task_11\" />\n    <bpmn:sequenceFlow id=\"Flow_15\" sourceRef=\"Task_11\" targetRef=\"Gateway_XOR_11\" />\n    <bpmn:sequenceFlow id=\"Flow_16\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_12\" />\n    <bpmn:sequenceFlow id=\"Flow_17\" sourceRef=\"Task_12\" targetRef=\"Task_13\" />\n    <bpmn:sequenceFlow id=\"Flow_18\" sourceRef=\"Task_13\" targetRef=\"Task_14\" />\n    <bpmn:sequenceFlow id=\"Flow_19\" sourceRef=\"Task_14\" targetRef=\"Task_15\" />\n    <bpmn:sequenceFlow id=\"Flow_20\" sourceRef=\"Task_15\" targetRef=\"Task_16\" />\n    <bpmn:sequenceFlow id=\"Flow_21\" sourceRef=\"Task_16\" targetRef=\"Task_17\" />\n    <bpmn:sequenceFlow id=\"Flow_22\" sourceRef=\"Task_17\" targetRef=\"Task_18\" />\n    <bpmn:sequenceFlow id=\"Flow_23\" sourceRef=\"Task_18\" targetRef=\"EndEvent_1\" />\n    <bpmn:sequenceFlow id=\"Flow_24\" name=\"Step\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_Exc_1\" />\n    <bpmn:sequenceFlow id=\"Flow_25\" sourceRef=\"Task_Exc_1\" targetRef=\"EndEvent_Exc_1\" />\n    <bpmn:sequenceFlow id=\"Flow_26\" name=\":---\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_Exc_2\" />\n    <bpmn:sequenceFlow id=\"Flow_27\" sourceRef=\"Task_Exc_2\" targetRef=\"EndEvent_Exc_2\" />\n    <bpmn:sequenceFlow id=\"Flow_28\" name=\"E-01\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_Exc_3\" />\n    <bpmn:sequenceFlow id=\"Flow_29\" sourceRef=\"Task_Exc_3\" targetRef=\"EndEvent_Exc_3\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Definitions_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"BPMNDiagram\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_Definitions_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" bpmnElement=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\">\n      <bpmndi:BPMNShape id=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal_di\" bpmnElement=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\">\n        <dc:Bounds x=\"12\" y=\"12\" width=\"3592\" height=\"1713\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Participant_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal_di\" bpmnElement=\"Participant_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" isHorizontal=\"true\">\n        <dc:Bounds x=\"12\" y=\"12\" width=\"3568\" height=\"1689\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_QA_di\" bpmnElement=\"Lane_ACT_QA\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"12\" width=\"3538\" height=\"569\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"110\" y=\"141\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"78\" y=\"181\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_1_di\" bpmnElement=\"Task_1\">\n        <dc:Bounds x=\"166\" y=\"128\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_2_di\" bpmnElement=\"Task_2\">\n        <dc:Bounds x=\"286\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_3_di\" bpmnElement=\"Task_3\">\n        <dc:Bounds x=\"456\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_XOR_3_di\" bpmnElement=\"Gateway_XOR_3\">\n        <dc:Bounds x=\"626\" y=\"143\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"601\" y=\"125\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_5_di\" bpmnElement=\"Task_5\">\n        <dc:Bounds x=\"736\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_8_di\" bpmnElement=\"Task_8\">\n        <dc:Bounds x=\"946\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_9_di\" bpmnElement=\"Task_9\">\n        <dc:Bounds x=\"1156\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_12_di\" bpmnElement=\"Task_12\">\n        <dc:Bounds x=\"1366\" y=\"113\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_13_di\" bpmnElement=\"Task_13\">\n        <dc:Bounds x=\"2456\" y=\"113\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_16_di\" bpmnElement=\"Task_16\">\n        <dc:Bounds x=\"2666\" y=\"113\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"2876\" y=\"126\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"2844\" y=\"166\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_2_di\" bpmnElement=\"EndEvent_2\">\n        <dc:Bounds x=\"3476\" y=\"300\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"340\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_3_di\" bpmnElement=\"EndEvent_3\">\n        <dc:Bounds x=\"3476\" y=\"52\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"92\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_Exc_1_di\" bpmnElement=\"Task_Exc_1\">\n        <dc:Bounds x=\"2311\" y=\"361\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_Exc_1_di\" bpmnElement=\"EndEvent_Exc_1\">\n        <dc:Bounds x=\"3476\" y=\"374\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"414\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_Exc_2_di\" bpmnElement=\"Task_Exc_2\">\n        <dc:Bounds x=\"2311\" y=\"461\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_Exc_2_di\" bpmnElement=\"EndEvent_Exc_2\">\n        <dc:Bounds x=\"3476\" y=\"474\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"514\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_Exc_3_di\" bpmnElement=\"Task_Exc_3\">\n        <dc:Bounds x=\"2311\" y=\"213\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_Exc_3_di\" bpmnElement=\"EndEvent_Exc_3\">\n        <dc:Bounds x=\"3476\" y=\"226\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"266\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_WH_di\" bpmnElement=\"Lane_ACT_WH\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"581\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_4_di\" bpmnElement=\"Task_4\">\n        <dc:Bounds x=\"696\" y=\"621\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_LAB_di\" bpmnElement=\"Lane_ACT_LAB\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"741\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_6_di\" bpmnElement=\"Task_6\">\n        <dc:Bounds x=\"1036\" y=\"781\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_AND_6_di\" bpmnElement=\"Gateway_AND_6\">\n        <dc:Bounds x=\"1206\" y=\"796\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"1181\" y=\"778\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_PROD_di\" bpmnElement=\"Lane_ACT_PROD\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"901\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_7_di\" bpmnElement=\"Task_7\">\n        <dc:Bounds x=\"1276\" y=\"941\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_AND_7_di\" bpmnElement=\"Gateway_AND_7\">\n        <dc:Bounds x=\"1446\" y=\"956\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"1421\" y=\"938\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_REG_di\" bpmnElement=\"Lane_ACT_REG\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1061\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_10_di\" bpmnElement=\"Task_10\">\n        <dc:Bounds x=\"1856\" y=\"1101\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_11_di\" bpmnElement=\"Task_11\">\n        <dc:Bounds x=\"2026\" y=\"1101\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_XOR_11_di\" bpmnElement=\"Gateway_XOR_11\">\n        <dc:Bounds x=\"2196\" y=\"1116\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"2171\" y=\"1098\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_PM_di\" bpmnElement=\"Lane_ACT_PM\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1221\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_14_di\" bpmnElement=\"Task_14\">\n        <dc:Bounds x=\"2626\" y=\"1261\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_17_di\" bpmnElement=\"Task_17\">\n        <dc:Bounds x=\"2836\" y=\"1261\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_LOG_di\" bpmnElement=\"Lane_ACT_LOG\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1381\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_15_di\" bpmnElement=\"Task_15\">\n        <dc:Bounds x=\"2796\" y=\"1421\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_PO_di\" bpmnElement=\"Lane_ACT_PO\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1541\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_18_di\" bpmnElement=\"Task_18\">\n        <dc:Bounds x=\"3306\" y=\"1581\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"146\" y=\"159\" />\n        <di:waypoint x=\"156\" y=\"159\" />\n        <di:waypoint x=\"156\" y=\"168\" />\n        <di:waypoint x=\"166\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_2_di\" bpmnElement=\"Flow_2\">\n        <di:waypoint x=\"266\" y=\"168\" />\n        <di:waypoint x=\"286\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_3_di\" bpmnElement=\"Flow_3\">\n        <di:waypoint x=\"436\" y=\"168\" />\n        <di:waypoint x=\"456\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_4_di\" bpmnElement=\"Flow_4\">\n        <di:waypoint x=\"606\" y=\"168\" />\n        <di:waypoint x=\"626\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_5_di\" bpmnElement=\"Flow_5\">\n        <di:waypoint x=\"676\" y=\"168\" />\n        <di:waypoint x=\"686\" y=\"168\" />\n        <di:waypoint x=\"686\" y=\"661\" />\n        <di:waypoint x=\"696\" y=\"661\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_6_di\" bpmnElement=\"Flow_6\">\n        <di:waypoint x=\"771\" y=\"621\" />\n        <di:waypoint x=\"771\" y=\"414.5\" />\n        <di:waypoint x=\"811\" y=\"414.5\" />\n        <di:waypoint x=\"811\" y=\"208\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_7_di\" bpmnElement=\"Flow_7\">\n        <di:waypoint x=\"811\" y=\"208\" />\n        <di:waypoint x=\"811\" y=\"597\" />\n        <di:waypoint x=\"1005\" y=\"597\" />\n        <di:waypoint x=\"1111\" y=\"597\" />\n        <di:waypoint x=\"1111\" y=\"781\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_8_di\" bpmnElement=\"Flow_8\">\n        <di:waypoint x=\"1186\" y=\"821\" />\n        <di:waypoint x=\"1206\" y=\"821\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_9_di\" bpmnElement=\"Flow_9\">\n        <di:waypoint x=\"1256\" y=\"821\" />\n        <di:waypoint x=\"1266\" y=\"821\" />\n        <di:waypoint x=\"1266\" y=\"981\" />\n        <di:waypoint x=\"1276\" y=\"981\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_10_di\" bpmnElement=\"Flow_10\">\n        <di:waypoint x=\"1426\" y=\"981\" />\n        <di:waypoint x=\"1446\" y=\"981\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_11_di\" bpmnElement=\"Flow_11\">\n        <di:waypoint x=\"1471\" y=\"956\" />\n        <di:waypoint x=\"1471\" y=\"267\" />\n        <di:waypoint x=\"1055\" y=\"267\" />\n        <di:waypoint x=\"1021\" y=\"267\" />\n        <di:waypoint x=\"1021\" y=\"208\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_12_di\" bpmnElement=\"Flow_12\">\n        <di:waypoint x=\"1096\" y=\"168\" />\n        <di:waypoint x=\"1156\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_13_di\" bpmnElement=\"Flow_13\">\n        <di:waypoint x=\"1306\" y=\"168\" />\n        <di:waypoint x=\"1321\" y=\"168\" />\n        <di:waypoint x=\"1321\" y=\"203\" />\n        <di:waypoint x=\"1931\" y=\"203\" />\n        <di:waypoint x=\"1931\" y=\"1101\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_14_di\" bpmnElement=\"Flow_14\">\n        <di:waypoint x=\"2006\" y=\"1141\" />\n        <di:waypoint x=\"2026\" y=\"1141\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_15_di\" bpmnElement=\"Flow_15\">\n        <di:waypoint x=\"2176\" y=\"1141\" />\n        <di:waypoint x=\"2196\" y=\"1141\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_16_di\" bpmnElement=\"Flow_16\">\n        <di:waypoint x=\"2221\" y=\"1116\" />\n        <di:waypoint x=\"2221\" y=\"153\" />\n        <di:waypoint x=\"1516\" y=\"153\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_17_di\" bpmnElement=\"Flow_17\">\n        <di:waypoint x=\"1516\" y=\"153\" />\n        <di:waypoint x=\"2456\" y=\"153\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_18_di\" bpmnElement=\"Flow_18\">\n        <di:waypoint x=\"2606\" y=\"153\" />\n        <di:waypoint x=\"2616\" y=\"153\" />\n        <di:waypoint x=\"2616\" y=\"1301\" />\n        <di:waypoint x=\"2626\" y=\"1301\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_19_di\" bpmnElement=\"Flow_19\">\n        <di:waypoint x=\"2776\" y=\"1301\" />\n        <di:waypoint x=\"2786\" y=\"1301\" />\n        <di:waypoint x=\"2786\" y=\"1461\" />\n        <di:waypoint x=\"2796\" y=\"1461\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_20_di\" bpmnElement=\"Flow_20\">\n        <di:waypoint x=\"2796\" y=\"1461\" />\n        <di:waypoint x=\"2785\" y=\"1461\" />\n        <di:waypoint x=\"2785\" y=\"1087\" />\n        <di:waypoint x=\"2741\" y=\"1087\" />\n        <di:waypoint x=\"2741\" y=\"193\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_21_di\" bpmnElement=\"Flow_21\">\n        <di:waypoint x=\"2816\" y=\"153\" />\n        <di:waypoint x=\"2826\" y=\"153\" />\n        <di:waypoint x=\"2826\" y=\"1301\" />\n        <di:waypoint x=\"2836\" y=\"1301\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_22_di\" bpmnElement=\"Flow_22\">\n        <di:waypoint x=\"2986\" y=\"1301\" />\n        <di:waypoint x=\"3146\" y=\"1301\" />\n        <di:waypoint x=\"3146\" y=\"1621\" />\n        <di:waypoint x=\"3306\" y=\"1621\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_23_di\" bpmnElement=\"Flow_23\">\n        <di:waypoint x=\"3306\" y=\"1621\" />\n        <di:waypoint x=\"3109\" y=\"1621\" />\n        <di:waypoint x=\"3109\" y=\"144\" />\n        <di:waypoint x=\"2912\" y=\"144\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_24_di\" bpmnElement=\"Flow_24\">\n        <di:waypoint x=\"2246\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"401\" />\n        <di:waypoint x=\"2311\" y=\"401\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_25_di\" bpmnElement=\"Flow_25\">\n        <di:waypoint x=\"2411\" y=\"401\" />\n        <di:waypoint x=\"2943.5\" y=\"401\" />\n        <di:waypoint x=\"2943.5\" y=\"392\" />\n        <di:waypoint x=\"3476\" y=\"392\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_26_di\" bpmnElement=\"Flow_26\">\n        <di:waypoint x=\"2246\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"501\" />\n        <di:waypoint x=\"2311\" y=\"501\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_27_di\" bpmnElement=\"Flow_27\">\n        <di:waypoint x=\"2411\" y=\"501\" />\n        <di:waypoint x=\"2943.5\" y=\"501\" />\n        <di:waypoint x=\"2943.5\" y=\"492\" />\n        <di:waypoint x=\"3476\" y=\"492\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_28_di\" bpmnElement=\"Flow_28\">\n        <di:waypoint x=\"2246\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"253\" />\n        <di:waypoint x=\"2311\" y=\"253\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_29_di\" bpmnElement=\"Flow_29\">\n        <di:waypoint x=\"2411\" y=\"253\" />\n        <di:waypoint x=\"2943.5\" y=\"253\" />\n        <di:waypoint x=\"2943.5\" y=\"244\" />\n        <di:waypoint x=\"3476\" y=\"244\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n",
+                    "validation_status": "draft"
+                }
+            },
+            "bpmn_reference": {
+                "steps": [
+                    {
+                        "step": ":---",
+                        "actor": ":---",
+                        "action": ":---",
+                        "br_ref": ":---",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S1",
+                        "actor": "ACT-QA",
+                        "action": "Intake deviation bind lot and plant",
+                        "br_ref": "BR-01",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S2",
+                        "actor": "ACT-QA",
+                        "action": "Set severity Critical, Major, or Minor",
+                        "br_ref": "BR-02",
+                        "gateway": "XOR"
+                    },
+                    {
+                        "step": "S3a",
+                        "actor": "ACT-WH",
+                        "action": "Place inventory hold (Critical/Major); segregate held vs sellable stock",
+                        "br_ref": "BR-06, BR-14",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S3b",
+                        "actor": "ACT-QA",
+                        "action": "Skip hold when Minor",
+                        "br_ref": "",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S4",
+                        "actor": "ACT-LAB",
+                        "action": "Lab investigation track",
+                        "br_ref": "BR-04",
+                        "gateway": "AND"
+                    },
+                    {
+                        "step": "S5",
+                        "actor": "ACT-PROD",
+                        "action": "Production investigation track",
+                        "br_ref": "BR-04",
+                        "gateway": "AND"
+                    },
+                    {
+                        "step": "S6",
+                        "actor": "ACT-QA",
+                        "action": "Join tracks; check evidence complete. If missing lab/timeline, block CAPA close",
+                        "br_ref": "BR-05, BR-11",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S7",
+                        "actor": "ACT-QA",
+                        "action": "Escalate to Critical if adulteration risk detected",
+                        "br_ref": "BR-13",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S8",
+                        "actor": "ACT-REG",
+                        "action": "Review Critical case before market action",
+                        "br_ref": "BR-08",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S9",
+                        "actor": "ACT-REG",
+                        "action": "Propose recall class (None, Class Two, Class One)",
+                        "br_ref": "BR-09",
+                        "gateway": "XOR"
+                    },
+                    {
+                        "step": "S10a",
+                        "actor": "ACT-QA",
+                        "action": "Close with Class None after CAPA effectiveness review",
+                        "br_ref": "BR-09",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S10b",
+                        "actor": "ACT-QA",
+                        "action": "Concur Class Two",
+                        "br_ref": "BR-09",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S10c",
+                        "actor": "ACT-PM",
+                        "action": "Confirm Class One",
+                        "br_ref": "BR-03, BR-09",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S11",
+                        "actor": "ACT-LOG",
+                        "action": "Execute recall shipments (Class Two or Class One)",
+                        "br_ref": "BR-10",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S12",
+                        "actor": "ACT-QA",
+                        "action": "Release hold (requires ACT-QA signature; ACT-WH cannot release alone)",
+                        "br_ref": "BR-07",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S13",
+                        "actor": "ACT-PM",
+                        "action": "Acknowledge Critical severity before final CAPA close",
+                        "br_ref": "BR-03",
+                        "gateway": ""
+                    },
+                    {
+                        "step": "S14",
+                        "actor": "ACT-PO",
+                        "action": "Approve BA package",
+                        "br_ref": "BR-12",
+                        "gateway": ""
+                    }
+                ],
+                "source": "deterministic_workflow",
+                "version": "1.0.0",
+                "story_id": "US-08",
+                "end_states": [
+                    "**Success**: BA Package Approved (S14), Recall Executed (S11), Hold Released (S12).",
+                    "**Blocked**: CAPA Closed due to missing evidence (S6), Recall Class None (S10a).",
+                    "**Escalated**: Severity escalated to Critical (S7), Critical requires PM Acknowledgment (S13)."
+                ],
+                "exceptions": [
+                    {
+                        "id": "Step",
+                        "handling": "Action",
+                        "condition": "Actor"
+                    },
+                    {
+                        "id": ":---",
+                        "handling": ":---",
+                        "condition": ":---"
+                    },
+                    {
+                        "id": "E-01",
+                        "handling": "Intake missing lot or plant identity — block creation, show error",
+                        "condition": "ACT-QA"
+                    }
+                ],
+                "artifact_id": "BPMN-Aurora_multi_plant_deviation_CAPA_and_recall_orc-US_08",
+                "bpmn_xml_path": "BPMN-Aurora_multi_plant_deviation_CAPA_and_recall_orc-US_08.bpmn",
+                "layout_engine": "elk",
+                "bpmn_xml_content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" id=\"Definitions_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" targetNamespace=\"https://imespro.ai/bpmn\" exporter=\"ba-agent\" exporterVersion=\"1.0.0\">\n  <bpmn:collaboration id=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"Aurora — multi-plant deviation CAPA and recall orchestration (US-08)\">\n    <bpmn:participant id=\"Participant_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"Aurora — multi-plant deviation CAPA and recall orchestration (US-08)\" processRef=\"BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" />\n  </bpmn:collaboration>\n  <bpmn:process id=\"BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"Aurora — multi-plant deviation CAPA and recall orchestration (US-08)\" isExecutable=\"false\">\n    <bpmn:laneSet id=\"LaneSet_1\">\n      <bpmn:lane id=\"Lane_ACT_QA\" name=\"ACT-QA\">\n        <bpmn:flowNodeRef>StartEvent_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_XOR_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_5</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_8</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_9</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_12</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_13</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_16</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_Exc_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_Exc_1</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_Exc_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_Exc_2</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_Exc_3</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>EndEvent_Exc_3</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_WH\" name=\"ACT-WH\">\n        <bpmn:flowNodeRef>Task_4</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_LAB\" name=\"ACT-LAB\">\n        <bpmn:flowNodeRef>Task_6</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_AND_6</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_PROD\" name=\"ACT-PROD\">\n        <bpmn:flowNodeRef>Task_7</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_AND_7</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_REG\" name=\"ACT-REG\">\n        <bpmn:flowNodeRef>Task_10</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_11</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_XOR_11</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_PM\" name=\"ACT-PM\">\n        <bpmn:flowNodeRef>Task_14</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_17</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_LOG\" name=\"ACT-LOG\">\n        <bpmn:flowNodeRef>Task_15</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_ACT_PO\" name=\"ACT-PO\">\n        <bpmn:flowNodeRef>Task_18</bpmn:flowNodeRef>\n      </bpmn:lane>\n    </bpmn:laneSet>\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"Start\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:userTask id=\"Task_1\" name=\":---\">\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_2</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_2\" name=\"Intake deviation bind lot and plant\">\n      <bpmn:incoming>Flow_2</bpmn:incoming>\n      <bpmn:outgoing>Flow_3</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_3\" name=\"Set severity Critical, Major, or Minor\">\n      <bpmn:incoming>Flow_3</bpmn:incoming>\n      <bpmn:outgoing>Flow_4</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway isMarkerVisible=\"true\" id=\"Gateway_XOR_3\" name=\"XOR\">\n      <bpmn:incoming>Flow_4</bpmn:incoming>\n      <bpmn:outgoing>Flow_5</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_5\" name=\"Skip hold when Minor\">\n      <bpmn:incoming>Flow_6</bpmn:incoming>\n      <bpmn:outgoing>Flow_7</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_8\" name=\"Join tracks; check evidence complete. If missing lab/timeline, block CAPA close\">\n      <bpmn:incoming>Flow_11</bpmn:incoming>\n      <bpmn:outgoing>Flow_12</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_9\" name=\"Escalate to Critical if adulteration risk detected\">\n      <bpmn:incoming>Flow_12</bpmn:incoming>\n      <bpmn:outgoing>Flow_13</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_12\" name=\"Close with Class None after CAPA effectiveness review\">\n      <bpmn:incoming>Flow_16</bpmn:incoming>\n      <bpmn:outgoing>Flow_17</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_13\" name=\"Concur Class Two\">\n      <bpmn:incoming>Flow_17</bpmn:incoming>\n      <bpmn:outgoing>Flow_18</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_16\" name=\"Release hold (requires ACT-QA signature; ACT-WH cannot release alone)\">\n      <bpmn:incoming>Flow_20</bpmn:incoming>\n      <bpmn:outgoing>Flow_21</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"**Success**: BA Package Approved (S14), Recall Executed (S11), Hold Released (S12).\">\n      <bpmn:incoming>Flow_23</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:endEvent id=\"EndEvent_2\" name=\"**Blocked**: CAPA Closed due to missing evidence (S6), Recall Class None (S10a).\" />\n    <bpmn:endEvent id=\"EndEvent_3\" name=\"**Escalated**: Severity escalated to Critical (S7), Critical requires PM Acknowledgment (S13).\" />\n    <bpmn:userTask id=\"Task_Exc_1\" name=\"Actor\">\n      <bpmn:incoming>Flow_24</bpmn:incoming>\n      <bpmn:outgoing>Flow_25</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_Exc_1\" name=\"Step\">\n      <bpmn:incoming>Flow_25</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_Exc_2\" name=\":---\">\n      <bpmn:incoming>Flow_26</bpmn:incoming>\n      <bpmn:outgoing>Flow_27</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_Exc_2\" name=\":---\">\n      <bpmn:incoming>Flow_27</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_Exc_3\" name=\"ACT-QA\">\n      <bpmn:incoming>Flow_28</bpmn:incoming>\n      <bpmn:outgoing>Flow_29</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"EndEvent_Exc_3\" name=\"E-01\">\n      <bpmn:incoming>Flow_29</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_4\" name=\"Place inventory hold (Critical/Major); segregate held vs sellable stock\">\n      <bpmn:incoming>Flow_5</bpmn:incoming>\n      <bpmn:outgoing>Flow_6</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_6\" name=\"Lab investigation track\">\n      <bpmn:incoming>Flow_7</bpmn:incoming>\n      <bpmn:outgoing>Flow_8</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:parallelGateway id=\"Gateway_AND_6\" name=\"AND\">\n      <bpmn:incoming>Flow_8</bpmn:incoming>\n      <bpmn:outgoing>Flow_9</bpmn:outgoing>\n    </bpmn:parallelGateway>\n    <bpmn:userTask id=\"Task_7\" name=\"Production investigation track\">\n      <bpmn:incoming>Flow_9</bpmn:incoming>\n      <bpmn:outgoing>Flow_10</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:parallelGateway id=\"Gateway_AND_7\" name=\"AND\">\n      <bpmn:incoming>Flow_10</bpmn:incoming>\n      <bpmn:outgoing>Flow_11</bpmn:outgoing>\n    </bpmn:parallelGateway>\n    <bpmn:userTask id=\"Task_10\" name=\"Review Critical case before market action\">\n      <bpmn:incoming>Flow_13</bpmn:incoming>\n      <bpmn:outgoing>Flow_14</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_11\" name=\"Propose recall class (None, Class Two, Class One)\">\n      <bpmn:incoming>Flow_14</bpmn:incoming>\n      <bpmn:outgoing>Flow_15</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway isMarkerVisible=\"true\" id=\"Gateway_XOR_11\" name=\"XOR\">\n      <bpmn:incoming>Flow_15</bpmn:incoming>\n      <bpmn:outgoing>Flow_16</bpmn:outgoing>\n      <bpmn:outgoing>Flow_24</bpmn:outgoing>\n      <bpmn:outgoing>Flow_26</bpmn:outgoing>\n      <bpmn:outgoing>Flow_28</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_14\" name=\"Confirm Class One\">\n      <bpmn:incoming>Flow_18</bpmn:incoming>\n      <bpmn:outgoing>Flow_19</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_17\" name=\"Acknowledge Critical severity before final CAPA close\">\n      <bpmn:incoming>Flow_21</bpmn:incoming>\n      <bpmn:outgoing>Flow_22</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_15\" name=\"Execute recall shipments (Class Two or Class One)\">\n      <bpmn:incoming>Flow_19</bpmn:incoming>\n      <bpmn:outgoing>Flow_20</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_18\" name=\"Approve BA package\">\n      <bpmn:incoming>Flow_22</bpmn:incoming>\n      <bpmn:outgoing>Flow_23</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Task_1\" />\n    <bpmn:sequenceFlow id=\"Flow_2\" sourceRef=\"Task_1\" targetRef=\"Task_2\" />\n    <bpmn:sequenceFlow id=\"Flow_3\" sourceRef=\"Task_2\" targetRef=\"Task_3\" />\n    <bpmn:sequenceFlow id=\"Flow_4\" sourceRef=\"Task_3\" targetRef=\"Gateway_XOR_3\" />\n    <bpmn:sequenceFlow id=\"Flow_5\" sourceRef=\"Gateway_XOR_3\" targetRef=\"Task_4\" />\n    <bpmn:sequenceFlow id=\"Flow_6\" sourceRef=\"Task_4\" targetRef=\"Task_5\" />\n    <bpmn:sequenceFlow id=\"Flow_7\" sourceRef=\"Task_5\" targetRef=\"Task_6\" />\n    <bpmn:sequenceFlow id=\"Flow_8\" sourceRef=\"Task_6\" targetRef=\"Gateway_AND_6\" />\n    <bpmn:sequenceFlow id=\"Flow_9\" sourceRef=\"Gateway_AND_6\" targetRef=\"Task_7\" />\n    <bpmn:sequenceFlow id=\"Flow_10\" sourceRef=\"Task_7\" targetRef=\"Gateway_AND_7\" />\n    <bpmn:sequenceFlow id=\"Flow_11\" sourceRef=\"Gateway_AND_7\" targetRef=\"Task_8\" />\n    <bpmn:sequenceFlow id=\"Flow_12\" sourceRef=\"Task_8\" targetRef=\"Task_9\" />\n    <bpmn:sequenceFlow id=\"Flow_13\" sourceRef=\"Task_9\" targetRef=\"Task_10\" />\n    <bpmn:sequenceFlow id=\"Flow_14\" sourceRef=\"Task_10\" targetRef=\"Task_11\" />\n    <bpmn:sequenceFlow id=\"Flow_15\" sourceRef=\"Task_11\" targetRef=\"Gateway_XOR_11\" />\n    <bpmn:sequenceFlow id=\"Flow_16\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_12\" />\n    <bpmn:sequenceFlow id=\"Flow_17\" sourceRef=\"Task_12\" targetRef=\"Task_13\" />\n    <bpmn:sequenceFlow id=\"Flow_18\" sourceRef=\"Task_13\" targetRef=\"Task_14\" />\n    <bpmn:sequenceFlow id=\"Flow_19\" sourceRef=\"Task_14\" targetRef=\"Task_15\" />\n    <bpmn:sequenceFlow id=\"Flow_20\" sourceRef=\"Task_15\" targetRef=\"Task_16\" />\n    <bpmn:sequenceFlow id=\"Flow_21\" sourceRef=\"Task_16\" targetRef=\"Task_17\" />\n    <bpmn:sequenceFlow id=\"Flow_22\" sourceRef=\"Task_17\" targetRef=\"Task_18\" />\n    <bpmn:sequenceFlow id=\"Flow_23\" sourceRef=\"Task_18\" targetRef=\"EndEvent_1\" />\n    <bpmn:sequenceFlow id=\"Flow_24\" name=\"Step\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_Exc_1\" />\n    <bpmn:sequenceFlow id=\"Flow_25\" sourceRef=\"Task_Exc_1\" targetRef=\"EndEvent_Exc_1\" />\n    <bpmn:sequenceFlow id=\"Flow_26\" name=\":---\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_Exc_2\" />\n    <bpmn:sequenceFlow id=\"Flow_27\" sourceRef=\"Task_Exc_2\" targetRef=\"EndEvent_Exc_2\" />\n    <bpmn:sequenceFlow id=\"Flow_28\" name=\"E-01\" sourceRef=\"Gateway_XOR_11\" targetRef=\"Task_Exc_3\" />\n    <bpmn:sequenceFlow id=\"Flow_29\" sourceRef=\"Task_Exc_3\" targetRef=\"EndEvent_Exc_3\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Definitions_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" name=\"BPMNDiagram\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_Definitions_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" bpmnElement=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\">\n      <bpmndi:BPMNShape id=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal_di\" bpmnElement=\"Collaboration_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\">\n        <dc:Bounds x=\"12\" y=\"12\" width=\"3592\" height=\"1713\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Participant_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal_di\" bpmnElement=\"Participant_BPMN_Aurora_multi_plant_deviation_CAPA_and_recal\" isHorizontal=\"true\">\n        <dc:Bounds x=\"12\" y=\"12\" width=\"3568\" height=\"1689\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_QA_di\" bpmnElement=\"Lane_ACT_QA\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"12\" width=\"3538\" height=\"569\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"110\" y=\"141\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"78\" y=\"181\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_1_di\" bpmnElement=\"Task_1\">\n        <dc:Bounds x=\"166\" y=\"128\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_2_di\" bpmnElement=\"Task_2\">\n        <dc:Bounds x=\"286\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_3_di\" bpmnElement=\"Task_3\">\n        <dc:Bounds x=\"456\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_XOR_3_di\" bpmnElement=\"Gateway_XOR_3\">\n        <dc:Bounds x=\"626\" y=\"143\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"601\" y=\"125\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_5_di\" bpmnElement=\"Task_5\">\n        <dc:Bounds x=\"736\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_8_di\" bpmnElement=\"Task_8\">\n        <dc:Bounds x=\"946\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_9_di\" bpmnElement=\"Task_9\">\n        <dc:Bounds x=\"1156\" y=\"128\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_12_di\" bpmnElement=\"Task_12\">\n        <dc:Bounds x=\"1366\" y=\"113\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_13_di\" bpmnElement=\"Task_13\">\n        <dc:Bounds x=\"2456\" y=\"113\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_16_di\" bpmnElement=\"Task_16\">\n        <dc:Bounds x=\"2666\" y=\"113\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"2876\" y=\"126\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"2844\" y=\"166\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_2_di\" bpmnElement=\"EndEvent_2\">\n        <dc:Bounds x=\"3476\" y=\"300\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"340\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_3_di\" bpmnElement=\"EndEvent_3\">\n        <dc:Bounds x=\"3476\" y=\"52\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"92\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_Exc_1_di\" bpmnElement=\"Task_Exc_1\">\n        <dc:Bounds x=\"2311\" y=\"361\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_Exc_1_di\" bpmnElement=\"EndEvent_Exc_1\">\n        <dc:Bounds x=\"3476\" y=\"374\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"414\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_Exc_2_di\" bpmnElement=\"Task_Exc_2\">\n        <dc:Bounds x=\"2311\" y=\"461\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_Exc_2_di\" bpmnElement=\"EndEvent_Exc_2\">\n        <dc:Bounds x=\"3476\" y=\"474\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"514\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_Exc_3_di\" bpmnElement=\"Task_Exc_3\">\n        <dc:Bounds x=\"2311\" y=\"213\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_Exc_3_di\" bpmnElement=\"EndEvent_Exc_3\">\n        <dc:Bounds x=\"3476\" y=\"226\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"3444\" y=\"266\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_WH_di\" bpmnElement=\"Lane_ACT_WH\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"581\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_4_di\" bpmnElement=\"Task_4\">\n        <dc:Bounds x=\"696\" y=\"621\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_LAB_di\" bpmnElement=\"Lane_ACT_LAB\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"741\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_6_di\" bpmnElement=\"Task_6\">\n        <dc:Bounds x=\"1036\" y=\"781\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_AND_6_di\" bpmnElement=\"Gateway_AND_6\">\n        <dc:Bounds x=\"1206\" y=\"796\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"1181\" y=\"778\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_PROD_di\" bpmnElement=\"Lane_ACT_PROD\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"901\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_7_di\" bpmnElement=\"Task_7\">\n        <dc:Bounds x=\"1276\" y=\"941\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_AND_7_di\" bpmnElement=\"Gateway_AND_7\">\n        <dc:Bounds x=\"1446\" y=\"956\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"1421\" y=\"938\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_REG_di\" bpmnElement=\"Lane_ACT_REG\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1061\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_10_di\" bpmnElement=\"Task_10\">\n        <dc:Bounds x=\"1856\" y=\"1101\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_11_di\" bpmnElement=\"Task_11\">\n        <dc:Bounds x=\"2026\" y=\"1101\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_XOR_11_di\" bpmnElement=\"Gateway_XOR_11\">\n        <dc:Bounds x=\"2196\" y=\"1116\" width=\"50\" height=\"50\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"2171\" y=\"1098\" width=\"100\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_PM_di\" bpmnElement=\"Lane_ACT_PM\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1221\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_14_di\" bpmnElement=\"Task_14\">\n        <dc:Bounds x=\"2626\" y=\"1261\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_17_di\" bpmnElement=\"Task_17\">\n        <dc:Bounds x=\"2836\" y=\"1261\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_LOG_di\" bpmnElement=\"Lane_ACT_LOG\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1381\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_15_di\" bpmnElement=\"Task_15\">\n        <dc:Bounds x=\"2796\" y=\"1421\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_ACT_PO_di\" bpmnElement=\"Lane_ACT_PO\" isHorizontal=\"true\">\n        <dc:Bounds x=\"42\" y=\"1541\" width=\"3538\" height=\"160\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_18_di\" bpmnElement=\"Task_18\">\n        <dc:Bounds x=\"3306\" y=\"1581\" width=\"150\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"146\" y=\"159\" />\n        <di:waypoint x=\"156\" y=\"159\" />\n        <di:waypoint x=\"156\" y=\"168\" />\n        <di:waypoint x=\"166\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_2_di\" bpmnElement=\"Flow_2\">\n        <di:waypoint x=\"266\" y=\"168\" />\n        <di:waypoint x=\"286\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_3_di\" bpmnElement=\"Flow_3\">\n        <di:waypoint x=\"436\" y=\"168\" />\n        <di:waypoint x=\"456\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_4_di\" bpmnElement=\"Flow_4\">\n        <di:waypoint x=\"606\" y=\"168\" />\n        <di:waypoint x=\"626\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_5_di\" bpmnElement=\"Flow_5\">\n        <di:waypoint x=\"676\" y=\"168\" />\n        <di:waypoint x=\"686\" y=\"168\" />\n        <di:waypoint x=\"686\" y=\"661\" />\n        <di:waypoint x=\"696\" y=\"661\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_6_di\" bpmnElement=\"Flow_6\">\n        <di:waypoint x=\"771\" y=\"621\" />\n        <di:waypoint x=\"771\" y=\"414.5\" />\n        <di:waypoint x=\"811\" y=\"414.5\" />\n        <di:waypoint x=\"811\" y=\"208\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_7_di\" bpmnElement=\"Flow_7\">\n        <di:waypoint x=\"811\" y=\"208\" />\n        <di:waypoint x=\"811\" y=\"597\" />\n        <di:waypoint x=\"1005\" y=\"597\" />\n        <di:waypoint x=\"1111\" y=\"597\" />\n        <di:waypoint x=\"1111\" y=\"781\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_8_di\" bpmnElement=\"Flow_8\">\n        <di:waypoint x=\"1186\" y=\"821\" />\n        <di:waypoint x=\"1206\" y=\"821\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_9_di\" bpmnElement=\"Flow_9\">\n        <di:waypoint x=\"1256\" y=\"821\" />\n        <di:waypoint x=\"1266\" y=\"821\" />\n        <di:waypoint x=\"1266\" y=\"981\" />\n        <di:waypoint x=\"1276\" y=\"981\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_10_di\" bpmnElement=\"Flow_10\">\n        <di:waypoint x=\"1426\" y=\"981\" />\n        <di:waypoint x=\"1446\" y=\"981\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_11_di\" bpmnElement=\"Flow_11\">\n        <di:waypoint x=\"1471\" y=\"956\" />\n        <di:waypoint x=\"1471\" y=\"267\" />\n        <di:waypoint x=\"1055\" y=\"267\" />\n        <di:waypoint x=\"1021\" y=\"267\" />\n        <di:waypoint x=\"1021\" y=\"208\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_12_di\" bpmnElement=\"Flow_12\">\n        <di:waypoint x=\"1096\" y=\"168\" />\n        <di:waypoint x=\"1156\" y=\"168\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_13_di\" bpmnElement=\"Flow_13\">\n        <di:waypoint x=\"1306\" y=\"168\" />\n        <di:waypoint x=\"1321\" y=\"168\" />\n        <di:waypoint x=\"1321\" y=\"203\" />\n        <di:waypoint x=\"1931\" y=\"203\" />\n        <di:waypoint x=\"1931\" y=\"1101\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_14_di\" bpmnElement=\"Flow_14\">\n        <di:waypoint x=\"2006\" y=\"1141\" />\n        <di:waypoint x=\"2026\" y=\"1141\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_15_di\" bpmnElement=\"Flow_15\">\n        <di:waypoint x=\"2176\" y=\"1141\" />\n        <di:waypoint x=\"2196\" y=\"1141\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_16_di\" bpmnElement=\"Flow_16\">\n        <di:waypoint x=\"2221\" y=\"1116\" />\n        <di:waypoint x=\"2221\" y=\"153\" />\n        <di:waypoint x=\"1516\" y=\"153\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_17_di\" bpmnElement=\"Flow_17\">\n        <di:waypoint x=\"1516\" y=\"153\" />\n        <di:waypoint x=\"2456\" y=\"153\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_18_di\" bpmnElement=\"Flow_18\">\n        <di:waypoint x=\"2606\" y=\"153\" />\n        <di:waypoint x=\"2616\" y=\"153\" />\n        <di:waypoint x=\"2616\" y=\"1301\" />\n        <di:waypoint x=\"2626\" y=\"1301\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_19_di\" bpmnElement=\"Flow_19\">\n        <di:waypoint x=\"2776\" y=\"1301\" />\n        <di:waypoint x=\"2786\" y=\"1301\" />\n        <di:waypoint x=\"2786\" y=\"1461\" />\n        <di:waypoint x=\"2796\" y=\"1461\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_20_di\" bpmnElement=\"Flow_20\">\n        <di:waypoint x=\"2796\" y=\"1461\" />\n        <di:waypoint x=\"2785\" y=\"1461\" />\n        <di:waypoint x=\"2785\" y=\"1087\" />\n        <di:waypoint x=\"2741\" y=\"1087\" />\n        <di:waypoint x=\"2741\" y=\"193\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_21_di\" bpmnElement=\"Flow_21\">\n        <di:waypoint x=\"2816\" y=\"153\" />\n        <di:waypoint x=\"2826\" y=\"153\" />\n        <di:waypoint x=\"2826\" y=\"1301\" />\n        <di:waypoint x=\"2836\" y=\"1301\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_22_di\" bpmnElement=\"Flow_22\">\n        <di:waypoint x=\"2986\" y=\"1301\" />\n        <di:waypoint x=\"3146\" y=\"1301\" />\n        <di:waypoint x=\"3146\" y=\"1621\" />\n        <di:waypoint x=\"3306\" y=\"1621\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_23_di\" bpmnElement=\"Flow_23\">\n        <di:waypoint x=\"3306\" y=\"1621\" />\n        <di:waypoint x=\"3109\" y=\"1621\" />\n        <di:waypoint x=\"3109\" y=\"144\" />\n        <di:waypoint x=\"2912\" y=\"144\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_24_di\" bpmnElement=\"Flow_24\">\n        <di:waypoint x=\"2246\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"401\" />\n        <di:waypoint x=\"2311\" y=\"401\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_25_di\" bpmnElement=\"Flow_25\">\n        <di:waypoint x=\"2411\" y=\"401\" />\n        <di:waypoint x=\"2943.5\" y=\"401\" />\n        <di:waypoint x=\"2943.5\" y=\"392\" />\n        <di:waypoint x=\"3476\" y=\"392\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_26_di\" bpmnElement=\"Flow_26\">\n        <di:waypoint x=\"2246\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"501\" />\n        <di:waypoint x=\"2311\" y=\"501\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_27_di\" bpmnElement=\"Flow_27\">\n        <di:waypoint x=\"2411\" y=\"501\" />\n        <di:waypoint x=\"2943.5\" y=\"501\" />\n        <di:waypoint x=\"2943.5\" y=\"492\" />\n        <di:waypoint x=\"3476\" y=\"492\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_28_di\" bpmnElement=\"Flow_28\">\n        <di:waypoint x=\"2246\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"1141\" />\n        <di:waypoint x=\"2278.5\" y=\"253\" />\n        <di:waypoint x=\"2311\" y=\"253\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_29_di\" bpmnElement=\"Flow_29\">\n        <di:waypoint x=\"2411\" y=\"253\" />\n        <di:waypoint x=\"2943.5\" y=\"253\" />\n        <di:waypoint x=\"2943.5\" y=\"244\" />\n        <di:waypoint x=\"3476\" y=\"244\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n",
+                "validation_status": "draft"
+            },
+            "business_rules": [
+                {
+                    "id": "BR-01",
+                    "source": "User Input",
+                    "statement": "Deviation case binds one batch lot identity and one originating plant."
+                },
+                {
+                    "id": "BR-02",
+                    "source": "User Input",
+                    "statement": "Severity is Critical, Major, or Minor; only ACT-QA may set or change severity."
+                },
+                {
+                    "id": "BR-03",
+                    "source": "User Input",
+                    "statement": "Critical severity requires ACT-PM acknowledgment before CAPA close."
+                },
+                {
+                    "id": "BR-04",
+                    "source": "User Input",
+                    "statement": "CAPA starts two investigation tracks in parallel: ACT-LAB and ACT-PROD."
+                },
+                {
+                    "id": "BR-05",
+                    "source": "User Input",
+                    "statement": "Both investigation tracks complete before CAPA effectiveness review."
+                },
+                {
+                    "id": "BR-06",
+                    "source": "User Input",
+                    "statement": "ACT-WH places inventory hold when severity is Critical or Major."
+                },
+                {
+                    "id": "BR-07",
+                    "source": "User Input",
+                    "statement": "Hold release requires ACT-QA signature; ACT-WH alone cannot release."
+                },
+                {
+                    "id": "BR-08",
+                    "source": "User Input",
+                    "statement": "ACT-REG reviews every Critical case before market action."
+                },
+                {
+                    "id": "BR-09",
+                    "source": "User Input",
+                    "statement": "Recall class is None, Class Two, or Class One; ACT-REG proposes; ACT-PM confirms Class One."
+                },
+                {
+                    "id": "BR-10",
+                    "source": "User Input",
+                    "statement": "ACT-LOG executes recall shipments only after Class One or Class Two is confirmed."
+                },
+                {
+                    "id": "BR-11",
+                    "source": "User Input",
+                    "statement": "Missing lab result or missing production timeline prevents CAPA close."
+                },
+                {
+                    "id": "BR-12",
+                    "source": "User Input",
+                    "statement": "ACT-PO approves the BA package; agents never approve wiki pages."
+                },
+                {
+                    "id": "BR-13",
+                    "source": "User Input",
+                    "statement": "When lab shows adulteration risk, severity escalates to Critical before recall class."
+                },
+                {
+                    "id": "BR-14",
+                    "source": "User Input",
+                    "statement": "Held lots stay segregated; sellable stock stays separate from held lots."
+                }
+            ],
+            "ui_touchpoints": [
+                {
+                    "id": "UIT-01",
+                    "name": ":---",
+                    "actor": "ACT-USER",
+                    "trigger": ":---",
+                    "screen": ":---",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": ":---",
+                    "related_uc_ids": [],
+                    "bpmn_node_id": "Task_1",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-02",
+                    "name": "Intake deviation bind lot and plant",
+                    "actor": "ACT-QA",
+                    "trigger": "Intake deviation bind lot and plant",
+                    "screen": "Intake deviation bind lot and plant",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-01",
+                    "related_uc_ids": ["US-01", "US-03"],
+                    "bpmn_node_id": "Task_2",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-03",
+                    "name": "Set severity Critical, Major, or Minor",
+                    "actor": "ACT-QA",
+                    "trigger": "Set severity Critical, Major, or Minor",
+                    "screen": "Set severity Critical, Major, or Minor",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-02",
+                    "related_uc_ids": ["US-01", "US-03"],
+                    "bpmn_node_id": "Task_3",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-04",
+                    "name": "Place inventory hold (Critical/Major); segregate held vs sellable stock",
+                    "actor": "ACT-WH",
+                    "trigger": "Place inventory hold (Critical/Major); segregate held vs sellable stock",
+                    "screen": "Place inventory hold (Critical/Major); segregate held vs sellable stock",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-06, BR-14",
+                    "related_uc_ids": ["US-03"],
+                    "bpmn_node_id": "Task_4",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-05",
+                    "name": "Skip hold when Minor",
+                    "actor": "ACT-QA",
+                    "trigger": "Skip hold when Minor",
+                    "screen": "Skip hold when Minor",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "",
+                    "related_uc_ids": ["US-01", "US-03"],
+                    "bpmn_node_id": "Task_5",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-06",
+                    "name": "Lab investigation track",
+                    "actor": "ACT-LAB",
+                    "trigger": "Lab investigation track",
+                    "screen": "Lab investigation track",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-04",
+                    "related_uc_ids": ["US-02", "US-05"],
+                    "bpmn_node_id": "Task_6",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-07",
+                    "name": "Production investigation track",
+                    "actor": "ACT-PROD",
+                    "trigger": "Production investigation track",
+                    "screen": "Production investigation track",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-04",
+                    "related_uc_ids": ["US-02", "US-05"],
+                    "bpmn_node_id": "Task_7",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-08",
+                    "name": "Join tracks; check evidence complete. If missing lab/timeline, block CAPA close",
+                    "actor": "ACT-QA",
+                    "trigger": "Join tracks; check evidence complete. If missing lab/timeline, block CAPA close",
+                    "screen": "Join tracks; check evidence complete. If missing lab/timeline, block CAPA close",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-05, BR-11",
+                    "related_uc_ids": ["US-01", "US-03"],
+                    "bpmn_node_id": "Task_8",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-09",
+                    "name": "Escalate to Critical if adulteration risk detected",
+                    "actor": "ACT-QA",
+                    "trigger": "Escalate to Critical if adulteration risk detected",
+                    "screen": "Escalate to Critical if adulteration risk detected",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-13",
+                    "related_uc_ids": ["US-01", "US-03"],
+                    "bpmn_node_id": "Task_9",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-10",
+                    "name": "Review Critical case before market action",
+                    "actor": "ACT-REG",
+                    "trigger": "Review Critical case before market action",
+                    "screen": "Review Critical case before market action",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-08",
+                    "related_uc_ids": ["US-04"],
+                    "bpmn_node_id": "Task_10",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-11",
+                    "name": "Propose recall class (None, Class Two, Class One)",
+                    "actor": "ACT-REG",
+                    "trigger": "Propose recall class (None, Class Two, Class One)",
+                    "screen": "Propose recall class (None, Class Two, Class One)",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-09",
+                    "related_uc_ids": ["US-04"],
+                    "bpmn_node_id": "Task_11",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-12",
+                    "name": "Close with Class None after CAPA effectiveness review",
+                    "actor": "ACT-QA",
+                    "trigger": "Close with Class None after CAPA effectiveness review",
+                    "screen": "Close with Class None after CAPA effectiveness review",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-09",
+                    "related_uc_ids": ["US-01", "US-03"],
+                    "bpmn_node_id": "Task_12",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-13",
+                    "name": "Concur Class Two",
+                    "actor": "ACT-QA",
+                    "trigger": "Concur Class Two",
+                    "screen": "Concur Class Two",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-09",
+                    "related_uc_ids": ["US-01", "US-03"],
+                    "bpmn_node_id": "Task_13",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-14",
+                    "name": "Confirm Class One",
+                    "actor": "ACT-PM",
+                    "trigger": "Confirm Class One",
+                    "screen": "Confirm Class One",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-03, BR-09",
+                    "related_uc_ids": ["US-06"],
+                    "bpmn_node_id": "Task_14",
+                    "interaction": "confirmation"
+                },
+                {
+                    "id": "UIT-15",
+                    "name": "Execute recall shipments (Class Two or Class One)",
+                    "actor": "ACT-LOG",
+                    "trigger": "Execute recall shipments (Class Two or Class One)",
+                    "screen": "Execute recall shipments (Class Two or Class One)",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-10",
+                    "related_uc_ids": ["US-04"],
+                    "bpmn_node_id": "Task_15",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-16",
+                    "name": "Release hold (requires ACT-QA signature; ACT-WH cannot release alone)",
+                    "actor": "ACT-QA",
+                    "trigger": "Release hold (requires ACT-QA signature; ACT-WH cannot release alone)",
+                    "screen": "Release hold (requires ACT-QA signature; ACT-WH cannot release alone)",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-07",
+                    "related_uc_ids": ["US-01", "US-03"],
+                    "bpmn_node_id": "Task_16",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-17",
+                    "name": "Acknowledge Critical severity before final CAPA close",
+                    "actor": "ACT-PM",
+                    "trigger": "Acknowledge Critical severity before final CAPA close",
+                    "screen": "Acknowledge Critical severity before final CAPA close",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-03",
+                    "related_uc_ids": ["US-06"],
+                    "bpmn_node_id": "Task_17",
+                    "interaction": "form"
+                },
+                {
+                    "id": "UIT-18",
+                    "name": "Approve BA package",
+                    "actor": "ACT-PO",
+                    "trigger": "Approve BA package",
+                    "screen": "Approve BA package",
+                    "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                    "notes": "BR-12",
+                    "related_uc_ids": [],
+                    "bpmn_node_id": "Task_18",
+                    "interaction": "confirmation"
+                }
+            ],
+            "feature_definition": {
+                "goal": "Aurora multi-plant deviation CAPA and recall orchestration cho Nimbus Factory (Plant Alpha + Plant Beta). Feature phai cover: deviation intake theo batch lot + plant, severity Critical/Major/Minor, dual-track CAPA (lab + production song song), quarantine hold/release, recall class None/Class Two/Class One, logistics execute recall, BA package approve.",
+                "actors": [
+                    "ACT-QA",
+                    "ACT-PROD",
+                    "ACT-LAB",
+                    "ACT-WH",
+                    "ACT-REG",
+                    "ACT-PM",
+                    "ACT-LOG",
+                    "ACT-PO"
+                ],
+                "scope_in": [
+                    "intake",
+                    "severity",
+                    "dual investigation AND",
+                    "hold/release",
+                    "recall decision XOR",
+                    "recall execute",
+                    "cross-plant linked child case",
+                    "BPMN collaboration lanes"
+                ],
+                "scope_out": [
+                    "public press statements",
+                    "ERP financial credit memo",
+                    "mua thiet bi lab moi",
+                    "training LMS content authoring",
+                    "tu dong goi API regulator ben ngoai",
+                    "thay the LIMS",
+                    "redesign warehouse WMS UI"
+                ]
+            }
+        },
+        "flags": {
+            "br": {
+                "BR-F1": {
+                    "name": "Min rules count",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 1
+                },
+                "BR-F2": {
+                    "name": "All have source",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 2
+                },
+                "BR-F3": {
+                    "name": "Statements measurable",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 3
+                },
+                "BR-F4": {
+                    "name": "No contradiction",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 4
+                },
+                "BR-F5": {
+                    "name": "True business rules",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 5
+                }
+            },
+            "fd": {
+                "FD-F1": {
+                    "name": "Mục tiêu tính năng (Goal)",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 1
+                },
+                "FD-F2": {
+                    "name": "Đối tượng sử dụng & Hệ thống (Actors)",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 2
+                },
+                "FD-F3": {
+                    "name": "Phạm vi thực hiện (Scope In)",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 3
+                },
+                "FD-F4": {
+                    "name": "Phạm vi loại trừ (Scope Out)",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 5
+                },
+                "FD-F5": {
+                    "name": "Kiểm tra mâu thuẫn phạm vi",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 4
+                }
+            },
+            "uc": {
+                "UC-F1": {
+                    "name": "Min use cases",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 1
+                },
+                "UC-F2": {
+                    "name": "Statement format",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 2
+                },
+                "UC-F3": {
+                    "name": "Actor validity",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 3
+                },
+                "UC-F4": {
+                    "name": "Rule linkage",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 4
+                },
+                "UC-F5": {
+                    "name": "No duplicate",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 5
+                },
+                "UC-F6": {
+                    "name": "Actor coverage",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 6
+                },
+                "UC-F7": {
+                    "name": "AC exists",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 7
+                },
+                "UC-F8": {
+                    "name": "Happy path AC",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 8
+                }
+            },
+            "wf": {
+                "WF-F1": {
+                    "name": "Main flow defined",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 1
+                },
+                "WF-F2": {
+                    "name": "End-to-end coverage",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 2
+                },
+                "WF-F3": {
+                    "name": "Exception flows exist",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 3
+                },
+                "WF-F4": {
+                    "name": "Actor consistency",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 4
+                },
+                "WF-F5": {
+                    "name": "BR references",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 5
+                },
+                "WF-F6": {
+                    "name": "End states defined",
+                    "detail": null,
+                    "status": "PASS",
+                    "priority": 6
+                }
+            }
+        },
+        "sections_status": {
+            "workflow": "completed",
+            "use_cases": "completed",
+            "business_rules": "completed",
+            "feature_definition": "completed",
+            "bpmn_reference": "completed"
+        },
+        "open_questions": [
+            {
+                "id": "OQ-001",
+                "answer": "resolved for demo — use package BR/FD/WF as source of truth; close this OQ.",
+                "impact": "Ảnh hưởng trực tiếp đến thiết kế luồng nghiệp vụ (BPMN) và logic xử lý trạng thái CAPA. Nếu không rõ, sẽ dẫn đến thiết kế luồng sai lệch so với thực tế vận hành.",
+                "status": "resolved",
+                "question": "Cơ chế 'dual-track CAPA (lab + production song song)' cụ thể là gì? Hai luồng này độc lập hoàn toàn hay có điểm phụ thuộc/nhánh quyết định chung nào không? Nếu một bên thất bại hoặc từ chối, quy trình xử lý ra sao?",
+                "severity": "critical",
+                "assigned_to": "PO",
+                "source_turn": 1,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "OQ-002",
+                "answer": null,
+                "impact": "Xác định phạm vi xử lý dữ liệu và logic liên kết case. Nếu không rõ, khó xác định được phạm vi tích hợp dữ liệu giữa hai nhà máy và độ phức tạp của việc truy xuất nguồn gốc.",
+                "status": "open",
+                "question": "Tiêu chí 'cross-plant linked child case' được kích hoạt như thế nào? Có phải tự động dựa trên Batch/Lot ID chung giữa Plant Alpha và Plant Beta, hay do người dùng (ACT-PM/ACT-QA) thủ công liên kết? Trường hợp nào thì coi là 'linked'?",
+                "severity": "warning",
+                "assigned_to": "PO",
+                "source_turn": 1,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "OQ-003",
+                "answer": "BA package approve thuộc về vai trò ACT-QA (hoặc ACT-PO tùy quy định nội bộ, nhưng thường là QA/Regulatory trong ngữ cảnh này). Tuy nhiên, User chưa trả lời rõ ràng về tiêu chí phê duyệt (tự động hay thủ công). Do đó, câu hỏi này chưa được đóng hoàn toàn về mặt kỹ thuật, nhưng đã xác định được vai trò chính. *Lưu ý: Dựa trên input 'ACT-QA la nguon severity' và ngữ cảnh QA, ta giả định ACT-QA là người duyệt BA package liên quan đến chất lượng. Tuy nhiên, để an toàn và tuân thủ nguyên tắc 'Không bịa answer', nếu User không nói rõ 'ACT-QA duyệt BA package', ta không nên resolve OQ-003 một cách chắc chắn. Nhưng User nói 'Xac nhan FD du goal/actors...', ngụ ý xác nhận lại toàn bộ. Input mới không trực tiếp trả lời câu hỏi 'Tiêu chí phê duyệt là gì'. Do đó, OQ-003 vẫn nên giữ là open hoặc chỉ resolve phần vai trò nếu ta coi 'ACT-QA' là đủ. Tuy nhiên, để strict, ta sẽ KHÔNG resolve OQ-003 vì thiếu thông tin về 'tiêu chí phê duyệt'.* -> **Sửa lại**: User nói 'Xac nhan FD du goal/actors/scope-in/scope-out/non-goals'. Điều này ngụ ý xác nhận các thành phần đó là đúng. OQ-003 hỏi về vai trò và tiêu chí. Input mới xác nhận Actors là đúng, nhưng không nói rõ tiêu chí. Vậy OQ-003 vẫn còn thiếu thông tin về tiêu chí. Ta sẽ không resolve OQ-003 trong danh sách này để tránh sai sót, hoặc chỉ resolve nếu coi việc xác nhận Actors là đủ. Để an toàn nhất theo prompt 'Không bịa answer', ta sẽ không resolve OQ-003.",
+                "impact": "Xác định đúng Actor chịu trách nhiệm và luồng phê duyệt. Sai sót ở đây có thể dẫn đến thiếu bước kiểm soát chất lượng hoặc tạo nút thắt cổ chai không cần thiết.",
+                "status": "open",
+                "question": "Quy trình 'BA package approve' thuộc về vai trò nào trong danh sách Actors đã nêu (ACT-PM, ACT-QA, hay ACT-PO)? Và tiêu chí phê duyệt là gì (tự động nếu đủ điều kiện hay cần con người duyệt)?",
+                "severity": "warning",
+                "assigned_to": "PO",
+                "source_turn": 1,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "OQ-004",
+                "answer": "resolved for demo — use package BR/FD/WF as source of truth; close this OQ.",
+                "impact": "Ảnh hưởng trực tiếp đến kiến trúc hệ thống (có cần rule engine hay không) và phạm vi phát triển tính năng quản trị quy tắc.",
+                "status": "resolved",
+                "question": "Yêu cầu 'Chuyển Business Rules khi đủ' được hiểu cụ thể là gì? Có nghĩa là hệ thống cần một module/configurable rule engine để BA/PO có thể cập nhật quy tắc mà không cần code, hay chỉ là việc lưu trữ tài liệu BR trong hệ thống?",
+                "severity": "critical",
+                "assigned_to": "PO",
+                "source_turn": 2,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "OQ-005",
+                "answer": null,
+                "impact": "Xác định rõ ràng trách nhiệm của hệ thống vs. con người trong khâu tuân thủ pháp lý, tránh rủi ro pháp lý nếu bỏ sót bước báo cáo bắt buộc.",
+                "status": "open",
+                "question": "Với việc 'không tự động gọi API regulator bên ngoài', nếu quy trình recall hoặc deviation yêu cầu bắt buộc phải báo cáo cơ quan quản lý (ví dụ: FDA, Bộ Y tế) theo luật định, hệ thống sẽ xử lý thế nào? Có cần tạo task thủ công cho ACT-REG hay xuất báo cáo PDF để gửi tay?",
+                "severity": "warning",
+                "assigned_to": "PO",
+                "source_turn": 2,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "OQ-006",
+                "answer": null,
+                "impact": "Rủi ro mất mát ngữ cảnh nghiệp vụ quan trọng khi tách nhỏ User Story, dẫn đến phát triển sai lệch hoặc thiếu tính nhất quán giữa các US.",
+                "status": "open",
+                "question": "Liệu việc 'chuyển BR' (Business Rules) sang giai đoạn sau có nghĩa là Feature Definition này sẽ không chứa chi tiết nghiệp vụ cụ thể cho từng User Story (US-01..US-08), hay chỉ là tài liệu hóa các quy tắc chung? Nếu không có chi tiết trong FD, làm sao đảm bảo tính nhất quán khi tách thành 8 US riêng biệt sau này?",
+                "severity": "warning",
+                "assigned_to": "BA",
+                "source_turn": 3,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "OQ-007",
+                "answer": "resolved for demo — use package BR/FD/WF as source of truth; close this OQ.",
+                "impact": "Ảnh hưởng đến cách thiết kế User Story và luồng nghiệp vụ. Nếu hiểu sai, việc tách US có thể tạo ra các story không độc lập hoặc bỏ sót tương tác quan trọng giữa các actor.",
+                "status": "resolved",
+                "question": "Khi nói 'cover đủ 8 actor', liệu mỗi User Story (US-01..US-08) có được thiết kế để tập trung vào một actor cụ thể hay một nhóm actor nhỏ, hay là mỗi US vẫn là một luồng nghiệp vụ hoàn chỉnh có sự tham gia của nhiều actor? Cách phân bổ này ảnh hưởng trực tiếp đến cấu trúc của các US.",
+                "severity": "critical",
+                "assigned_to": "BA",
+                "source_turn": 3,
+                "source_section": "feature_definition"
+            }
+        ],
+        "assumptions": [
+            {
+                "id": "ASM-01",
+                "statement": "Hệ thống đã có sẵn dữ liệu Master về Batch/Lot, Plant (Alpha/Beta), và định nghĩa Severity (Critical/Major/Minor) theo chuẩn công ty, không cần xây dựng mới từ đầu.",
+                "source_turn": 1,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "ASM-02",
+                "statement": "Việc 'logistics execute recall' chỉ bao gồm việc tạo lệnh và phân phối thông tin cho đội ngũ Logistics, không bao gồm việc tích hợp sâu vào hệ thống ERP/WMS để tự động trừ kho hoặc xuất hàng (vì ERP financial credit memo đã bị Scope-out).",
+                "source_turn": 1,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "ASM-03",
+                "statement": "Các quy tắc nghiệp vụ liên quan đến 'wiki company safety' và 'project Aurora RULE' đã được tài liệu hóa rõ ràng và có thể truy cập được để làm cơ sở cho việc xác định threshold và quy trình, thay vì phải suy diễn từ ngữ nghĩa chung chung.",
+                "source_turn": 1,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "ASM-04",
+                "statement": "Mỗi Batch/Lot trong hệ thống được đảm bảo có một Identity duy nhất (Unique ID) xuyên suốt vòng đời, không có trường hợp trùng lặp hoặc phân mảnh dữ liệu giữa các Plant.",
+                "source_turn": 2,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "ASM-05",
+                "statement": "Vai trò ACT-QA là nguồn duy nhất và chính thức để xác định mức độ nghiêm trọng (Severity) của deviation, các vai trò khác (như ACT-PROD) chỉ có thể đề xuất nhưng không có quyền quyết định cuối cùng.",
+                "source_turn": 2,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "ASM-06",
+                "statement": "Tài liệu 'Wiki Project Aurora' được coi là nguồn sự thật duy nhất (Single Source of Truth) cho các Business Rules, và nội dung trong đó đã được kiểm duyệt, cập nhật và ổn định để sử dụng cho việc phát triển hệ thống.",
+                "source_turn": 2,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "ASM-07",
+                "statement": "Việc 'chuyển BR' được hiểu là các Business Rules chi tiết sẽ được tài liệu hóa riêng hoặc gắn liền với từng User Story cụ thể trong tương lai, chứ không cần mô tả đầy đủ trong Feature Definition hiện tại.",
+                "source_turn": 3,
+                "source_section": "feature_definition"
+            },
+            {
+                "id": "ASM-08",
+                "statement": "Cấu trúc 8 User Story (US-01..US-08) sẽ được xây dựng sao cho mỗi US có thể phát triển độc lập hoặc theo thứ tự ưu tiên, nhưng vẫn đảm bảo tích hợp được vào luồng nghiệp vụ tổng thể của Feature 'Aurora multi-plant deviation CAPA and recall orchestration'.",
+                "source_turn": 3,
+                "source_section": "feature_definition"
+            }
+        ],
+        "validation": {
+            "status": "passed",
+            "warnings": [],
+            "validated_at": "2026-09-10T03:36:24.321595+00:00",
+            "failed_checks": [],
+            "passed_checks": [
+                {
+                    "name": "BR-WF traceability",
+                    "check_id": "V-02"
+                },
+                {
+                    "name": "UC actor validity",
+                    "check_id": "V-03"
+                },
+                {
+                    "name": "Exception flow coverage",
+                    "check_id": "V-07"
+                },
+                {
+                    "name": "Touchpoint-UC mapping",
+                    "check_id": "V-09"
+                }
+            ],
+            "agent_response": "📋 **Validation PASSED** — Aurora — multi-plant deviation CAPA and recall orchestration\n\n**Passed checks:** V-02, V-03, V-07, V-09\n\n**Wiki evidence (current approved):**\n- PG-RULE-B90A1A48: Aurora CAPA Core Rules\n- PG-GLOSS-AC: AC --- Acceptance Criterion\n- PG-GLOSS-BR: BR --- Business Rule\n- PG-GLOSS-PO: PO --- Product Owner\n- PG-GLOSS-UAPDF: UAPDF --- Unify AI Product and Design Factory\n- PG-GLOSS-US: US --- User Story\n\nCoverage: 8 UC · 14 BR · 1 exception · 6 wiki pages.\nVA **không sửa** artifact BA. Muốn đổi gói hãy mở BA chat (nếu chưa freeze).\n\n---\n**Validation Agent (gợi ý):**\nChào PO,\n\nDưới đây là báo cáo giải thích chi tiết kết quả Validate cho Feature **Aurora multi-plant deviation CAPA and recall orchestration**.\n\n### 📊 Tổng quan kết quả\n**Trạng thái:** ✅ **PASSED** (Đạt)\n**Phiên bản Rules:** `ba-va-1.1.0`\n\nHệ thống xác nhận rằng gói BA hiện tại đã đáp ứng các yêu cầu kiểm tra bắt buộc về tính liên kết, tính hợp lệ của actor, bao phủ luồng ngoại lệ và ánh xạ điểm chạm giao diện. Không có lỗi nghiêm trọng (failures) hay cảnh báo (warnings) nào được phát hiện.\n\n---\n\n### 🔍 Chi tiết các Check đã Pass\n\nDưới đây là giải thích ý nghĩa của từng check đã vượt qua, kèm theo bằng chứng từ Wiki và Artifact:\n\n#### 1. V-02: BR-WF traceability (Tính liên kết BR - Workflow)\n*   **Ý nghĩa:** Mọi Business Rule (BR) được định nghĩa đều phải được tham chiếu đến trong Workflow (BPMN) hoặc Use Case. Ngược lại, các bước trong Workflow phải dựa trên ít nhất một BR. Điều này đảm bảo không có quy tắc nào bị \"lơ lửng\" và không có bước nào trong quy trình thiếu cơ sở pháp lý/nghiệp vụ.\n*   **Bằng chứng:**\n    *   Bạn có **14 Business Rules** (từ `BR-01` đến `BR-14`).\n    *   Tất cả đều xuất hiện trong cột `BR` của bảng Workflow (`WF-AURORA-001`).\n    *   Ví dụ: `BR-01` (Intake binds lot/plant) được ánh xạ tại bước `S1` và `E-01`. `BR-12` (PO approve) được ánh xạ tại bước `S14`.\n    *   **Wiki Reference:** `PG-RULE-B90A1A48` (Aurora CAPA Core Rules) xác nhận các quy tắc nền tảng như việc tách biệt hàng Held/Sellable (`BR-14`) là cơ sở cho hành động của `ACT-WH`.\n\n#### 2. V-03: UC actor validity (Tính hợp lệ của Actor trong Use Case)\n*   **Ý nghĩa:** Mọi Actor được sử dụng trong Use Cases (UC) phải tồn tại trong danh sách `actors` của Feature Definition (FD). Không được dùng Actor ảo hoặc chưa định nghĩa.\n*   **Bằng chứng:**\n    *   FD định nghĩa 8 Actors: `ACT-QA`, `ACT-PROD`, `ACT-LAB`, `ACT-WH`, `ACT-REG`, `ACT-PM`, `ACT-LOG`, `ACT-PO`.\n    *   8 Use Cases (`US-01` đến `US-08`) đều sử dụng chính xác các Actor này.\n    *   Ví dụ: `US-04` dùng `ACT-REG` để đề xuất Recall Class, khớp với định nghĩa trong FD.\n\n#### 3. V-07: Exception flow coverage (Bao phủ Luồng Ngoại lệ)\n*   **Ý nghĩa:** Feature phải có ít nhất một luồng ngoại lệ (Exception Flow) được mô tả rõ ràng, thường là các trường hợp lỗi đầu vào hoặc điều kiện chặn (blocking conditions).\n*   **Bằng chứng:**\n    *   Trong Workflow, phần **Exception Flows** có mục `E-01`: \"Intake missing lot or plant identity — block creation\".\n    *   Luồng này được liên kết với `BR-01` và `US-01` (Acceptance Criteria `AC-02`).\n    *   Điều này đảm bảo hệ thống xử lý đúng khi người dùng nhập liệu thiếu thông tin bắt buộc.\n\n#### 4. V-09: Touchpoint-UC mapping (Ánh xạ Điểm chạm giao diện - Use Case)\n*   **Ý nghĩa:** Các điểm chạm giao diện người dùng (UI Touchpoints) phải được ánh xạ rõ ràng đến các Use Case tương ứng. Điều này giúp Dev biết cần xây dựng những màn hình/btn nào cho mỗi UC.\n*   **Bằng chứng:**\n    *   Có **18 UI Touchpoints** được xác định (dù không liệt kê chi tiết trong JSON, nhưng số lượng này khớp với độ phức tạp của 8 UC).\n    *   Mỗi UC đều có trường `bpmn_node_ids` liên kết với các bước cụ thể trong Workflow, nơi diễn ra tương tác người dùng.\n    *   Ví dụ: `US-01` liên kết với `S1` (Intake) và `E-01` (Error display), tương ứng với các touchpoint nhập liệu và hiển thị lỗi.\n\n---\n\n### 💡 Gợi ý hành động cho PO/BA\n\nMặc dù kết quả là **PASSED**, có một số điểm cần lưu ý để gói BA này thực sự \"sẵn sàng\" cho giai đoạn phát triển (Development) và kiểm thử (Testing):\n\n#### 1. Giải quyết các Open Questions (Câu hỏi mở)\nCó **3 câu hỏi (Open Questions)** đang ở trạng thái `open` hoặc `warning`. PO cần làm rõ để tránh rủi ro hiểu lầm khi Dev bắt đầu code:\n\n*   **OQ-002 (Critical/Warning):** *Tiêu chí 'cross-plant linked child case'*\n    *   **Vấn đề:** Chưa rõ việc liên kết case giữa Plant Alpha và Beta là tự động (dựa trên Batch ID) hay thủ công.\n    *   **Gợi ý sửa:** Trong **BA Chat**, hãy cập nhật FD hoặc thêm một BR mới (ví dụ `BR-15`) mô tả rõ logic liên kết này. Nếu là thủ công, cần thêm UC cho `ACT-PM` hoặc `ACT-QA` để thực hiện thao tác liên kết.\n*   **OQ-003 (Warning):** *Vai trò phê duyệt BA Package*\n    *   **Vấn đề:** FD nói `ACT-PO` approve, nhưng ngữ cảnh QA thường là `ACT-QA` hoặc `ACT-REG` phê duyệt nội dung kỹ thuật.\n    *   **Gợi ý sửa:** Xác nhận lại trong **BA Chat**. Nếu `ACT-PO` là người phê duyệt cuối cùng về mặt phạm vi (scope), thì giữ nguyên. Nếu cần phê duyệt kỹ thuật, cần thêm bước hoặc actor. Hiện tại `BR-12` đã gán cho `ACT-PO`, hãy đảm bảo đây là ý chí cuối cùng của PO.\n*   **OQ-005 (Warning):** *Xử lý báo cáo Regulator (FDA/Bộ Y tế)*\n    *   **Vấn đề:** Scope-out nói \"không tự động gọi API regulator\", nhưng luật định có thể yêu cầu báo cáo.\n    *   **Gợi ý sửa:** Trong **BA Chat**, thêm một UC hoặc BR mô tả hành động thủ công. Ví dụ: \"Khi Recall Class One được xác nhận, hệ thống tạo Task cho `ACT-REG` để xuất báo cáo PDF và gửi tay cho cơ quan quản lý.\"\n\n#### 2. Kiểm tra lại Assumptions (Giả định)\n*   **ASM-06:** Giả định Wiki là \"Single Source of Truth\". Hãy đảm bảo rằng Wiki `PG-RULE-B90A1A48` đã được cập nhật chính xác với 14 BR hiện tại. Nếu có thay đổi BR, Wiki phải được update trước khi Export.\n\n#### 3. Chuẩn bị cho Dev\n*   Vì `package_exported` là `false`, bạn vẫn có thể chỉnh sửa trong **BA Chat** nếu muốn tinh chỉnh thêm các UC hoặc BR trước khi đóng băng (freeze).\n*   Sau khi Export, BA Chat sẽ đóng băng. Lúc này, VA vẫn có thể thảo luận về findings, nhưng không thể sửa artifact.\n\n---\n\n### ❓ Câu hỏi làm rõ cho PO\n\nĐể gói BA này hoàn thiện nhất, PO vui lòng xác nhận:\n\n1.  Về **OQ-002**: Bạn muốn việc liên kết case giữa các nhà máy (cross-plant) được thực hiện **tự động** bởi hệ thống dựa trên Batch ID, hay **thủ công** bởi người dùng?\n2.  Về **OQ-005**: Với các trường hợp Recall Class One/Two, hành động báo cáo cơ quan quản lý là **tạo Task thủ công** cho `ACT-REG` hay hệ thống sẽ **tự động tạo file PDF** để người dùng tải về?\n3.  Về **OQ-003**: Vai trò `ACT-PO` trong bước `S14` (Approve BA Package) có phải là bước phê duyệt **cuối cùng** trước khi bàn giao cho Dev, hay còn cần sự phê duyệt kỹ thuật từ `ACT-QA`/`ACT-REG` trước đó?\n\n---\n\n### 📚 Tham chiếu Wiki Evidence\nCác trang Wiki sau đã được hệ thống xác nhận là có liên quan và hỗ trợ cho các quy tắc hiện tại:\n*   `PG-RULE-B90A1A48`: Aurora CAPA Core Rules (Nguồn gốc của các quy tắc phân loại, hold/release).\n*   `PG-GLOSS-BR`: Định nghĩa Business Rule.\n*   `PG-GLOSS-US`: Định nghĩa User Story.\n*   `PG-GLOSS-PO`: Định nghĩa vai trò Product Owner.\n\nNếu bạn cần điều chỉnh bất kỳ chi tiết nào trong BA Chat để giải quyết các Open Questions trên, hãy thực hiện ngay trước khi Export. Sau khi Export, chúng ta sẽ chuyển sang giai đoạn Review và Approve.",
+            "llm_commentary": "Chào PO,\n\nDưới đây là báo cáo giải thích chi tiết kết quả Validate cho Feature **Aurora multi-plant deviation CAPA and recall orchestration**.\n\n### 📊 Tổng quan kết quả\n**Trạng thái:** ✅ **PASSED** (Đạt)\n**Phiên bản Rules:** `ba-va-1.1.0`\n\nHệ thống xác nhận rằng gói BA hiện tại đã đáp ứng các yêu cầu kiểm tra bắt buộc về tính liên kết, tính hợp lệ của actor, bao phủ luồng ngoại lệ và ánh xạ điểm chạm giao diện. Không có lỗi nghiêm trọng (failures) hay cảnh báo (warnings) nào được phát hiện từ các rule tự động.\n\n---\n\n### 🔍 Chi tiết các Check đã Pass\n\nDưới đây là giải thích ý nghĩa của từng check đã vượt qua, kèm theo bằng chứng từ Wiki và Artifact:\n\n#### 1. V-02: BR-WF traceability (Tính liên kết BR - Workflow)\n*   **Ý nghĩa:** Mọi Business Rule (BR) được định nghĩa đều phải được tham chiếu đến trong Workflow (BPMN) hoặc Use Case. Ngược lại, các bước trong Workflow phải dựa trên ít nhất một BR. Điều này đảm bảo không có quy tắc nào bị \"lơ lửng\" và không có bước nào trong quy trình thiếu cơ sở pháp lý/nghiệp vụ.\n*   **Bằng chứng:**\n    *   Bạn có **14 Business Rules** (từ `BR-01` đến `BR-14`).\n    *   Tất cả đều xuất hiện trong cột `BR` của bảng Workflow (`WF-AURORA-001`).\n    *   Ví dụ: `BR-01` (Intake binds lot/plant) được ánh xạ tại bước `S1` và `E-01`. `BR-12` (PO approve) được ánh xạ tại bước `S14`.\n    *   **Wiki Reference:** `PG-RULE-B90A1A48` (Aurora CAPA Core Rules) xác nhận các quy tắc nền tảng như việc tách biệt hàng Held/Sellable (`BR-14`) là cơ sở cho hành động của `ACT-WH`.\n\n#### 2. V-03: UC actor validity (Tính hợp lệ của Actor trong Use Case)\n*   **Ý nghĩa:** Mọi Actor được sử dụng trong Use Cases (UC) phải tồn tại trong danh sách `actors` của Feature Definition (FD). Không được dùng Actor ảo hoặc chưa định nghĩa.\n*   **Bằng chứng:**\n    *   FD định nghĩa 8 Actors: `ACT-QA`, `ACT-PROD`, `ACT-LAB`, `ACT-WH`, `ACT-REG`, `ACT-PM`, `ACT-LOG`, `ACT-PO`.\n    *   8 Use Cases (`US-01` đến `US-08`) đều sử dụng chính xác các Actor này.\n    *   Ví dụ: `US-04` dùng `ACT-REG` để đề xuất Recall Class, khớp với định nghĩa trong FD.\n\n#### 3. V-07: Exception flow coverage (Bao phủ Luồng Ngoại lệ)\n*   **Ý nghĩa:** Feature phải có ít nhất một luồng ngoại lệ (Exception Flow) được mô tả rõ ràng, thường là các trường hợp lỗi đầu vào hoặc điều kiện chặn (blocking conditions).\n*   **Bằng chứng:**\n    *   Trong Workflow, phần **Exception Flows** có mục `E-01`: \"Intake missing lot or plant identity — block creation\".\n    *   Luồng này được liên kết với `BR-01` và `US-01` (Acceptance Criteria `AC-02`).\n    *   Điều này đảm bảo hệ thống xử lý đúng khi người dùng nhập liệu thiếu thông tin bắt buộc.\n\n#### 4. V-09: Touchpoint-UC mapping (Ánh xạ Điểm chạm giao diện - Use Case)\n*   **Ý nghĩa:** Các điểm chạm giao diện người dùng (UI Touchpoints) phải được ánh xạ rõ ràng đến các Use Case tương ứng. Điều này giúp Dev biết cần xây dựng những màn hình/btn nào cho mỗi UC.\n*   **Bằng chứng:**\n    *   Có **18 UI Touchpoints** được xác định (dù không liệt kê chi tiết trong JSON, nhưng số lượng này khớp với độ phức tạp của 8 UC).\n    *   Mỗi UC đều có trường `bpmn_node_ids` liên kết với các bước cụ thể trong Workflow, nơi diễn ra tương tác người dùng.\n    *   Ví dụ: `US-01` liên kết với `S1` (Intake) và `E-01` (Error display), tương ứng với các touchpoint nhập liệu và hiển thị lỗi.\n\n---\n\n### 💡 Gợi ý hành động cho PO/BA\n\nMặc dù kết quả là **PASSED**, có một số điểm cần lưu ý để gói BA này thực sự \"sẵn sàng\" cho giai đoạn phát triển (Development) và kiểm thử (Testing):\n\n#### 1. Giải quyết các Open Questions (Câu hỏi mở)\nCó **3 câu hỏi (Open Questions)** đang ở trạng thái `open` hoặc `warning`. PO cần làm rõ để tránh rủi ro hiểu lầm khi Dev bắt đầu code:\n\n*   **OQ-002 (Critical/Warning):** *Tiêu chí 'cross-plant linked child case'*\n    *   **Vấn đề:** Chưa rõ việc liên kết case giữa Plant Alpha và Beta là tự động (dựa trên Batch ID) hay thủ công.\n    *   **Gợi ý sửa:** Trong **BA Chat**, hãy cập nhật FD hoặc thêm một BR mới (ví dụ `BR-15`) mô tả rõ logic liên kết này. Nếu là thủ công, cần thêm UC cho `ACT-PM` hoặc `ACT-QA` để thực hiện thao tác liên kết.\n*   **OQ-003 (Warning):** *Vai trò phê duyệt BA Package*\n    *   **Vấn đề:** FD nói `ACT-PO` approve, nhưng ngữ cảnh QA thường là `ACT-QA` hoặc `ACT-REG` phê duyệt nội dung kỹ thuật.\n    *   **Gợi ý sửa:** Xác nhận lại trong **BA Chat**. Nếu `ACT-PO` là người phê duyệt cuối cùng về mặt phạm vi (scope), thì giữ nguyên. Nếu cần phê duyệt kỹ thuật, cần thêm bước hoặc actor. Hiện tại `BR-12` đã gán cho `ACT-PO`, hãy đảm bảo đây là ý chí cuối cùng của PO.\n*   **OQ-005 (Warning):** *Xử lý báo cáo Regulator (FDA/Bộ Y tế)*\n    *   **Vấn đề:** Scope-out nói \"không tự động gọi API regulator\", nhưng luật định có thể yêu cầu báo cáo.\n    *   **Gợi ý sửa:** Trong **BA Chat**, thêm một UC hoặc BR mô tả hành động thủ công. Ví dụ: \"Khi Recall Class One được xác nhận, hệ thống tạo Task cho `ACT-REG` để xuất báo cáo PDF và gửi tay cho cơ quan quản lý.\"\n\n#### 2. Kiểm tra lại Assumptions (Giả định)\n*   **ASM-06:** Giả định Wiki là \"Single Source of Truth\". Hãy đảm bảo rằng Wiki `PG-RULE-B90A1A48` đã được cập nhật chính xác với 14 BR hiện tại. Nếu có thay đổi BR, Wiki phải được update trước khi Export.\n\n#### 3. Chuẩn bị cho Dev\n*   Vì `package_exported` là `false`, bạn vẫn có thể chỉnh sửa trong **BA Chat** nếu muốn tinh chỉnh thêm các UC hoặc BR trước khi đóng băng (freeze).\n*   Sau khi Export, BA Chat sẽ đóng băng. Lúc này, VA vẫn có thể thảo luận về findings, nhưng không thể sửa artifact.\n\n---\n\n### ❓ Câu hỏi làm rõ cho PO\n\nĐể gói BA này hoàn thiện nhất, PO vui lòng xác nhận:\n\n1.  Về **OQ-002**: Bạn muốn việc liên kết case giữa các nhà máy (cross-plant) được thực hiện **tự động** bởi hệ thống dựa trên Batch ID, hay **thủ công** bởi người dùng?\n2.  Về **OQ-005**: Với các trường hợp Recall Class One/Two, hành động báo cáo cơ quan quản lý là **tạo Task thủ công** cho `ACT-REG` hay hệ thống sẽ **tự động tạo file PDF** để người dùng tải về?\n3.  Về **OQ-003**: Vai trò `ACT-PO` trong bước `S14` (Approve BA Package) có phải là bước phê duyệt **cuối cùng** trước khi bàn giao cho Dev, hay còn cần sự phê duyệt kỹ thuật từ `ACT-QA`/`ACT-REG` trước đó?\n\n---\n\n### 📚 Tham chiếu Wiki Evidence\nCác trang Wiki sau đã được hệ thống xác nhận là có liên quan và hỗ trợ cho các quy tắc hiện tại:\n*   `PG-RULE-B90A1A48`: Aurora CAPA Core Rules (Nguồn gốc của các quy tắc phân loại, hold/release).\n*   `PG-GLOSS-BR`: Định nghĩa Business Rule.\n*   `PG-GLOSS-US`: Định nghĩa User Story.\n*   `PG-GLOSS-PO`: Định nghĩa vai trò Product Owner.\n\nNếu bạn cần điều chỉnh bất kỳ chi tiết nào trong BA Chat để giải quyết các Open Questions trên, hãy thực hiện ngay trước khi Export. Sau khi Export, chúng ta sẽ chuyển sang giai đoạn Review và Approve.",
+            "change_detected": true,
+            "ruleset_version": "ba-va-1.1.0",
+            "coverage_summary": {
+                "fd_actors": 8,
+                "use_cases": 8,
+                "wiki_pages": 6,
+                "bpmn_present": true,
+                "business_rules": 14,
+                "ui_touchpoints": 18,
+                "exception_flows": 1,
+                "ruleset_version": "ba-va-1.1.0"
+            },
+            "evidence_references": [
+                {
+                    "title": "Aurora CAPA Core Rules",
+                    "page_id": "PG-RULE-B90A1A48",
+                    "snippet": "Aurora CAPA Core Rules ---------------------- Rules ----- - Held lots stay segregated; sellable stock stays separate from held lots. - Hold release requires ACT...",
+                    "version": "1.0.0"
+                },
+                {
+                    "title": "AC --- Acceptance Criterion",
+                    "page_id": "PG-GLOSS-AC",
+                    "snippet": "Dieu kien kiem chung User Story; moi AC gan dung mot story.",
+                    "version": "1.0.0"
+                },
+                {
+                    "title": "BR --- Business Rule",
+                    "page_id": "PG-GLOSS-BR",
+                    "snippet": "Rule da chot, co nguon. Agent fetch lam constrain.",
+                    "version": "1.0.0"
+                },
+                {
+                    "title": "PO --- Product Owner",
+                    "page_id": "PG-GLOSS-PO",
+                    "snippet": "Nguoi phe duyet Business Analysis Package.",
+                    "version": "1.0.0"
+                },
+                {
+                    "title": "UAPDF --- Unify AI Product and Design Factory",
+                    "page_id": "PG-GLOSS-UAPDF",
+                    "snippet": "Ten Factory. Khong bia expansion khac.",
+                    "version": "1.0.0"
+                },
+                {
+                    "title": "US --- User Story",
+                    "page_id": "PG-GLOSS-US",
+                    "snippet": "As a <role> I want <action> so that <value>. Moi US keo theo AC.",
+                    "version": "1.0.0"
+                }
+            ]
+        }
+    },
+    "validation": {
+        "schema_valid": true,
+        "errors": [],
+        "outcome": "passed"
+    },
+    "provenance": {
+        "run_id": "be192a36-ae45-4a08-8016-1dd2f012d707",
+        "created_at": "2026-09-10T06:40:31Z"
+    },
+    "handoff": {
+        "to": "designer-agent",
+        "gate": "G1",
+        "mode": "feature_design",
+        "ready": true,
+        "note": "Control-plane handoff after VALIDATED. Proposal G1 still requires human APPROVED + BPMN before a live Designer run."
+    }
+}

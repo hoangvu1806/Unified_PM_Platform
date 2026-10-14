@@ -1,0 +1,2 @@
+{"active_section": "feature_definition", "user_message": "Muc tieu: van hanh treo co Independence Day cho MES, bao gom pick-pack kit, hoist ngoai troi, va backup indoor khi mua. Actors: ACT-WH, ACT-OPS, ACT-PO. Scope-in: pick-pack, hoist, weather cancel, indoor backup. Scope-out: mua sam co moi. Tranh viet so trong FD."}
+{"active_section": "feature_definition", "user_message": "Xac nhan FD du: goal/actors/scope-in/scope-out nhu tren. Co the dong cac cau hoi mo neu con. Chuyen sang Business Rules khi du."}

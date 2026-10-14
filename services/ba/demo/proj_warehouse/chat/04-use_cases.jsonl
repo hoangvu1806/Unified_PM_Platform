@@ -1,0 +1,2 @@
+{"active_section": "use_cases", "user_message": "US-01: La ACT-PO, toi muon phe duyet material request (exactly one human approver) de kho chi pick don hop le. AC: moi don co dung one approver; khong nhac so 1."}
+{"active_section": "use_cases", "user_message": "US-01 xong. Mo US-02: La ACT-WH, toi muon pick-pack don da approve de xuat hang; negative stock is not allowed after pick. AC: block neu MSDS missing hoac stock am; no silent substitution."}

@@ -1,0 +1,65 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 732 >>
+stream
+BT
+/F1 11 Tf
+48 740 Td
+() Tj
+0 -13 Td
+(Aurora Cross-Plant Investigation Handoff) Tj
+0 -13 Td
+(----------------------------------------) Tj
+0 -13 Td
+() Tj
+0 -13 Td
+() Tj
+0 -13 Td
+(Org) Tj
+0 -13 Td
+(---) Tj
+0 -13 Td
+(- Originating plant owns the deviation case header.) Tj
+0 -13 Td
+(- Sister plant may receive a linked child case when the same lot shipped between plants.) Tj
+0 -13 Td
+(- ACT-LAB of the originating plant remains primary for release testing.) Tj
+0 -13 Td
+() Tj
+0 -13 Td
+() Tj
+0 -13 Td
+(Progress) Tj
+0 -13 Td
+(--------) Tj
+0 -13 Td
+(- Case stages: Intake, Investigate, Hold, Decide Recall, Execute, Close.) Tj
+0 -13 Td
+(- BPMN must show XOR on severity and on recall class, and AND for dual investigation tracks.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001024 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+1094
+%%EOF

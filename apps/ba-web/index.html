@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BA Document Manager — Unify AI Product</title>
+  <meta name="description" content="Quản lý BA Packages & Features — hệ thống phân tích nghiệp vụ 4 section bắt buộc (FD → BR → WF → UC)">
+  <link rel="stylesheet" href="/src/design-tokens.css">
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Manager Body */
+    main.manager-body {
+      flex: 1;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 32px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .page-head-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #FFF;
+    }
+
+    .page-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* Toolbar */
+    .toolbar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 12px 16px;
+    }
+
+    .search-wrapper {
+      flex: 1;
+      max-width: 400px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 8px 12px;
+    }
+
+    .search-input {
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      width: 100%;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 6px;
+    }
+
+    .filter-btn {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-btn.active {
+      background: var(--bg-surface-hover);
+      border-color: var(--border-subtle);
+      color: var(--accent-cyan);
+    }
+
+    .filter-btn:hover:not(.active) {
+      color: var(--text-main);
+    }
+
+    /* Package Grid */
+    .package-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 20px;
+    }
+
+    .package-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .package-card:hover {
+      border-color: rgba(0, 242, 254, 0.4);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #FFF;
+      line-height: 1.3;
+    }
+
+    .card-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .section-progress-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 8px 12px;
+      font-size: 11px;
+    }
+
+    .card-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-subtle);
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-dim);
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .empty-state-desc {
+      font-size: 13px;
+      max-width: 400px;
+      margin: 0 auto 20px;
+      line-height: 1.5;
+    }
+
+    /* Loading */
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border-subtle);
+      border-top-color: var(--accent-cyan);
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header class="top-bar">
+    <div class="brand-group">
+      <div class="brand-title">
+        <span class="tag tag-cyan">UNIFY | BA FACTORY</span>
+        <span>BA Document Manager</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <a class="btn btn-cyan" href="wiki.html">Wiki</a>
+      <button class="btn btn-cyan" id="btnCreateFeature">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Tạo Dự Án Mới
+      </button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="manager-body">
+    <div class="page-head-row">
+      <div>
+        <h1 class="page-title">Quản lý BA Packages & Features</h1>
+        <p class="page-sub">Danh sách các gói hồ sơ nghiệp vụ 4 section bắt buộc (Feature Definition → Business Rules → Workflow → User Stories).</p>
+      </div>
+      <button class="btn btn-cyan" style="padding: 10px 20px; font-size: 13px;" id="btnCreateFeature2">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Tạo Dự Án Mới
+      </button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar-row">
+      <div class="search-wrapper">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input class="search-input" id="searchInput" placeholder="Tìm kiếm Feature theo tên..." />
+      </div>
+      <div class="filter-tabs" id="filterTabs">
+        <button class="filter-btn active" data-filter="ALL">Tất cả</button>
+        <button class="filter-btn" data-filter="COMPLETED">Đã hoàn thành</button>
+        <button class="filter-btn" data-filter="IN_PROGRESS">Đang làm việc</button>
+      </div>
+    </div>
+
+    <!-- Package Grid -->
+    <div class="package-grid" id="packageGrid">
+      <!-- Cards rendered dynamically -->
+    </div>
+  </main>
+
+  <!-- Create Feature Modal -->
+  <div class="modal-overlay" id="createModal">
+    <div class="modal-card">
+      <div class="flex items-center justify-between">
+        <div style="font-size: 16px; font-weight: 700; color: #FFF; display: flex; align-items: center; gap: 8px;">
+          <span class="tag tag-cyan">CREATE FEATURE</span>
+          <span>Tạo Dự Án Mới</span>
+        </div>
+        <button class="btn" id="btnCloseModal" style="padding: 4px 10px;">✕</button>
+      </div>
+
+      <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.5;">
+        Nhập thông tin yêu cầu ban đầu. Sau khi bấm Start, hệ thống sẽ tạo session mới và mở giao diện Chat để BA Agent bắt đầu phân tích từ <strong>Section 1 (Feature Definition)</strong>.
+      </p>
+
+      <div class="field-group">
+        <label class="field-label">Tên Tính năng / Module (*)</label>
+        <input class="field-input" id="newFeatureTitle" placeholder="VD: Đăng ký khoản vay thấu chi, Chuyển tiền Napas247..." />
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Mô tả tóm tắt ý tưởng / Yêu cầu ban đầu</label>
+        <textarea class="field-textarea" id="newFeaturePitch" placeholder="Nhập mong muốn hoặc mô tả sơ bộ về tính năng này..." style="min-height: 90px;"></textarea>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+        <button class="btn" id="btnCancelModal">Hủy</button>
+        <button class="btn btn-cyan" style="padding: 10px 20px; font-size: 13px;" id="btnStartChat">
+          Start Chat với BA Agent
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

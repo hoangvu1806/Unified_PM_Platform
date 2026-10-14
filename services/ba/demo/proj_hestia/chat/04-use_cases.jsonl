@@ -1,0 +1,2 @@
+{"active_section": "use_cases", "user_message": "US-01: La ACT-END-USER, toi muon chup fridge/counter de Hestia detect ingredients before suggesting recipes de co danh sach dung. AC given: photo uploaded; when: detect or manual entry when confidence low; then: ingredient list ready."}
+{"active_section": "use_cases", "user_message": "US-01 xong. Mo US-02: La ACT-END-USER, toi muon thay safety warnings kem goi y de tranh rui ro; must not invent ingredients. AC: moi warning cite wiki source; safety override ranking."}

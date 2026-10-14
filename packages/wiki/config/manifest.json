@@ -1,0 +1,43 @@
+{
+  "agents": {
+    "ba-agent": {
+      "tools.allowed": [
+        "wiki.search_pages",
+        "wiki.fetch_page",
+        "wiki.ingest_source",
+        "wiki.propose_page"
+      ],
+      "tools.denied": [
+        "wiki.approve_page",
+        "wiki.demote_page",
+        "wiki.delete_page"
+      ]
+    },
+    "designer-agent": {
+      "tools.allowed": [
+        "wiki.search_pages",
+        "wiki.fetch_page",
+        "wiki.propose_page"
+      ],
+      "tools.denied": [
+        "wiki.approve_page",
+        "wiki.demote_page",
+        "wiki.delete_page",
+        "wiki.ingest_source"
+      ]
+    },
+    "validation-agent": {
+      "tools.allowed": [
+        "wiki.search_pages",
+        "wiki.fetch_page"
+      ],
+      "tools.denied": [
+        "wiki.approve_page",
+        "wiki.demote_page",
+        "wiki.delete_page",
+        "wiki.ingest_source",
+        "wiki.propose_page"
+      ]
+    }
+  }
+}

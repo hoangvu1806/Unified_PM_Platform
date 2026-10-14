@@ -1,0 +1,10 @@
+{
+  "feature_status": ["EXPORTED", "VALIDATED"],
+  "package_exported": true,
+  "chat_frozen": true,
+  "min_user_stories": 2,
+  "min_company_docs": 1,
+  "min_project_docs": 1,
+  "require_validate_pass": false,
+  "export_ok": true
+}

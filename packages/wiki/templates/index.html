@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wiki Knowledge MVP</title>
+  <style>
+    :root {
+      --navy: #1F3A5F;
+      --navy-soft: #2A4A73;
+      --ink: #1c1c1c;
+      --muted: #5c5c5c;
+      --line: #D4CFC5;
+      --fill: #F7F5F1;
+      --paper: #FFFEFB;
+      --accent: #8A5A2B;
+      --accent-soft: #F3E8DA;
+      --ok: #1F5C45;
+      --ok-soft: #E4F0EA;
+      --llm: #3D4F8C;
+      --llm-soft: #E8EBF6;
+      --heur: #7A4E1E;
+      --heur-soft: #F5EBDF;
+      --shadow: 0 1px 2px rgba(31, 58, 95, 0.06), 0 8px 24px rgba(31, 58, 95, 0.06);
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Times New Roman", Times, Georgia, serif;
+      color: var(--ink);
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 1.6rem 1.25rem 3rem;
+      background:
+        radial-gradient(1200px 400px at 10% -10%, #E8EEF5 0%, transparent 55%),
+        radial-gradient(900px 360px at 100% 0%, #F3E8DA 0%, transparent 50%),
+        #F3F1EC;
+      line-height: 1.45;
+    }
+    .top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--navy);
+    }
+    .brand h1 {
+      color: var(--navy);
+      font-size: 1.75rem;
+      margin: 0 0 0.25rem;
+      letter-spacing: 0.01em;
+    }
+    .brand .sub { color: var(--muted); margin: 0; font-size: 0.98rem; }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-family: Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      padding: 0.28rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--navy);
+    }
+    .pill.ok { background: var(--ok-soft); border-color: #B7D4C6; color: var(--ok); }
+    .pill.warn { background: var(--accent-soft); border-color: #E0C9A8; color: var(--accent); }
+    section.card {
+      margin: 1.1rem 0;
+      padding: 1.05rem 1.15rem 1.15rem;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    section.card h2 {
+      color: var(--navy);
+      font-size: 1.12rem;
+      margin: 0 0 0.75rem;
+      display: flex;
+      align-items: baseline;
+      gap: 0.55rem;
+    }
+    section.card h2 .step {
+      font-family: Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      font-weight: normal;
+      color: #fff;
+      background: var(--navy);
+      border-radius: 999px;
+      padding: 0.15rem 0.5rem;
+      min-width: 1.5rem;
+      text-align: center;
+    }
+    .hint { color: var(--muted); margin: 0.65rem 0 0; font-size: 0.92rem; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.45rem 0.65rem;
+    }
+    .field {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.28rem 0.45rem 0.28rem 0.55rem;
+    }
+    .field label {
+      min-width: auto;
+      margin: 0;
+      font-size: 0.82rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-family: Menlo, Consolas, monospace;
+    }
+    .field input,
+    .field select {
+      margin: 0;
+      border: 0;
+      background: transparent;
+      font: inherit;
+      color: var(--ink);
+      outline: none;
+      padding: 0.15rem 0.2rem;
+    }
+    .field input[type="file"] { max-width: 13rem; font-size: 0.85rem; }
+    .field input[name="project_id"] { width: 8.2rem; }
+    .field input[name="actor"] { width: 6.2rem; }
+    .field select[name="sort_mode"] { min-width: 13.5rem; }
+    .field:focus-within {
+      border-color: var(--navy-soft);
+      box-shadow: 0 0 0 3px rgba(31, 58, 95, 0.12);
+    }
+    .search-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .search-row input[name="query"] {
+      flex: 1 1 14rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.45rem 0.7rem;
+      font: inherit;
+      background: var(--fill);
+    }
+    .search-row input[name="query"]:focus {
+      outline: none;
+      border-color: var(--navy-soft);
+      box-shadow: 0 0 0 3px rgba(31, 58, 95, 0.12);
+    }
+    button {
+      background: var(--navy);
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 0.42rem 0.9rem;
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.95rem;
+      transition: background 0.15s ease, transform 0.05s ease;
+    }
+    button:hover { background: var(--navy-soft); }
+    button:active { transform: translateY(1px); }
+    button.danger {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid #D4B48A;
+    }
+    button.danger:hover { background: var(--accent-soft); }
+    button.ghost {
+      background: var(--fill);
+      color: var(--navy);
+      border: 1px solid var(--line);
+    }
+    button.ghost:hover { background: #fff; }
+    button.sm { padding: 0.28rem 0.65rem; font-size: 0.88rem; }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      text-align: left;
+      padding: 0.55rem 0.65rem;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+      font-size: 0.94rem;
+    }
+    th {
+      color: var(--navy);
+      background: var(--fill);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-family: Menlo, Consolas, monospace;
+      font-weight: normal;
+    }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover td { background: #FAF8F4; }
+    code {
+      font-family: Menlo, Consolas, monospace;
+      font-size: 0.82em;
+      background: var(--fill);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 0.05rem 0.28rem;
+    }
+    .tag {
+      display: inline-block;
+      font-family: Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      padding: 0.12rem 0.4rem;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--fill);
+      color: var(--navy);
+      white-space: nowrap;
+    }
+    .tag.heur { background: var(--heur-soft); border-color: #E0C9A8; color: var(--heur); }
+    .tag.llm { background: var(--llm-soft); border-color: #C5CDE8; color: var(--llm); }
+    .status-draft {
+      display: inline-block;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid #E0C9A8;
+      border-radius: 999px;
+      padding: 0.1rem 0.5rem;
+      font-size: 0.82rem;
+    }
+    .status-approved {
+      display: inline-block;
+      color: var(--ok);
+      background: var(--ok-soft);
+      border: 1px solid #B7D4C6;
+      border-radius: 999px;
+      padding: 0.1rem 0.5rem;
+      font-size: 0.82rem;
+      font-weight: bold;
+    }
+    .notice {
+      background: linear-gradient(90deg, #E8EEF5, #F7F5F1);
+      border: 1px solid #B7C6DA;
+      border-left: 4px solid var(--navy);
+      border-radius: 8px;
+      padding: 0.7rem 0.9rem;
+      margin: 0 0 1rem;
+      color: var(--navy);
+    }
+    .empty {
+      margin: 0;
+      padding: 1.1rem;
+      text-align: center;
+      color: var(--muted);
+      background: var(--fill);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+    }
+    .count {
+      margin-left: auto;
+      font-family: Menlo, Consolas, monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-weight: normal;
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1>Wiki Knowledge MVP</h1>
+      <p class="sub">UAPDF-WKM-001 — HTTP cho người · Agent dùng MCP · không approve</p>
+    </div>
+    <div class="badge-row">
+      <span class="pill">extract lossless</span>
+      <span class="pill warn">LLM = DRAFT only</span>
+      <span class="pill ok">human gate</span>
+      <a class="pill" href="/sim" style="text-decoration:none">BA ↔ Wiki sim</a>
+    </div>
+  </header>
+
+  {% if notice %}
+  <p class="notice">{{ notice }}</p>
+  {% endif %}
+
+  <section class="card">
+    <div class="toolbar">
+      <h2 style="margin:0"><span class="step">0</span> Demo reset</h2>
+      <form action="/ui/reset" method="post" onsubmit="return confirm('Xóa toàn bộ wiki_page / wiki_source / blobs?');">
+        <button type="submit" class="danger">Clear wiki DB</button>
+      </form>
+    </div>
+    <p class="hint">Xóa draft + approved. Samples PDF vẫn ở <code>data/samples/</code> nếu đã generate.</p>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">1</span> Ingest PDF</h2>
+    <form action="/ui/upload" method="post" enctype="multipart/form-data">
+      <div class="form-row">
+        <div class="field">
+          <label>File</label>
+          <input type="file" name="file" accept="application/pdf" required>
+        </div>
+        <div class="field">
+          <label>ns</label>
+          <select name="namespace">
+            <option value="project" selected>project</option>
+            <option value="company">company</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>sort</label>
+          <select name="sort_mode">
+            <option value="both" selected>both (H- + L-)</option>
+            <option value="llm">llm only</option>
+            <option value="heuristic">heuristic only</option>
+            <option value="auto">auto (env)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>project</label>
+          <input name="project_id" value="PRJ-MES-01">
+        </div>
+        <div class="field">
+          <label>actor</label>
+          <input name="actor" value="ba.lead">
+        </div>
+        <button type="submit">Upload</button>
+      </div>
+    </form>
+    <p class="hint"><code>both</code>: một extract, hai bộ DRAFT — <span class="tag heur">H- heuristic</span> <span class="tag llm">L- llm</span></p>
+  </section>
+
+  <section class="card">
+    <h2>
+      <span class="step">2</span> Draft / proposed — duyệt
+      {% if drafts %}<span class="count">{{ drafts|length }}</span>{% endif %}
+    </h2>
+    {% if drafts %}
+    <div class="table-wrap">
+      <table>
+        <tr><th>page_id</th><th>bucket</th><th>title</th><th>status</th><th></th></tr>
+        {% for p in drafts %}
+        <tr>
+          <td>
+            {% if p.page_id.startswith('H-') %}
+              <span class="tag heur">H</span>
+            {% elif p.page_id.startswith('L-') %}
+              <span class="tag llm">L</span>
+            {% endif %}
+            <code>{{ p.page_id }}</code>
+          </td>
+          <td><span class="tag">{{ p.bucket_id }}</span></td>
+          <td>{{ p.title }}{% if p.abbrev %} <code>{{ p.abbrev }}</code>{% endif %}</td>
+          <td><span class="status-draft">{{ p.status }}</span></td>
+          <td>
+            <form action="/ui/approve/{{ p.page_id }}" method="post">
+              <input type="hidden" name="actor" value="ba.lead">
+              <input type="hidden" name="project_id" value="{{ p.project_id or '' }}">
+              <button type="submit" class="sm">Approve</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% else %}
+    <p class="empty">Chưa có draft — upload PDF với sort = both để so sánh heuristic vs LLM.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>
+      <span class="step">3</span> Approved — constrain cho agent
+      {% if approved %}<span class="count">{{ approved|length }}</span>{% endif %}
+    </h2>
+    {% if approved %}
+    <p class="hint">V-WIKI conflict? <strong>Demote → draft</strong> (preferred) or Delete the violator, then re-Validate in BA.</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>page_id</th><th>bucket</th><th>title</th><th>version</th><th></th></tr>
+        {% for p in approved %}
+        <tr>
+          <td><code>{{ p.page_id }}</code></td>
+          <td><span class="tag">{{ p.bucket_id }}</span></td>
+          <td>{{ p.title }}</td>
+          <td><span class="status-approved">{{ p.version }}</span></td>
+          <td style="white-space:nowrap;display:flex;gap:0.35rem;">
+            <form action="/ui/demote/{{ p.page_id }}" method="post">
+              <input type="hidden" name="actor" value="ba.lead">
+              <input type="hidden" name="project_id" value="{{ p.project_id or '' }}">
+              <button type="submit" class="sm ghost" title="approved → draft (human only)">Demote</button>
+            </form>
+            <form action="/ui/delete/{{ p.page_id }}" method="post" onsubmit="return confirm('Hard delete {{ p.page_id }}? Prefer Demote when unsure.');">
+              <input type="hidden" name="actor" value="ba.lead">
+              <input type="hidden" name="project_id" value="{{ p.project_id or '' }}">
+              <button type="submit" class="sm" style="color:#b91c1c;">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% else %}
+    <p class="empty">Chưa có trang approved.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2><span class="step">4</span> Search approved</h2>
+    <form action="/ui/search" method="post" class="search-row">
+      <input name="query" value="{{ query }}" placeholder="phe duyet, POL-WH, glossary…">
+      <input type="hidden" name="namespace" value="project">
+      <input type="hidden" name="project_id" value="PRJ-MES-01">
+      <input type="hidden" name="bucket_id" value="">
+      <button type="submit" class="ghost">Search</button>
+    </form>
+    {% if hits is not none %}
+      {% if hits %}
+      <div class="table-wrap" style="margin-top:0.85rem">
+        <table>
+          <tr><th>page_id</th><th>title</th><th>snippet</th><th>score</th></tr>
+          {% for h in hits %}
+          <tr>
+            <td><code>{{ h.page_id }}</code></td>
+            <td>{{ h.title }}</td>
+            <td>{{ h.snippet }}</td>
+            <td>{{ h.score }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% else %}
+      <p class="empty" style="margin-top:0.85rem">Không hit. Search không trả full <code>body</code> — fetch mới lấy trang.</p>
+      {% endif %}
+    {% endif %}
+  </section>
+</body>
+</html>

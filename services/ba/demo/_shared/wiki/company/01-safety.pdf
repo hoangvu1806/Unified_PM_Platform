@@ -1,0 +1,85 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1071 >>
+stream
+BT
+/F1 11 Tf
+48 740 Td
+() Tj
+0 -13 Td
+(Nimbus Factory ? Workplace Safety Ground Rules) Tj
+0 -13 Td
+(----------------------------------------------) Tj
+0 -13 Td
+() Tj
+0 -13 Td
+(Company: Nimbus Factory \(fantasy org for BA demos\).) Tj
+0 -13 Td
+() Tj
+0 -13 Td
+() Tj
+0 -13 Td
+(Rules) Tj
+0 -13 Td
+(-----) Tj
+0 -13 Td
+(- All outdoor work above 2 meters must use a safety harness.) Tj
+0 -13 Td
+(- Incomplete kits must not leave the warehouse floor.) Tj
+0 -13 Td
+(- Rain or high wind cancels outdoor display work until a supervisor re-opens the window.) Tj
+0 -13 Td
+(- Agents may propose drafts; only a human \(ba.lead\) may approve wiki pages.) Tj
+0 -13 Td
+() Tj
+0 -13 Td
+() Tj
+0 -13 Td
+(Constraint) Tj
+0 -13 Td
+(----------) Tj
+0 -13 Td
+(- Safety rules override schedule pressure.) Tj
+0 -13 Td
+(- Do not invent thresholds that are not written here.) Tj
+0 -13 Td
+() Tj
+0 -13 Td
+() Tj
+0 -13 Td
+(Org) Tj
+0 -13 Td
+(---) Tj
+0 -13 Td
+(- ACT-OPS: operations / hoist crew) Tj
+0 -13 Td
+(- ACT-WH: warehouse pick-pack) Tj
+0 -13 Td
+(- ACT-PO: Product Owner / approver of BA package) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001364 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+1434
+%%EOF
