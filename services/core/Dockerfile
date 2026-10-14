@@ -1,6 +1,9 @@
 # Build context: platform root (docker build -f services/core/Dockerfile .)
 FROM python:3.12-slim-bookworm
 
+# Slow mirrors: retry instead of failing the build.
+ENV PIP_DEFAULT_TIMEOUT=120 PIP_RETRIES=5
+
 WORKDIR /app
 
 COPY packages/platform_core /opt/platform/packages/platform_core

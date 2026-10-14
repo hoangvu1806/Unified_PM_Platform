@@ -12,6 +12,7 @@ from contextvars import ContextVar
 from fastapi import HTTPException, Request
 
 from platform_core.auth import SYSTEM_USER, AuthError, CurrentUser, decode_token, get_auth_settings
+from platform_core.logs import bind
 from platform_core.projects import ProjectAccessError, check_project
 
 _current_user: ContextVar[CurrentUser | None] = ContextVar("platform_current_user", default=None)
@@ -42,6 +43,7 @@ async def authenticate(request: Request) -> CurrentUser:
     user = resolve_user(request)
     request.state.user = user
     _current_user.set(user)
+    bind(user=user.username)
     return user
 
 
@@ -58,6 +60,7 @@ def auth_disabled() -> bool:
 
 def require_project(project_id: str | None, write_role: str | None = None) -> frozenset[str]:
     """403/400 unless the current caller may read (or write with ``write_role``)."""
+    bind(project_id=project_id)
     if auth_disabled():
         return frozenset({"ADMIN"})
     try:

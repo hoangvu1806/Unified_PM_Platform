@@ -326,12 +326,20 @@ def run_pack(
     base_url: str,
     ui_base: str,
     turn_timeout_s: float = 120.0,
+    project: str | None = None,
+    login: str | None = None,
+    password: str = "demo123",
+    core_url: str | None = None,
 ) -> dict[str, Any]:
     pack_dir = pack_dir.resolve()
     feature_cfg = _load_json(pack_dir / "feature.json")
     expect = _load_json(pack_dir / "expect.json") if (pack_dir / "expect.json").is_file() else {}
 
     client = DemoClient(base_url, timeout_s=max(180.0, turn_timeout_s))
+    if login:
+        # Platform: log in through core-api (gateway root) before calling BA.
+        client.login(core_url or base_url.rsplit("/ba", 1)[0], login, password)
+        print(f"  logged in as {login}")
     health = client.health()
     if health.get("status") not in {"ok", "healthy", None} and health.get("adk_ready") is False:
         raise DemoClientError(f"API not ready: {health}")
@@ -345,6 +353,7 @@ def run_pack(
     created = client.create_feature(
         feature_cfg["title"],
         feature_cfg.get("description") or "",
+        project_id=project,
     )
     session_id = created["session_id"]
     project_id = created.get("project_id") or ""
@@ -418,6 +427,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--ui-base", default="http://127.0.0.1:5173")
     parser.add_argument("--turn-timeout", type=float, default=180.0)
+    # Platform (gateway): --base-url http://gateway/ba --ui-base http://localhost:8080/ba
+    parser.add_argument("--project", help="platform project id the feature belongs to")
+    parser.add_argument("--login", help="platform username (needs BA; ADMIN to seed company wiki)")
+    parser.add_argument("--password", default="demo123")
+    parser.add_argument("--core-url", help="gateway root for core-api login (default: base-url without /ba)")
     args = parser.parse_args(argv)
 
     # Allow `python -m demo._runner.run_demo` from repo root
@@ -443,6 +457,10 @@ def main(argv: list[str] | None = None) -> int:
                     base_url=args.base_url,
                     ui_base=args.ui_base,
                     turn_timeout_s=args.turn_timeout,
+                    project=args.project,
+                    login=args.login,
+                    password=args.password,
+                    core_url=args.core_url,
                 )
             )
         except (DemoClientError, ExpectError, OSError, json.JSONDecodeError) as exc:

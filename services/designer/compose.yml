@@ -15,6 +15,7 @@ services:
     volumes:
       - designer-data:/app/data          # assets until Sprint 2 storage move, logs
       - platform-storage:/data/storage
+      - ../../logs:/logs                    # platform/logs/designer-api/
       - designer-cache:/data/design-data/cache
       - ${DESIGNER_HOST_DESIGN_SYSTEMS:-../../../design-systems}:/data/design-data/design-systems:ro
     extra_hosts:
@@ -51,6 +52,7 @@ services:
       POSTGRES_PORT: "5432"
       AUTH_MODE: "off"          # legacy suites run without login; access rules have their own tests
       STORAGE_BACKEND: local    # tests never write to the real bucket
+      LOG_PROJECT_TO_STORAGE: "false"
     depends_on:
       postgres:
         condition: service_healthy

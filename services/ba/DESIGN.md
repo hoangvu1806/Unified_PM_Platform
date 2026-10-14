@@ -63,10 +63,10 @@ Aligned with `Documents/Tieu_chuan_tich_hop_BA_Designer_Validation_Agent_v1.md` 
 | BPMN | Live: `managers/control/bpmn.py` emits `bpmn:collaboration` (one lane per FD actor); Node `bpmn-elk-layout` places DI; DIY fallback if Node is missing. |
 | UI Touchpoints | Not a Designer-ready artifact. Export may include a hook; Penpot is out of this repo. |
 | Export | When `feature_status` is `VALIDATED` (or `EXPORTED` with a current passed VA). First export freezes chat; Validate/Export can still refresh against wiki. Envelope `handoff.to = designer-agent`. |
-| Login / identity | Not built. Feature CRUD and chat UI use `USER_ID = "ba-user"`. Chat API still accepts another `user_id`. |
-| Knowledge Graph / live Designer / Agyn | Out of scope. Wiki is documents, not a graph. Designer is a handoff port. |
+| Login / identity | Platform login (core-api, mock JWT now, Keycloak later). Routes check project membership/role; ADK sessions still use `USER_ID = "ba-user"` internally. |
+| Knowledge Graph / Agyn | Out of scope. Wiki is documents, not a graph. Designer is a separate platform service reached by handoff. |
 
-`docs/ba-graph-agent/` is the **August 2026 product vision** (8 sections, 3 tiers). This DESIGN.md is the runtime map. Validate is in-process, not HTTP A2A.
+This DESIGN.md is the runtime map. Validate is in-process, not HTTP A2A.
 
 ## State contract
 

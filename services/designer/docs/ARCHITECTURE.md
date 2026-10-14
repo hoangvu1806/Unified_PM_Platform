@@ -95,5 +95,4 @@ OpenPencil Unsplash contract.
 
 `PromptLibrary` adds [design craft knowledge](knowledge/design-craft.md) only where
 visual direction or execution is decided: project direction, workspace page
-planning and page design. See [refactor notes](DESIGN_AGENT_REFACTOR.md) for the
-audit, regression coverage and live-validation limits.
+planning and page design.

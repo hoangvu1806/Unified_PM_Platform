@@ -12,6 +12,7 @@ services:
       POSTGRES_PORT: "5432"
     volumes:
       - platform-storage:/data/storage   # Assets downloads (S3 cache)
+      - ../../logs:/logs                 # platform/logs/core-api/
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,6 +41,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       STORAGE_BACKEND: local    # tests never write to the real bucket
+      LOG_PROJECT_TO_STORAGE: "false"
     depends_on:
       postgres:
         condition: service_healthy

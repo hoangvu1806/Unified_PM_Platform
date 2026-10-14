@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from platform_core import artifacts
 from platform_core.auth import CurrentUser, get_auth_settings, issue_token
 from platform_core.fastapi import authenticate, get_current_user
+from platform_core.logs import bind
 from platform_core.projects import PROJECT_ROLES, clear_cache
 from pydantic import BaseModel, Field
 
@@ -74,6 +75,7 @@ def _my_roles(conn, project_id: str, user_id: str) -> list[str]:
 
 
 def _require_member(conn, project_id: str, user: CurrentUser, admin: bool = False) -> list[str]:
+    bind(project_id=project_id)
     project = conn.execute(
         "SELECT id FROM projects WHERE id=%s AND archived_at IS NULL", (project_id,)
     ).fetchone()

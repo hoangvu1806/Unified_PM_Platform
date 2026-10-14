@@ -12,7 +12,6 @@ import {
   PenTool,
   Plus,
   Search,
-  Sparkles,
   UserPlus,
   Users,
   X,
@@ -154,11 +153,11 @@ export function App() {
 function Brand() {
   return (
     <span className="brand">
-      <span className="brand-mark">
-        <Sparkles size={15} />
+      <span className="brand-mark" aria-hidden="true">
+        UW
       </span>
       <span className="brand-text">
-        BA <em>×</em> Designer
+        Unified Work <span className="brand-sub">AI Platform</span>
       </span>
     </span>
   );
@@ -217,81 +216,54 @@ function LoginPage({ onLoggedIn }: { onLoggedIn: (u: User) => void }) {
 
   return (
     <div className="login">
-      <section className="login-hero">
+      <div className="login-card">
         <Brand />
-        <div className="hero-copy">
-          <h1>
-            Một dự án.
-            <br />
-            Hai không gian.
-            <br />
-            <span className="grad">Một nền tảng.</span>
-          </h1>
-          <p>BA phân tích, Designer thiết kế — cùng tài nguyên, cùng tri thức, cùng lịch sử phiên bản.</p>
-        </div>
-        <ul className="hero-points">
-          <li>
-            <FolderKanban size={16} /> Dự án là trung tâm: Assets dùng chung, Data workspace theo vai trò
-          </li>
-          <li>
-            <Layers size={16} /> BA package có phiên bản, thiết kế tự đánh dấu khi BA thay đổi
-          </li>
-          <li>
-            <Users size={16} /> Phân quyền theo dự án, sẵn sàng SSO Keycloak
-          </li>
-        </ul>
-      </section>
+        <h2>Đăng nhập</h2>
+        <p className="muted">Không gian làm việc chung cho phân tích nghiệp vụ và thiết kế.</p>
+        <form onSubmit={submit} className="form">
+          <label>
+            Tài khoản
+            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus />
+          </label>
+          <label>
+            Mật khẩu
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </label>
+          {error && <div className="alert">{error}</div>}
+          <button className="btn primary block" disabled={!!busy || !username || !password}>
+            {busy === username ? <span className="spinner sm" /> : "Đăng nhập"}
+          </button>
+        </form>
 
-      <section className="login-panel">
-        <div className="login-card">
-          <h2>Đăng nhập</h2>
-          <p className="muted">Vào các dự án bạn tham gia.</p>
-          <form onSubmit={submit} className="form">
-            <label>
-              Tài khoản
-              <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus />
-            </label>
-            <label>
-              Mật khẩu
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-            </label>
-            {error && <div className="alert">{error}</div>}
-            <button className="btn primary block" disabled={!!busy || !username || !password}>
-              {busy === username ? <span className="spinner sm" /> : "Đăng nhập"}
-            </button>
-          </form>
-
-          {demo.length > 0 && (
-            <div className="demo">
-              <div className="divider">
-                <span>Tài khoản demo</span>
-              </div>
-              <div className="demo-grid">
-                {demo.map((d) => (
-                  <button
-                    key={d.username}
-                    className="demo-user"
-                    disabled={!!busy}
-                    onClick={() => void signIn(d.username, d.password)}
-                  >
-                    <Avatar name={d.name} size={34} />
-                    <span className="demo-info">
-                      <strong>{d.name.replace(/\s*\(.*\)/, "")}</strong>
-                      <span className="mono">{d.username}</span>
-                    </span>
-                    {busy === d.username ? <span className="spinner sm" /> : <RoleChips roles={d.roles} />}
-                  </button>
-                ))}
-              </div>
+        {demo.length > 0 && (
+          <div className="demo">
+            <div className="demo-title">Tài khoản demo · mật khẩu {demo[0].password}</div>
+            <div className="demo-list">
+              {demo.map((d) => (
+                <button
+                  key={d.username}
+                  className="demo-user"
+                  disabled={!!busy}
+                  onClick={() => void signIn(d.username, d.password)}
+                >
+                  <Avatar name={d.name} size={28} />
+                  <span className="demo-info">
+                    <strong>{d.name.replace(/\s*\(.*\)/, "")}</strong>
+                    <span className="mono">{d.username}</span>
+                  </span>
+                  {busy === d.username ? <span className="spinner sm" /> : <RoleChips roles={d.roles} />}
+                </button>
+              ))}
             </div>
-          )}
-        </div>
-      </section>
+          </div>
+        )}
+      </div>
+      <p className="login-foot muted small">Unified Work AI Platform · đăng nhập giả lập (Keycloak sẽ thay thế)</p>
     </div>
   );
 }
@@ -334,9 +306,10 @@ function HomePage({ me, onOpenDetail }: { me: User; onOpenDetail: (id: string) =
     <section>
       <div className="hero">
         <div>
-          <span className="eyebrow">{greeting()}</span>
-          <h1>{me.name.replace(/\s*\(.*\)/, "")}</h1>
-          <p className="muted">{roleHint}</p>
+          <h1>Dự án của tôi</h1>
+          <p className="muted">
+            {greeting()}, {me.name.replace(/\s*\(.*\)/, "")}. {roleHint}
+          </p>
         </div>
         <div className="hero-stats">
           <div className="stat">
@@ -398,7 +371,6 @@ function ProjectCard({ project: p, onOpen, onDetail }: { project: ProjectSummary
   const designer = canWrite(p.my_roles, "DESIGNER");
   return (
     <article className="card project" style={{ ["--h" as string]: hue(p.id) }} onClick={onOpen}>
-      <div className="project-accent" />
       <div className="project-head">
         <span className="project-mark">{p.name.slice(0, 1).toUpperCase()}</span>
         <RoleChips roles={p.my_roles} />

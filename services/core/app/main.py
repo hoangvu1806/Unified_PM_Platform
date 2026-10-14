@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from platform_core import artifacts
+from platform_core.logs import RequestLogMiddleware, setup_logging
 from platform_core.auth import get_auth_settings
 from platform_core.settings import startup_report
 
@@ -13,6 +14,7 @@ from .db import close_pool, open_pool
 from .routes import private, public
 from .seed import seed_demo
 
+setup_logging("core-api")
 logger = logging.getLogger("core-api")
 
 
@@ -38,5 +40,6 @@ app = FastAPI(
     openapi_url="/api/core/openapi.json",
     lifespan=lifespan,
 )
+app.add_middleware(RequestLogMiddleware)
 app.include_router(public)
 app.include_router(private)

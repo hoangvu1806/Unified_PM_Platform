@@ -19,6 +19,10 @@ from sqlalchemy import text
 
 load_dotenv()
 
+from platform_core.logs import RequestLogMiddleware, setup_logging  # noqa: E402
+
+setup_logging("ba-api")
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -56,6 +60,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RequestLogMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins_list,

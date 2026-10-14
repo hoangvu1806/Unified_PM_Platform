@@ -7,22 +7,19 @@ import re
 import sys
 from pathlib import Path
 
-# Allow importing MVP pdf helper when WIKI_MVP_ROOT or sibling mvp exists.
+# The PDF helper lives in the wiki package (platform packages/wiki).
 _REPO = Path(__file__).resolve().parents[2]
-_MVP_CANDIDATES = [
-    Path(__file__).resolve().parents[3] / "mvp",  # WikiFactoryAI/mvp
-    _REPO.parent.parent / "mvp",
-]
 
 
 def _ensure_mvp() -> Path:
-    for root in _MVP_CANDIDATES:
-        if (root / "wiki" / "pdf_write.py").is_file():
-            sys.path.insert(0, str(root))
-            return root
-    raise SystemExit(
-        "Cannot find Wiki MVP (wiki/pdf_write.py). Set WIKI_MVP_ROOT or keep mvp next to the BA repo."
-    )
+    if str(_REPO) not in sys.path:
+        sys.path.insert(0, str(_REPO))
+    from factory_wiki.paths import ensure_mvp_importable
+
+    try:
+        return ensure_mvp_importable()
+    except ModuleNotFoundError as exc:
+        raise SystemExit(f"Cannot find the wiki package (wiki/pdf_write.py): {exc}") from exc
 
 
 def _md_to_pages(text: str, *, max_lines: int = 48) -> list[list[str]]:

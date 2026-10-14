@@ -17,6 +17,9 @@ COPY services/designer/openpencil-cli /usr/local/bin/openpencil
 RUN chmod +x /usr/local/bin/openpencil
 
 # Service root = /app (docs/, data/, logs/ live beside app/).
+# Slow mirrors: retry instead of failing the build.
+ENV PIP_DEFAULT_TIMEOUT=120 PIP_RETRIES=5
+
 WORKDIR /app
 
 COPY packages/platform_core /opt/platform/packages/platform_core

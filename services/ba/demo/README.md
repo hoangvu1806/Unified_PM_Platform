@@ -8,37 +8,17 @@ Folder-driven demos under `demo/proj_*/`. Each pack has:
 - `chat/*.jsonl` — BA section turns (FD → BR → WF → UC)
 - `expect.json` — closed-cycle assertions
 
-Last closed-cycle run: **15/09/2026** on Coder Docker (API :8010, UI :5173). Six packs: five `EXPORTED`, Aurora `VALIDATED` (`skip_export`). Write-up: UAPDF-PIPE-001.
+## Run on the platform
 
-## Prerequisites
-
-1. API healthy (`make docker-up`, or Coder overlay on :8010) with `LLM_GATE_API_KEY` set. Chat needs the gate; wiki approve does not.
-2. Python venv with BA deps (`.venv`) for the runner on the machine that calls the API.
-3. Wiki MVP checkout for PDF build (`WikiFactoryAI/mvp` next to BA, or `WIKI_MVP_ROOT`).
-
-## Commands
+Inside the running `ba-api` container, through the gateway (login + project):
 
 ```bash
-# Rebuild PDFs from wiki/**/src/*.md
-make demo-pdfs
-
-# One pack
-make demo DEMO=proj_july4
-
-# All packs including aurora (stop on first failure)
-make demo-all
-
-# Continue after failures
-.venv/bin/python -m demo._runner.run_demo --all --continue --base-url http://127.0.0.1:8000
+docker compose exec ba-api python -m demo._runner.run_demo demo/proj_warehouse \
+  --base-url http://gateway/ba --ui-base http://localhost:8080/ba \
+  --project PRJ-DEMO --login lead.dung
 ```
 
-Against VPS API:
-
-```bash
-.venv/bin/python -m demo._runner.run_demo --all --continue \
-  --base-url https://8010--main--aquamarine-leopon-37--vupham.coder.imespro.ai \
-  --ui-base https://5173--main--aquamarine-leopon-37--vupham.coder.imespro.ai
-```
+`--login` needs role BA in the project and ADMIN to seed the company wiki. `--all --continue` runs every pack.
 
 ## Packs
 
@@ -55,7 +35,7 @@ Against VPS API:
 
 1. Copy any `proj_*` folder.
 2. Edit `feature.json`, `wiki/**/src/*.md`, `chat/*.jsonl`, `expect.json`.
-3. `make demo-pdfs` then `make demo DEMO=proj_yourname`.
+3. Rebuild PDFs (`python -m demo._runner.md_to_pdf`) then run the pack as above.
 
 Set `"skip_export": true` in `expect.json` to stop after Validate (chat stays unlocked for manual Export).
 

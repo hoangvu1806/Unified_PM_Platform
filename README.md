@@ -17,9 +17,10 @@ platform/
 ## Run (Docker only)
 
 ```bash
-cp .env.example .env        # fill LLM keys, passwords
-make openpencil             # default OpenPencil instance (builds openpencil:local)
-make up                     # http://localhost:8080
+cp .env.example .env                                        # fill LLM keys, passwords, S3
+cd ../BA/open-pencil && docker compose up -d && cd -        # default OpenPencil instance (builds openpencil:local)
+docker compose up -d --build                                # http://localhost:8080
+docker builder prune -af                                    # optional: drop build cache afterwards
 ```
 
 | URL | What |
@@ -50,6 +51,24 @@ Data created before Sprint 3 (no project): `docker compose exec core-api python 
 
 One default instance (`OPENPENCIL_DEFAULT_MCP_URL`). A designer's own instance is a row in `designer.openpencil_instances` (`PUT /designer/api/v1/openpencil-instances/{user_id}?project_id=…`, project ADMIN only); runs then use it automatically.
 
-Run one module only: `make up-ba` or `make up-designer` (each includes postgres, gateway, core and portal). Run the tests: `make test`; access checks: `make e2e`; Assets flow on the configured storage: `make e2e-assets`; UI walk-through: `make e2e-ui`; database backup: `make backup`.
+## Common commands
+
+| Task | Command (from `platform/`) |
+|---|---|
+| One module only | `docker compose -f compose.ba.yml up -d` or `docker compose -f compose.designer.yml up -d` (each includes postgres, gateway, core, portal) |
+| Tests | `docker compose --profile test run --rm ba-test` (also `designer-test`, `wiki-test`, `core-test`) |
+| Access checks | `docker run --rm --network platform_default -v "$PWD/scripts:/s:ro" python:3.12-slim python /s/e2e_access.py http://gateway` |
+| Assets flow (real storage) | `sh scripts/e2e_assets.sh` |
+| BA scenario (real LLM) | `docker compose exec ba-api python -m demo._runner.run_demo demo/proj_warehouse --base-url http://gateway/ba --ui-base http://localhost:8080/ba --project PRJ-DEMO --login lead.dung` |
+| Legacy data → project | `docker compose exec core-api python -m app.legacy` |
+| Local files → S3 | `docker compose exec core-api python -m platform_core.sync_storage` |
+| Database backup | `docker compose exec -T postgres sh -c 'pg_dump -U $POSTGRES_USER -d $POSTGRES_DB -Fc -f /tmp/platform.dump'` then `docker compose cp postgres:/tmp/platform.dump backups/` |
+| Shrink Docker disk (Windows, Admin) | `scripts/windows/compact-docker-disk.ps1` |
+
+## Logs
+
+- Local: `platform/logs/<service>/<service>.log` (JSON lines, daily rotation, 14 days): every request with `user`, `project_id`, `request_id`, plus agent/workflow logs.
+- Per project: `projects/<project_id>/logs/<service>/<date>/*.jsonl` in storage (S3), flushed every `LOG_PROJECT_FLUSH_SECONDS`.
+
 
 Every edit to the imported sources is listed in `CHANGES-FROM-SOURCE.md`.

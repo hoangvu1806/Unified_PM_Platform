@@ -1,7 +1,9 @@
-# Agentic Designer
+# Designer service (designer-api)
 
-Conversation-first UI design agent built with FastAPI, Google ADK, React, SQLite, and
-OpenPencil MCP.
+Conversation-first UI design agent built with FastAPI, Google ADK and OpenPencil MCP.
+It runs inside the platform (`../../README.md`): UI at `/designer/`, API at
+`/designer/api/v1/` behind the gateway; data in Postgres schema `designer`, files in
+platform storage (S3).
 
 ## How it works
 
@@ -40,59 +42,30 @@ are available. Screen count is dynamic; there is no fixed three-screen template.
   wrong viewport width, empty component mounts and critical container overflow.
 - Source libraries, output files, checkpoints and human reviews remain separate.
 - Sourced design guidance lives in [design-craft.md](docs/knowledge/design-craft.md).
-  The [refactor notes](docs/DESIGN_AGENT_REFACTOR.md) explain decisions and limits.
 
-## Local setup
+## Run and test
 
-Requirements: Python 3.11+, Node.js 20+, and OpenPencil with HTTP MCP enabled.
-
-```powershell
-Copy-Item .env.example .env
-cd backend
-pip install -r requirements.txt
-python run.py
-```
-
-In another terminal:
+From `platform/` (everything runs in Docker):
 
 ```powershell
-cd frontend
-npm install
-npm run dev
+cd ..\..\BA\open-pencil; docker compose up -d     # default OpenPencil instance (editor :1420, MCP :7600)
+cd <platform>; docker compose up -d                # whole platform, http://localhost:8080
+docker compose --profile test run --rm designer-test
 ```
 
-Default endpoints:
+The editor tab (http://localhost:1420) must be open for MCP write automation. Each
+designer's runs use their OpenPencil instance (`designer.openpencil_instances`) or the
+default one; the endpoint typed in Settings is only used in `PLATFORM_ENV=dev`.
 
-- Frontend: `http://127.0.0.1:3232`
-- Backend API: `http://127.0.0.1:8282/api/v1`
-- OpenAPI: `http://127.0.0.1:8282/api/docs`
-- OpenPencil MCP: `http://127.0.0.1:7600/mcp`
+Project files (BA packages, wiki documents, finished designs) are listed in the right
+panel ("Files dự án") and can be dragged into the chat or cited with `@`.
 
-Configure the OpenPencil source file in frontend Settings. For screens containing
-photography, add an Unsplash key in OpenPencil AI settings and select Unsplash as the
-active stock-photo provider.
-
-## Verification
-
-```powershell
-cd backend
-$env:PYTHONPATH=(Get-Location).Path
-$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'
-pytest -q
-ruff check app tests
-
-cd ..\frontend
-npm run build
-```
-
-The golden project shapes are stored in
-[`backend/data/evals/golden-projects.json`](backend/data/evals/golden-projects.json).
 Architecture details are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ### Model endpoint protocol
 
-For an OpenAI-compatible proxy, use `LLM_MODEL=openai/<model-name>` and
-`BASE_URL=<proxy>/v1`. The prefix selects the wire protocol, not the model vendor.
+For an OpenAI-compatible proxy, use `DESIGNER_LLM_MODEL=openai/<model-name>` and
+`DESIGNER_LLM_BASE_URL=<proxy>/v1`. The prefix selects the wire protocol, not the model vendor.
 Use `gemini/` only for a working Gemini-native endpoint. This project’s proxy
 returned empty Gemini responses (`STOP`, zero tokens) for the page tools; its
 OpenAI-compatible route returned valid tool calls for the same model and prompt.

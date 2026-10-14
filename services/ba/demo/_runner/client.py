@@ -6,9 +6,10 @@ import json
 import time
 from pathlib import Path
 from typing import Any
+from http.cookiejar import CookieJar
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 
 class DemoClientError(RuntimeError):
@@ -22,6 +23,22 @@ class DemoClient:
     def __init__(self, base_url: str, *, timeout_s: float = 180.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
+        # Platform: the login cookie (platform_token) is reused for every call.
+        self._opener = build_opener(HTTPCookieProcessor(CookieJar()))
+
+    def login(self, core_url: str, username: str, password: str) -> dict[str, Any]:
+        """Log in through core-api; the cookie is then sent to the BA API."""
+        req = Request(
+            f"{core_url.rstrip('/')}/api/core/auth/login",
+            data=json.dumps({"username": username, "password": password}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with self._opener.open(req, timeout=30) as res:
+                return json.loads(res.read().decode())
+        except HTTPError as exc:
+            raise DemoClientError(f"login {username} -> HTTP {exc.code}", status=exc.code) from exc
 
     def _url(self, path: str) -> str:
         if not path.startswith("/"):
@@ -76,7 +93,7 @@ class DemoClient:
 
         req = Request(url, data=data, headers=headers, method=method.upper())
         try:
-            with urlopen(req, timeout=self.timeout_s) as res:
+            with self._opener.open(req, timeout=self.timeout_s) as res:
                 raw = res.read()
                 if not raw:
                     return None
@@ -97,12 +114,11 @@ class DemoClient:
     def health(self) -> dict[str, Any]:
         return self.request("GET", "/api/health")
 
-    def create_feature(self, title: str, description: str = "") -> dict[str, Any]:
-        return self.request(
-            "POST",
-            "/api/features/",
-            json_body={"title": title, "description": description},
-        )
+    def create_feature(self, title: str, description: str = "", project_id: str | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {"title": title, "description": description}
+        if project_id:
+            body["project_id"] = project_id
+        return self.request("POST", "/api/features/", json_body=body)
 
     def get_feature(self, session_id: str) -> dict[str, Any]:
         return self.request("GET", f"/api/features/{session_id}")
@@ -139,7 +155,8 @@ class DemoClient:
         data = path.read_bytes()
         form = {
             "namespace": namespace,
-            "project_id": "" if namespace == "company" else project_id,
+            # Platform: always send the acting project (company uploads need ADMIN there).
+            "project_id": project_id,
             "actor": actor,
             "sort_mode": sort_mode,
         }
