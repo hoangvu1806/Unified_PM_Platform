@@ -3,34 +3,43 @@ import {
   ArrowRight,
   BookOpen,
   Boxes,
+  Check,
+  CircleAlert,
   Download,
   FileJson,
   FolderKanban,
+  LayoutGrid,
   Layers,
+  Lock,
   LogOut,
   MessagesSquare,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   PenTool,
   Plus,
   Search,
+  Sun,
   UserPlus,
   Users,
   X,
 } from "lucide-react";
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   type Artifact,
   type BaFeature,
   type DesignerSession,
+  type Journey,
+  type JourneyStep,
   type MockUser,
   type ProjectDetail,
   type ProjectSummary,
   type User,
   type WikiList,
   api,
-  canWrite,
-  moduleUrl,
 } from "./api";
+import { toggleTheme, useThemeMode } from "./theme";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -58,7 +67,6 @@ function initials(name: string): string {
   return ((parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
-/** Stable hue per project id, for the card accent. */
 function hue(seed: string): number {
   let h = 0;
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) % 360;
@@ -76,14 +84,13 @@ function timeAgo(iso: string): string {
   return days < 30 ? `${days} ngày trước` : new Date(iso).toLocaleDateString();
 }
 
-function greeting(): string {
-  const h = new Date().getHours();
-  return h < 11 ? "Chào buổi sáng" : h < 14 ? "Chào buổi trưa" : h < 18 ? "Chào buổi chiều" : "Chào buổi tối";
+function plainName(name: string): string {
+  return name.replace(/\s*\(.*\)/, "");
 }
 
 function Avatar({ name, size = 32 }: { name: string; size?: number }) {
   return (
-    <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.36, ["--h" as string]: hue(name) }}>
+    <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.38, ["--h" as string]: hue(name) }}>
       {initials(name)}
     </span>
   );
@@ -101,18 +108,50 @@ function RoleChips({ roles }: { roles: string[] }) {
   );
 }
 
-// ── App ──────────────────────────────────────────────────────────────────
+// ── App shell: project rail + page (same layout as the Designer app) ────
+
+type ShellCtx = {
+  me: User;
+  projects: ProjectSummary[] | null;
+  navigate: (to: string) => void;
+  createProject: () => void;
+  onLogout: () => void;
+};
+
+const Shell = createContext<ShellCtx>(null as unknown as ShellCtx);
+const RAIL_KEY = "portal.rail.collapsed";
+
+function readRailPref(): boolean {
+  try { return localStorage.getItem(RAIL_KEY) === "1"; } catch { return false; }
+}
 
 export function App() {
   const [path, navigate] = usePath();
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [railPref, setRailPref] = useState(readRailPref);
+  const [journeyRailOpen, setJourneyRailOpen] = useState(false);
 
   useEffect(() => {
     api.me().then(setUser).catch(() => setUser(null));
   }, []);
 
+  const loadProjects = useCallback(() => {
+    api.projects().then(setProjects).catch(() => setProjects([]));
+  }, []);
+  useEffect(() => {
+    if (user) loadProjects();
+  }, [user, loadProjects]);
+
   const pathname = path.split("?")[0];
   const params = new URLSearchParams(path.split("?")[1] ?? "");
+  const match = pathname.match(/^\/projects\/([^/]+)(?:\/f\/([^/]+)|\/(designer))?$/);
+  const projectId = match ? decodeURIComponent(match[1]) : null;
+  const featureId = match?.[2] ? decodeURIComponent(match[2]) : null;
+  const designerView = !!match?.[3];
+
+  useEffect(() => setJourneyRailOpen(false), [featureId, designerView]);
 
   if (user === undefined) return <div className="boot"><span className="spinner" /></div>;
 
@@ -132,49 +171,165 @@ export function App() {
   const logout = async () => {
     await api.logout().catch(() => undefined);
     setUser(null);
+    setProjects(null);
     navigate("/login");
   };
 
-  const projectMatch = pathname.match(/^\/projects\/([^/]+)$/);
+  // The journey page needs the width for the BA / Designer workspaces: the rail starts collapsed there.
+  const wide = !!featureId || designerView;
+  const collapsed = wide ? !journeyRailOpen : railPref;
+  const toggleRail = () => {
+    if (wide) {
+      setJourneyRailOpen((open) => !open);
+      return;
+    }
+    const next = !railPref;
+    setRailPref(next);
+    try { localStorage.setItem(RAIL_KEY, next ? "1" : "0"); } catch { /* private mode */ }
+  };
+
+  const ctx: ShellCtx = { me: user, projects, navigate, createProject: () => setCreating(true), onLogout: logout };
+  const enc = (id: string) => encodeURIComponent(id);
+
   return (
-    <div className="shell">
-      <TopBar user={user} onLogout={logout} onHome={() => navigate("/")} />
-      <main className="main">
-        {projectMatch ? (
-          <ProjectPage projectId={decodeURIComponent(projectMatch[1])} me={user} onBack={() => navigate("/")} />
-        ) : (
-          <HomePage me={user} onOpenDetail={(id) => navigate(`/projects/${encodeURIComponent(id)}`)} />
-        )}
-      </main>
-    </div>
+    <Shell.Provider value={ctx}>
+      <div className={`app-shell ${collapsed ? "rail-collapsed" : ""}`}>
+        <Rail collapsed={collapsed} activeProject={projectId} onToggle={toggleRail} />
+        <div className="page">
+          {projectId && featureId ? (
+            <JourneyPage
+              key={featureId}
+              projectId={projectId}
+              featureId={featureId}
+              onBack={() => navigate(`/projects/${enc(projectId)}`)}
+            />
+          ) : projectId && designerView ? (
+            <DesignerPage key={projectId} projectId={projectId} />
+          ) : projectId ? (
+            <ProjectPage
+              key={projectId}
+              projectId={projectId}
+              me={user}
+              onBack={() => navigate("/")}
+              onOpenFeature={(fid) => navigate(`/projects/${enc(projectId)}/f/${enc(fid)}`)}
+            />
+          ) : (
+            <HomePage me={user} onOpenProject={(id) => navigate(`/projects/${enc(id)}`)} />
+          )}
+        </div>
+      </div>
+      {creating && (
+        <CreateDialog
+          title="Dự án mới"
+          note="Bạn là PM của dự án (làm cả BA và Designer) và có quyền quản trị thành viên."
+          submitLabel="Tạo dự án"
+          onClose={() => setCreating(false)}
+          onSubmit={async (name, description) => {
+            const created = await api.createProject(name, description);
+            setCreating(false);
+            loadProjects();
+            navigate(`/projects/${enc(created.id)}`);
+          }}
+        />
+      )}
+    </Shell.Provider>
   );
+}
+
+function BrandMark() {
+  return <span className="brand-mark" aria-hidden="true">UW</span>;
 }
 
 function Brand() {
   return (
     <span className="brand">
-      <span className="brand-mark" aria-hidden="true">
-        UW
-      </span>
+      <BrandMark />
       <span className="brand-text">
-        Unified Work <span className="brand-sub">AI Platform</span>
+        <strong>Unified Work</strong>
+        <small>AI Platform</small>
       </span>
     </span>
   );
 }
 
-function TopBar({ user, onLogout, onHome }: { user: User; onLogout: () => void; onHome: () => void }) {
+function ThemeButton() {
+  const mode = useThemeMode();
   return (
-    <header className="topbar">
-      <button className="topbar-home" onClick={onHome} aria-label="Trang chủ">
-        <Brand />
+    <button className="icon-btn" onClick={toggleTheme} title={mode === "dark" ? "Giao diện sáng" : "Giao diện tối"} aria-label="Đổi giao diện">
+      {mode === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
+  );
+}
+
+function Rail({ collapsed, activeProject, onToggle }: { collapsed: boolean; activeProject: string | null; onToggle: () => void }) {
+  const { projects, navigate, createProject } = useContext(Shell);
+  return (
+    <aside className={`rail ${collapsed ? "is-collapsed" : ""}`}>
+      <button className="rail-brand" onClick={() => navigate("/")} title="Unified Work AI Platform">
+        {collapsed ? <BrandMark /> : <Brand />}
       </button>
-      <div className="topbar-user">
-        <RoleChips roles={user.roles} />
-        <div className="user-pill">
-          <Avatar name={user.name} size={28} />
-          <span className="user-name">{user.name}</span>
-        </div>
+      <button className="rail-new" onClick={createProject} title="Dự án mới">
+        <Plus size={17} />
+        {!collapsed && <span>Dự án mới</span>}
+      </button>
+      {!collapsed && <div className="rail-label">Dự án của tôi {projects ? `(${projects.length})` : ""}</div>}
+      <nav className="rail-list" aria-label="Dự án">
+        <button className={`rail-row ${activeProject ? "" : "active"}`} onClick={() => navigate("/")} title="Tất cả dự án">
+          <span className="rail-icon"><LayoutGrid size={15} /></span>
+          {!collapsed && <span className="rail-title">Tất cả dự án</span>}
+        </button>
+        {projects?.map((p) => (
+          <button
+            key={p.id}
+            className={`rail-row ${p.id === activeProject ? "active" : ""}`}
+            onClick={() => navigate(`/projects/${encodeURIComponent(p.id)}`)}
+            title={p.name}
+          >
+            <span className="rail-mark" style={{ ["--h" as string]: hue(p.id) }}>{p.name.slice(0, 1).toUpperCase()}</span>
+            {!collapsed && <span className="rail-title">{p.name}</span>}
+          </button>
+        ))}
+      </nav>
+      <div className="rail-footer">
+        <button onClick={onToggle} title={collapsed ? "Mở thanh bên" : "Thu gọn thanh bên"}>
+          {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          {!collapsed && <span>Thu gọn</span>}
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+type Crumb = { label: string; to?: string };
+
+function PageHeader({ crumbs, center, children }: { crumbs: Crumb[]; center?: ReactNode; children?: ReactNode }) {
+  const { me, navigate, onLogout } = useContext(Shell);
+  return (
+    <header className={`topbar ${center ? "has-center" : ""}`}>
+      <nav className="crumbs" aria-label="Vị trí">
+        {crumbs.map((c, i) => (
+          <Fragment key={i}>
+            {i > 0 && <span className="crumb-sep">/</span>}
+            {c.to ? (
+              <button className="crumb" onClick={() => navigate(c.to!)}>
+                {i === 0 && crumbs.length > 1 && <ArrowLeft size={14} />}
+                {c.label}
+              </button>
+            ) : (
+              <span className="crumb current" title={c.label}>{c.label}</span>
+            )}
+          </Fragment>
+        ))}
+      </nav>
+      {center}
+      <div className="topbar-actions">
+        {children}
+        <ThemeButton />
+        <span className="topbar-divider" />
+        <span className="user-chip" title={me.username}>
+          <Avatar name={me.name} size={26} />
+          <span className="user-name">{me.name}</span>
+        </span>
         <button className="icon-btn" onClick={onLogout} title="Đăng xuất" aria-label="Đăng xuất">
           <LogOut size={16} />
         </button>
@@ -219,7 +374,7 @@ function LoginPage({ onLoggedIn }: { onLoggedIn: (u: User) => void }) {
       <div className="login-card">
         <Brand />
         <h2>Đăng nhập</h2>
-        <p className="muted">Không gian làm việc chung cho phân tích nghiệp vụ và thiết kế.</p>
+        <p className="muted">Phân tích nghiệp vụ và thiết kế trong cùng một hành trình, cùng các agent.</p>
         <form onSubmit={submit} className="form">
           <label>
             Tài khoản
@@ -227,67 +382,40 @@ function LoginPage({ onLoggedIn }: { onLoggedIn: (u: User) => void }) {
           </label>
           <label>
             Mật khẩu
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
           </label>
           {error && <div className="alert">{error}</div>}
           <button className="btn primary block" disabled={!!busy || !username || !password}>
             {busy === username ? <span className="spinner sm" /> : "Đăng nhập"}
           </button>
         </form>
-
         {demo.length > 0 && (
           <div className="demo">
             <div className="demo-title">Tài khoản demo · mật khẩu {demo[0].password}</div>
             <div className="demo-list">
               {demo.map((d) => (
-                <button
-                  key={d.username}
-                  className="demo-user"
-                  disabled={!!busy}
-                  onClick={() => void signIn(d.username, d.password)}
-                >
-                  <Avatar name={d.name} size={28} />
+                <button key={d.username} className="demo-user" disabled={!!busy} onClick={() => void signIn(d.username, d.password)}>
+                  <Avatar name={d.name} size={30} />
                   <span className="demo-info">
-                    <strong>{d.name.replace(/\s*\(.*\)/, "")}</strong>
+                    <strong>{plainName(d.name)}</strong>
                     <span className="mono">{d.username}</span>
                   </span>
-                  {busy === d.username ? <span className="spinner sm" /> : <RoleChips roles={d.roles} />}
+                  {busy === d.username ? <span className="spinner sm" /> : <RoleChips roles={d.roles.length > 1 ? ["PM"] : d.roles} />}
                 </button>
               ))}
             </div>
           </div>
         )}
       </div>
-      <p className="login-foot muted small">Unified Work AI Platform · đăng nhập giả lập (Keycloak sẽ thay thế)</p>
     </div>
   );
 }
 
-// ── Home: my projects ────────────────────────────────────────────────────
+// ── Home: projects ───────────────────────────────────────────────────────
 
-function openProject(p: ProjectSummary, onOpenDetail: (id: string) => void) {
-  const ba = canWrite(p.my_roles, "BA");
-  const designer = canWrite(p.my_roles, "DESIGNER");
-  if (ba && !designer) window.location.assign(moduleUrl("ba", p.id));
-  else if (designer && !ba) window.location.assign(moduleUrl("designer", p.id));
-  else onOpenDetail(p.id);
-}
-
-function HomePage({ me, onOpenDetail }: { me: User; onOpenDetail: (id: string) => void }) {
-  const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
-  const [error, setError] = useState("");
-  const [creating, setCreating] = useState(false);
+function HomePage({ me, onOpenProject }: { me: User; onOpenProject: (id: string) => void }) {
+  const { projects, createProject } = useContext(Shell);
   const [query, setQuery] = useState("");
-
-  const load = useCallback(() => {
-    api.projects().then(setProjects).catch((e) => setError(String(e.message ?? e)));
-  }, []);
-  useEffect(load, [load]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -296,155 +424,102 @@ function HomePage({ me, onOpenDetail }: { me: User; onOpenDetail: (id: string) =
     );
   }, [projects, query]);
 
-  const roleHint = me.roles.includes("BA") && me.roles.includes("DESIGNER")
-    ? "Chọn dự án để mở BA hoặc Designer."
-    : me.roles.includes("BA")
-      ? "Bấm vào dự án để vào không gian BA."
-      : "Bấm vào dự án để vào không gian Designer.";
-
   return (
-    <section>
-      <div className="hero">
-        <div>
-          <h1>Dự án của tôi</h1>
-          <p className="muted">
-            {greeting()}, {me.name.replace(/\s*\(.*\)/, "")}. {roleHint}
-          </p>
-        </div>
-        <div className="hero-stats">
-          <div className="stat">
-            <strong>{projects?.length ?? "–"}</strong>
-            <span>dự án</span>
+    <>
+      <PageHeader crumbs={[{ label: "Dự án của tôi" }]} />
+      <main className="page-body">
+        <div className="page-inner">
+          <div className="hero">
+            <h1>Chào {plainName(me.name)}</h1>
+            <p className="muted">
+              Chọn một dự án để tiếp tục. Trong dự án, mỗi feature đi từ phân tích BA tới thiết kế màn hình theo từng bước.
+            </p>
           </div>
-          <div className="stat">
-            <strong>{me.roles.length}</strong>
-            <span>vai trò</span>
+
+          <div className="toolbar">
+            <label className="search">
+              <Search size={16} />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm dự án…" />
+            </label>
+            <button className="btn primary" onClick={createProject}>
+              <Plus size={16} /> Dự án mới
+            </button>
           </div>
-        </div>
-      </div>
 
-      <div className="toolbar">
-        <label className="search">
-          <Search size={16} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm dự án…" />
-        </label>
-        <button className="btn primary" onClick={() => setCreating(true)}>
-          <Plus size={16} /> Dự án mới
-        </button>
-      </div>
-
-      {creating && (
-        <CreateProjectDialog
-          onClose={() => setCreating(false)}
-          onCreated={() => {
-            setCreating(false);
-            load();
-          }}
-        />
-      )}
-
-      {error && <div className="alert">{error}</div>}
-      {projects === null ? (
-        <div className="grid">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="card project skeleton" />
-          ))}
+          {projects === null ? (
+            <div className="grid">{[0, 1, 2].map((i) => <div key={i} className="card project skeleton" />)}</div>
+          ) : visible.length === 0 ? (
+            <div className="empty">
+              <FolderKanban size={28} />
+              <p>{projects.length === 0 ? "Bạn chưa thuộc dự án nào. Tạo dự án đầu tiên để bắt đầu." : "Không có dự án khớp tìm kiếm."}</p>
+            </div>
+          ) : (
+            <div className="grid">
+              {visible.map((p) => (
+                <article key={p.id} className="card project" style={{ ["--h" as string]: hue(p.id) }} onClick={() => onOpenProject(p.id)}>
+                  <div className="project-head">
+                    <span className="project-mark">{p.name.slice(0, 1).toUpperCase()}</span>
+                    <RoleChips roles={p.my_roles} />
+                  </div>
+                  <h2>{p.name}</h2>
+                  <p className="muted desc">{p.description || "Chưa có mô tả."}</p>
+                  <div className="project-foot">
+                    <span className="meta"><Users size={13} /> {p.member_count} thành viên</span>
+                    <span className="spacer" />
+                    <span className="link">Mở dự án <ArrowRight size={13} /></span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
-      ) : visible.length === 0 ? (
-        <div className="empty">
-          <FolderKanban size={28} />
-          <p>{projects.length === 0 ? "Bạn chưa thuộc dự án nào." : "Không có dự án khớp tìm kiếm."}</p>
-        </div>
-      ) : (
-        <div className="grid">
-          {visible.map((p) => (
-            <ProjectCard key={p.id} project={p} onOpen={() => openProject(p, onOpenDetail)} onDetail={() => onOpenDetail(p.id)} />
-          ))}
-        </div>
-      )}
-    </section>
+      </main>
+    </>
   );
 }
 
-function ProjectCard({ project: p, onOpen, onDetail }: { project: ProjectSummary; onOpen: () => void; onDetail: () => void }) {
-  const ba = canWrite(p.my_roles, "BA");
-  const designer = canWrite(p.my_roles, "DESIGNER");
-  return (
-    <article className="card project" style={{ ["--h" as string]: hue(p.id) }} onClick={onOpen}>
-      <div className="project-head">
-        <span className="project-mark">{p.name.slice(0, 1).toUpperCase()}</span>
-        <RoleChips roles={p.my_roles} />
-      </div>
-      <h2>{p.name}</h2>
-      <p className="muted desc">{p.description || "Chưa có mô tả."}</p>
-      <div className="project-foot">
-        <span className="meta">
-          <Users size={13} /> {p.member_count}
-        </span>
-        <span className="meta mono">{p.id}</span>
-        <span className="spacer" />
-        {ba && designer ? (
-          <span className="quick" onClick={(e) => e.stopPropagation()}>
-            <a href={moduleUrl("ba", p.id)} className="quick-btn ba" title="Mở BA">
-              <MessagesSquare size={14} /> BA
-            </a>
-            <a href={moduleUrl("designer", p.id)} className="quick-btn designer" title="Mở Designer">
-              <PenTool size={14} /> Design
-            </a>
-          </span>
-        ) : (
-          <button
-            className="link"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDetail();
-            }}
-          >
-            Chi tiết <ArrowRight size={13} />
-          </button>
-        )}
-      </div>
-    </article>
-  );
-}
-
-function CreateProjectDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function CreateDialog(props: {
+  title: string;
+  note: string;
+  submitLabel: string;
+  nameLabel?: string;
+  onClose: () => void;
+  onSubmit: (name: string, description: string) => Promise<void>;
+}) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const create = async (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
+    setError("");
     try {
-      await api.createProject(name, description);
-      onCreated();
+      await props.onSubmit(name.trim(), description.trim());
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Không tạo được dự án");
+      setError(err instanceof ApiError ? err.message : "Không tạo được");
       setBusy(false);
     }
   };
 
   return (
-    <Modal title="Dự án mới" onClose={onClose}>
-      <form className="form" onSubmit={create}>
+    <Modal title={props.title} onClose={props.onClose}>
+      <form className="form" onSubmit={submit}>
         <label>
-          Tên dự án
-          <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} autoFocus />
+          {props.nameLabel ?? "Tên"}
+          <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} autoFocus />
         </label>
         <label>
           Mô tả
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} rows={3} />
         </label>
         {error && <div className="alert">{error}</div>}
-        <p className="muted small">Bạn sẽ là quản trị (ADMIN) của dự án và có thể mời thành viên sau.</p>
+        <p className="muted small">{props.note}</p>
         <div className="dialog-actions">
-          <button type="button" className="btn ghost" onClick={onClose}>
-            Huỷ
-          </button>
+          <button type="button" className="btn ghost" onClick={props.onClose}>Huỷ</button>
           <button className="btn primary" disabled={!name.trim() || busy}>
-            Tạo dự án
+            {busy ? <span className="spinner sm" /> : props.submitLabel}
           </button>
         </div>
       </form>
@@ -452,7 +527,7 @@ function CreateProjectDialog({ onClose, onCreated }: { onClose: () => void; onCr
   );
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -460,12 +535,10 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   }, [onClose]);
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" aria-label={title}>
+      <div className={`dialog ${wide ? "wide" : ""}`} role="dialog" aria-label={title}>
         <div className="dialog-head">
           <h2>{title}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Đóng">
-            <X size={16} />
-          </button>
+          <button className="icon-btn" onClick={onClose} aria-label="Đóng"><X size={16} /></button>
         </div>
         {children}
       </div>
@@ -475,117 +548,589 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 // ── Project page ─────────────────────────────────────────────────────────
 
-type Tab = "assets" | "workspace" | "members";
+type Tab = "features" | "assets" | "workspace" | "members";
 
-function ProjectPage({ projectId, me, onBack }: { projectId: string; me: User; onBack: () => void }) {
+function ProjectPage({
+  projectId,
+  me,
+  onBack,
+  onOpenFeature,
+}: {
+  projectId: string;
+  me: User;
+  onBack: () => void;
+  onOpenFeature: (fid: string) => void;
+}) {
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<Tab>("assets");
+  const [tab, setTab] = useState<Tab>("features");
 
   const load = useCallback(() => {
     api.project(projectId).then(setProject).catch((e) => setError(String(e.message ?? e)));
   }, [projectId]);
   useEffect(load, [load]);
 
-  if (error)
-    return (
-      <div className="empty">
-        <p>{error}</p>
-        <button className="btn" onClick={onBack}>
-          Về danh sách dự án
-        </button>
-      </div>
-    );
-  if (!project) return <div className="boot inline"><span className="spinner" /></div>;
-
-  const ba = canWrite(project.my_roles, "BA");
-  const designer = canWrite(project.my_roles, "DESIGNER");
+  const crumbs: Crumb[] = [{ label: "Dự án", to: "/" }, { label: project?.name ?? "…" }];
 
   return (
-    <section>
-      <button className="back" onClick={onBack}>
-        <ArrowLeft size={15} /> Dự án của tôi
-      </button>
-      <div className="project-hero" style={{ ["--h" as string]: hue(project.id) }}>
-        <span className="project-mark lg">{project.name.slice(0, 1).toUpperCase()}</span>
-        <div className="project-hero-text">
-          <h1>{project.name}</h1>
-          <p className="muted">{project.description || "Chưa có mô tả."}</p>
-          <div className="project-hero-meta">
-            <span className="mono">{project.id}</span>
-            <span>
-              <Users size={13} /> {project.members.length} thành viên
+    <>
+      <PageHeader crumbs={crumbs} />
+      <main className="page-body">
+        <div className="page-inner">
+          {error ? (
+            <div className="empty">
+              <p>{error}</p>
+              <button className="btn" onClick={onBack}>Về danh sách dự án</button>
+            </div>
+          ) : !project ? (
+            <div className="boot inline"><span className="spinner" /></div>
+          ) : (
+            <>
+              <div className="project-hero" style={{ ["--h" as string]: hue(project.id) }}>
+                <span className="project-mark lg">{project.name.slice(0, 1).toUpperCase()}</span>
+                <div className="project-hero-text">
+                  <h1>{project.name}</h1>
+                  <p className="muted">{project.description || "Chưa có mô tả."}</p>
+                  <div className="project-hero-meta">
+                    <RoleChips roles={project.my_roles} />
+                    <span><Users size={13} /> {project.members.length} thành viên</span>
+                    <span className="mono" title="Mã dự án">{project.id}</span>
+                  </div>
+                </div>
+              </div>
+
+              <nav className="tabs">
+                {([
+                  ["features", "Features"],
+                  ["assets", "Assets"],
+                  ["workspace", "Data workspace"],
+                  ["members", "Thành viên"],
+                ] as [Tab, string][]).map(([id, label]) => (
+                  <button key={id} className={tab === id ? "tab active" : "tab"} onClick={() => setTab(id)}>{label}</button>
+                ))}
+              </nav>
+
+              {tab === "features" && <FeaturesTab project={project} onOpenFeature={onOpenFeature} />}
+              {tab === "assets" && <AssetsTab projectId={project.id} />}
+              {tab === "workspace" && <WorkspaceTab projectId={project.id} />}
+              {tab === "members" && <MembersTab project={project} me={me} onChanged={load} />}
+            </>
+          )}
+        </div>
+      </main>
+    </>
+  );
+}
+
+function canWriteAny(roles: string[]): boolean {
+  return roles.some((r) => ["PM", "ADMIN", "BA"].includes(r));
+}
+
+function canDesign(roles: string[]): boolean {
+  return roles.some((r) => ["PM", "ADMIN", "DESIGNER"].includes(r));
+}
+
+function FeaturesTab({ project, onOpenFeature }: { project: ProjectDetail; onOpenFeature: (fid: string) => void }) {
+  const { navigate } = useContext(Shell);
+  const [features, setFeatures] = useState<BaFeature[] | null>(null);
+  const [sessions, setSessions] = useState<DesignerSession[] | null>(null);
+  const [journeys, setJourneys] = useState<Record<string, Journey>>({});
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api
+      .baFeatures(project.id)
+      .then((items) => {
+        setFeatures(items);
+        items.forEach((f) =>
+          api.journey(project.id, f.session_id).then((j) => setJourneys((cur) => ({ ...cur, [f.session_id]: j }))).catch(() => undefined),
+        );
+      })
+      .catch((e) => setError(String(e.message ?? e)));
+    api.designerSessions(project.id).then(setSessions).catch(() => setSessions([]));
+  }, [project.id]);
+
+  const handedOff = (features ?? []).filter((f) => f.feature_status === "EXPORTED").length;
+  const inDesign = (sessions ?? []).filter((s) => s.source === "ba-handoff").length;
+  const writeBa = canWriteAny(project.my_roles);
+  const writeDesign = canDesign(project.my_roles);
+  const openDesigner = () => navigate(`/projects/${encodeURIComponent(project.id)}/designer`);
+
+  return (
+    <div className="stack">
+      <div className="agent-cards">
+        <div className="card agent-card">
+          <div className="agent-card-head">
+            <span className="module-icon ba"><MessagesSquare size={18} /></span>
+            <div>
+              <strong>BA agent</strong>
+              <span className="muted small">Phân tích nghiệp vụ · 4 section, kiểm tra, bàn giao</span>
+            </div>
+            <span className={`state-pill ${features?.length ? "ok" : ""}`}>
+              {features === null ? "…" : features.length ? `${features.length} feature` : "Chưa bắt đầu"}
             </span>
-            <RoleChips roles={project.my_roles} />
+          </div>
+          <p className="muted small">
+            {features === null
+              ? "Đang tải…"
+              : features.length === 0
+                ? "Bắt đầu bằng một feature mới: BA agent hỏi mục tiêu, tác nhân và phạm vi."
+                : `${handedOff} / ${features.length} feature đã bàn giao BA package cho thiết kế.`}
+          </p>
+          <div className="agent-card-actions">
+            {writeBa ? (
+              <button className="btn primary sm" onClick={() => setCreating(true)}><Plus size={15} /> Feature mới</button>
+            ) : (
+              <span className="state-pill">Chỉ xem</span>
+            )}
+          </div>
+        </div>
+
+        <div className={`card agent-card ${handedOff ? "" : "waiting"}`}>
+          <div className="agent-card-head">
+            <span className="module-icon designer"><PenTool size={18} /></span>
+            <div>
+              <strong>Designer agent</strong>
+              <span className="muted small">Thiết kế màn hình trên OpenPencil từ BA package</span>
+            </div>
+            <span className={`state-pill ${handedOff ? "ok" : "wait"}`}>
+              {features === null ? "…" : handedOff ? `${handedOff} package sẵn sàng` : <><Lock size={11} /> Chờ BA</>}
+            </span>
+          </div>
+          <p className="muted small">
+            {features === null
+              ? "Đang tải…"
+              : handedOff
+                ? `${inDesign} phiên thiết kế từ BA${sessions && sessions.length > inDesign ? ` · ${sessions.length - inDesign} phiên khác` : ""}. Mở feature để đi tiếp bước Thiết kế.`
+                : "Chưa có BA package nào được bàn giao. Bạn vẫn có thể mở Designer để xem hoặc trao đổi trước; thiết kế từ BA sẽ mở khi BA bàn giao."}
+          </p>
+          <div className="agent-card-actions">
+            <button className={`btn sm ${handedOff ? "" : "ghost"}`} onClick={openDesigner}>
+              {writeDesign ? "Mở Designer" : "Xem Designer"} <ArrowRight size={14} />
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="modules">
-        <ModuleCard
-          kind="ba"
-          href={moduleUrl("ba", project.id)}
-          title="Business Analysis"
-          text="Chat với BA Agent theo từng feature, wiki dự án, validation và BA package."
-          icon={<MessagesSquare size={22} />}
-          canWrite={ba}
-        />
-        <ModuleCard
-          kind="designer"
-          href={moduleUrl("designer", project.id)}
-          title="Designer"
-          text="Tạo và chỉnh màn hình với Designer Agent trên OpenPencil, trích dẫn file của dự án."
-          icon={<PenTool size={22} />}
-          canWrite={designer}
-        />
+      <div className="section-row">
+        <h2 className="section-title">Features</h2>
+        <p className="muted small">Mỗi feature là một hành trình 9 bước: BA (1–6) rồi Thiết kế (7–9).</p>
       </div>
-
-      <nav className="tabs">
-        {([
-          ["assets", "Assets"],
-          ["workspace", "Data workspace"],
-          ["members", "Thành viên"],
-        ] as [Tab, string][]).map(([id, label]) => (
-          <button key={id} className={tab === id ? "tab active" : "tab"} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      {tab === "assets" && <AssetsTab projectId={project.id} />}
-      {tab === "workspace" && <WorkspaceTab projectId={project.id} />}
-      {tab === "members" && <MembersTab project={project} me={me} onChanged={load} />}
-    </section>
+      {creating && (
+        <CreateDialog
+          title="Feature mới"
+          nameLabel="Tên feature"
+          note="Sau khi tạo, bạn bắt đầu ở bước 1 – Định nghĩa feature, cùng BA agent."
+          submitLabel="Bắt đầu"
+          onClose={() => setCreating(false)}
+          onSubmit={async (name, description) => {
+            const created = await api.createFeature(project.id, name, description);
+            onOpenFeature(created.session_id);
+          }}
+        />
+      )}
+      {error && <div className="alert">{error}</div>}
+      {features === null ? (
+        <div className="card skeleton tall" />
+      ) : features.length === 0 ? (
+        <div className="empty">
+          <MessagesSquare size={28} />
+          <p>Dự án chưa có feature nào. Tạo feature đầu tiên để bắt đầu hành trình.</p>
+          {writeBa && <button className="btn primary" onClick={() => setCreating(true)}><Plus size={16} /> Feature mới</button>}
+        </div>
+      ) : (
+        <div className="card list">
+          {features.map((f) => {
+            const j = journeys[f.session_id];
+            const done = j ? j.steps.filter((s) => s.status === "done").length : 0;
+            const current = j?.steps.find((s) => s.key === j.current);
+            return (
+              <button key={f.session_id} className="row row-button" onClick={() => onOpenFeature(f.session_id)}>
+                <span className={`module-icon small ${j?.role === "DESIGNER" ? "designer" : "ba"}`}>
+                  {j?.role === "DESIGNER" ? <PenTool size={16} /> : <MessagesSquare size={16} />}
+                </span>
+                <div className="row-main">
+                  <div className="row-title">{f.title}</div>
+                  <div className="row-meta">
+                    {j ? (j.current === "done" ? "Hoàn tất hành trình" : `Đang ở: ${current?.label ?? ""}`) : "…"} · {timeAgo(f.updated_at)}
+                  </div>
+                </div>
+                <div className="progress" title={`${done}/9 bước`}>
+                  <div className="progress-bar" style={{ width: `${(done / 9) * 100}%` }} />
+                </div>
+                <span className="mono">{done}/9</span>
+                <ArrowRight size={16} className="dim" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
-function ModuleCard(props: { kind: "ba" | "designer"; href: string; title: string; text: string; icon: ReactNode; canWrite: boolean }) {
+// ── Designer inside the portal (project level, no feature) ───────────────
+
+function DesignerPage({ projectId }: { projectId: string }) {
+  const { projects } = useContext(Shell);
+  const name = projects?.find((p) => p.id === projectId)?.name ?? projectId;
+  const session = new URLSearchParams(window.location.search).get("session");
+  const src = `/designer/?project=${encodeURIComponent(projectId)}${session ? `&session=${encodeURIComponent(session)}` : ""}&embed=1`;
   return (
-    <a className={`card module module-${props.kind}`} href={props.href}>
-      <span className="module-icon">{props.icon}</span>
-      <div className="module-body">
-        <h2>{props.title}</h2>
-        <p className="muted">{props.text}</p>
+    <div className="journey-shell">
+      <PageHeader crumbs={[{ label: "Dự án", to: "/" }, { label: name, to: `/projects/${encodeURIComponent(projectId)}` }, { label: "Designer agent" }]}>
+        <span className="role-badge designer"><PenTool size={13} /> Vai: Designer</span>
+      </PageHeader>
+      <div className="frames">
+        <iframe src={src} title="Designer agent" />
       </div>
-      <span className="module-cta">
-        {props.canWrite ? "Mở để làm việc" : "Mở chỉ đọc"} <ArrowRight size={14} />
-      </span>
-    </a>
+    </div>
   );
 }
 
-// ── Tabs ─────────────────────────────────────────────────────────────────
+// ── Journey page: guided BA -> Design in one screen ──────────────────────
+
+const STEP_NUMBER: Record<string, number> = {
+  feature_definition: 1, business_rules: 2, workflow: 3, use_cases: 4, validate: 5,
+  export: 6, design_scope: 7, design_build: 8, design_review: 9,
+};
+
+type Guide =
+  | { kind: "welcome"; journey: Journey }
+  | { kind: "step"; from: JourneyStep; to: JourneyStep }
+  | { kind: "role"; journey: Journey }
+  | { kind: "finished"; journey: Journey }
+  | { kind: "locked"; step: JourneyStep };
+
+function JourneyPage({
+  projectId,
+  featureId,
+  onBack,
+}: {
+  projectId: string;
+  featureId: string;
+  onBack: () => void;
+}) {
+  const { projects } = useContext(Shell);
+  const [journey, setJourney] = useState<Journey | null>(null);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [guide, setGuide] = useState<Guide | null>(null);
+  const [handingOff, setHandingOff] = useState(false);
+  const previous = useRef<Journey | null>(null);
+  const baFrame = useRef<HTMLIFrameElement | null>(null);
+  const seenKey = `journey.welcome.${featureId}`;
+  const projectName = projects?.find((p) => p.id === projectId)?.name ?? projectId;
+
+  const load = useCallback(async () => {
+    try {
+      const next = await api.journey(projectId, featureId);
+      const prev = previous.current;
+      previous.current = next;
+      setJourney(next);
+      if (!prev) {
+        setSelected(next.current === "done" ? "design_review" : next.current);
+        let seen = false;
+        try { seen = localStorage.getItem(seenKey) === "1"; } catch { /* private mode */ }
+        if (!seen) setGuide({ kind: "welcome", journey: next });
+        else if (next.current === "design_scope" && !next.designer.session_id) setGuide({ kind: "role", journey: next });
+        return;
+      }
+      if (prev.current !== next.current) {
+        const from = prev.steps.find((s) => s.key === prev.current);
+        const to = next.steps.find((s) => s.key === next.current);
+        if (next.current === "done") setGuide({ kind: "finished", journey: next });
+        else if (next.current === "design_scope" && !next.designer.session_id) setGuide({ kind: "role", journey: next });
+        else if (from && to) setGuide({ kind: "step", from, to });
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
+    }
+  }, [projectId, featureId, seenKey]);
+
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), 6000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  // BA's "Export → Designer" inside the embedded page asks the shell to switch roles.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      // Designer's "Trạng thái BA" panel asks to show a BA step in the same page.
+      if (event.data?.type === "platform:show-step" && typeof event.data.key === "string") {
+        setSelected(event.data.key);
+        return;
+      }
+      if (event.data?.type === "platform:open-designer") {
+        void load().then(() => {
+          const j = previous.current;
+          if (j) setGuide({ kind: "role", journey: j });
+        });
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [load]);
+
+  // Keep the embedded BA page on the section of the chosen step.
+  const syncBaSection = useCallback(() => {
+    if (selected) baFrame.current?.contentWindow?.postMessage({ type: "platform:select-section", key: selected }, window.location.origin);
+  }, [selected]);
+  useEffect(syncBaSection, [syncBaSection]);
+
+  const startDesign = async () => {
+    setHandingOff(true);
+    try {
+      if (!previous.current?.designer.session_id) await api.handoff(featureId);
+      await load();
+      setSelected("design_scope");
+      setGuide(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setHandingOff(false);
+    }
+  };
+
+  const crumbs: Crumb[] = [
+    { label: projectName, to: `/projects/${encodeURIComponent(projectId)}` },
+    { label: journey?.feature.title ?? "…" },
+  ];
+
+  if (error && !journey)
+    return (
+      <>
+        <PageHeader crumbs={crumbs} />
+        <div className="empty page-empty">
+          <p>{error}</p>
+          <button className="btn" onClick={onBack}>Về dự án</button>
+        </div>
+      </>
+    );
+  if (!journey)
+    return (
+      <>
+        <PageHeader crumbs={crumbs} />
+        <div className="boot inline"><span className="spinner" /></div>
+      </>
+    );
+
+  const step = journey.steps.find((s) => s.key === selected) ?? journey.steps[0];
+  const module: "ba" | "designer" = step.role === "DESIGNER" ? "designer" : "ba";
+  const baUrl =
+    `/ba/chat.html?session=${encodeURIComponent(featureId)}&project_id=${encodeURIComponent(projectId)}` +
+    `&title=${encodeURIComponent(journey.feature.title)}&embed=1`;
+  const designerUrl = journey.designer.session_id
+    ? `/designer/?project=${encodeURIComponent(projectId)}&session=${encodeURIComponent(journey.designer.session_id)}&embed=1`
+    : null;
+  const done = journey.steps.filter((s) => s.status === "done").length;
+  const pkg = journey.ba_package;
+
+  const choose = (s: JourneyStep) => {
+    if (s.status === "locked") setGuide({ kind: "locked", step: s });
+    else if (s.role === "DESIGNER" && !journey.designer.session_id) setGuide({ kind: "role", journey });
+    else setSelected(s.key);
+  };
+
+  const groups: [string, JourneyStep[]][] = [
+    ["Phân tích BA", journey.steps.slice(0, 6)],
+    ["Thiết kế", journey.steps.slice(6)],
+  ];
+
+  return (
+    <div className="journey-shell">
+      <PageHeader
+        crumbs={crumbs}
+        center={
+          <nav className="journey-strip" aria-label="Hành trình">
+            {groups.map(([label, steps], g) => (
+              <Fragment key={label}>
+                {g > 0 && <span className="jdivider" title="BA → Thiết kế" />}
+                <div className={`jgroup ${g ? "design" : "ba"}`} title={label}>
+                  {steps.map((s, i) => (
+                    <Fragment key={s.key}>
+                      {i > 0 && <span className={`jconn ${steps[i - 1].status === "done" ? "done" : ""}`} />}
+                      <button
+                        className={`jstep ${s.status} ${s.key === step.key ? "selected" : ""}`}
+                        onClick={() => choose(s)}
+                        title={`Bước ${STEP_NUMBER[s.key]} · ${s.label}${s.status === "locked" && s.reason ? ` — ${s.reason}` : ` — ${s.hint}`}`}
+                      >
+                        <span className="jstep-icon">
+                          {s.status === "done" ? <Check size={12} /> : s.status === "locked" ? <Lock size={10} /> : s.status === "attention" ? <CircleAlert size={12} /> : STEP_NUMBER[s.key]}
+                        </span>
+                        <span className="jstep-label">{s.label}</span>
+                      </button>
+                    </Fragment>
+                  ))}
+                </div>
+              </Fragment>
+            ))}
+            <span className="jsummary" title={pkg.latest_version ? `${done}/9 bước · BA package v${pkg.latest_version}` : `${done}/9 bước · chưa có BA package`}>
+              {done}<small>/9</small>
+            </span>
+          </nav>
+        }
+      >
+        {pkg.stale && <span className="state-pill wait" title={`Thiết kế dùng BA v${pkg.used_by_design}`}>BA v{pkg.latest_version} mới — cần xem lại</span>}
+        {step.key !== journey.current && journey.current !== "done" && (
+          <button className="btn sm ghost" onClick={() => choose(journey.steps.find((s) => s.key === journey.current)!)} title="Về bước đang làm">
+            Bước đang làm <ArrowRight size={14} />
+          </button>
+        )}
+        <span className={`role-badge ${module}`}>
+          {module === "ba" ? <MessagesSquare size={13} /> : <PenTool size={13} />}
+          {module === "ba" ? "BA" : "Designer"}
+        </span>
+      </PageHeader>
+
+      <div className="frames">
+        <iframe ref={baFrame} className={module === "ba" ? "" : "hidden"} src={baUrl} title="BA agent" onLoad={() => window.setTimeout(syncBaSection, 1500)} />
+        {designerUrl ? (
+          <iframe className={module === "designer" ? "" : "hidden"} src={designerUrl} title="Designer agent" />
+        ) : (
+          module === "designer" && (
+            <div className="frame-placeholder">
+              <PenTool size={28} />
+              <p>Chưa có phiên thiết kế. Phiên được tạo từ BA package khi bạn bắt đầu bước Thiết kế.</p>
+              {journey.steps[5].status === "done" && (
+                <button className="btn primary" onClick={() => setGuide({ kind: "role", journey })}>Bắt đầu thiết kế</button>
+              )}
+            </div>
+          )
+        )}
+      </div>
+
+      {guide && (
+        <GuideDialog
+          guide={guide}
+          busy={handingOff}
+          onClose={() => {
+            if (guide.kind === "welcome") {
+              try { localStorage.setItem(seenKey, "1"); } catch { /* ignore */ }
+            }
+            setGuide(null);
+          }}
+          onGo={(key) => {
+            if (guide.kind === "welcome") {
+              try { localStorage.setItem(seenKey, "1"); } catch { /* ignore */ }
+            }
+            const target = journey.steps.find((s) => s.key === key);
+            setGuide(null);
+            if (target) choose(target);
+          }}
+          onStartDesign={startDesign}
+        />
+      )}
+    </div>
+  );
+}
+
+function GuideDialog({
+  guide,
+  busy,
+  onClose,
+  onGo,
+  onStartDesign,
+}: {
+  guide: Guide;
+  busy: boolean;
+  onClose: () => void;
+  onGo: (key: string) => void;
+  onStartDesign: () => void;
+}) {
+  if (guide.kind === "welcome") {
+    const j = guide.journey;
+    const current = j.steps.find((s) => s.key === j.current);
+    return (
+      <Modal title="Hành trình của feature" onClose={onClose} wide>
+        <p className="muted">
+          Feature <strong>{j.feature.title}</strong> đi qua 9 bước. Bạn làm phân tích với <strong>BA agent</strong> (bước 1–6),
+          sau đó chuyển sang vai <strong>Designer</strong> để thiết kế màn hình (bước 7–9). Mỗi khi xong một bước,
+          hệ thống sẽ báo và hướng dẫn bước tiếp theo.
+        </p>
+        <ol className="guide-steps">
+          {j.steps.map((s) => (
+            <li key={s.key} className={s.status}>
+              <strong>{s.label}</strong> <span className="muted">— {s.hint}</span>
+            </li>
+          ))}
+        </ol>
+        <div className="dialog-actions">
+          <button className="btn primary" onClick={() => onGo(j.current === "done" ? "design_review" : j.current)}>
+            {j.current === "done" ? "Xem kết quả" : `Bắt đầu: ${current?.label ?? ""}`} <ArrowRight size={14} />
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+  if (guide.kind === "step") {
+    return (
+      <Modal title={`Đã xong: ${guide.from.label}`} onClose={onClose}>
+        <div className="guide-callout done"><Check size={16} /> Bước {STEP_NUMBER[guide.from.key]} – {guide.from.label} đã hoàn tất.</div>
+        <p>Bước tiếp theo là <strong>{guide.to.label}</strong>: {guide.to.hint}</p>
+        <p className="muted small">Bạn vẫn có thể bấm vào bước đã xong trên thanh hành trình để xem lại.</p>
+        <div className="dialog-actions">
+          <button className="btn ghost" onClick={onClose}>Ở lại bước này</button>
+          <button className="btn primary" onClick={() => onGo(guide.to.key)}>Tiếp tục: {guide.to.label} <ArrowRight size={14} /></button>
+        </div>
+      </Modal>
+    );
+  }
+  if (guide.kind === "role") {
+    const v = guide.journey.ba_package.latest_version;
+    return (
+      <Modal title="Phân tích BA đã xong — sang Thiết kế" onClose={onClose} wide>
+        <div className="guide-callout done"><Check size={16} /> BA package {v ? `v${v}` : ""} đã được bàn giao và lưu trong Assets.</div>
+        <div className="role-switch">
+          <span className="role-badge ba"><MessagesSquare size={13} /> Vai: BA</span>
+          <ArrowRight size={16} className="dim" />
+          <span className="role-badge designer"><PenTool size={13} /> Vai: Designer</span>
+        </div>
+        <p>
+          Bạn sẽ chuyển sang vai <strong>Designer</strong>. Designer agent đọc BA package, đề xuất danh sách màn hình;
+          bạn chốt phạm vi, duyệt spec, rồi agent dựng màn hình trên OpenPencil.
+        </p>
+        <p className="muted small">Các bước BA vẫn xem được trên thanh hành trình. Nếu BA thay đổi, thiết kế sẽ được đánh dấu "cần xem lại".</p>
+        <div className="dialog-actions">
+          <button className="btn ghost" onClick={onClose}>Để sau</button>
+          <button className="btn primary" disabled={busy} onClick={onStartDesign}>
+            {busy ? <span className="spinner sm" /> : <>Bắt đầu thiết kế <ArrowRight size={14} /></>}
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+  if (guide.kind === "finished") {
+    return (
+      <Modal title="Hành trình hoàn tất" onClose={onClose}>
+        <div className="guide-callout done"><Check size={16} /> Thiết kế đã được duyệt và lưu vào Assets của dự án.</div>
+        <p className="muted">Bạn có thể tải file thiết kế ở tab Assets của dự án, hoặc tiếp tục chỉnh trong bước Thiết kế.</p>
+        <div className="dialog-actions">
+          <button className="btn primary" onClick={() => onGo("design_review")}>Xem thiết kế</button>
+        </div>
+      </Modal>
+    );
+  }
+  return (
+    <Modal title={`Chưa mở: ${guide.step.label}`} onClose={onClose}>
+      <div className="guide-callout locked"><Lock size={15} /> {guide.step.reason}</div>
+      <p className="muted small">{guide.step.hint}</p>
+      <div className="dialog-actions">
+        <button className="btn primary" onClick={onClose}>Đã hiểu</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Tabs: Assets, Data workspace, Members ────────────────────────────────
 
 const KIND: Record<Artifact["kind"], { label: string; icon: ReactNode; cls: string }> = {
   ba_package: { label: "BA package", icon: <FileJson size={16} />, cls: "ba" },
   designer_output: { label: "Thiết kế", icon: <Layers size={16} />, cls: "designer" },
 };
-
-function openArtifactUrl(a: Artifact, projectId: string): string {
-  const p = encodeURIComponent(projectId);
-  if (a.kind === "ba_package") return `/ba/chat.html?session=${encodeURIComponent(a.source_ref)}&project_id=${p}`;
-  return `/designer/?project=${p}&session=${encodeURIComponent(a.meta?.session_id ?? "")}`;
-}
 
 function AssetsTab({ projectId }: { projectId: string }) {
   const [items, setItems] = useState<Artifact[] | null>(null);
@@ -601,14 +1146,11 @@ function AssetsTab({ projectId }: { projectId: string }) {
     <div className="stack">
       {wiki && (
         <a className="card wiki-card" href={`/ba/wiki.html?project_id=${encodeURIComponent(projectId)}`}>
-          <span className="module-icon small wiki">
-            <BookOpen size={18} />
-          </span>
+          <span className="module-icon small wiki"><BookOpen size={18} /></span>
           <div>
             <strong>Wiki &amp; tri thức</strong>
             <p className="muted small">
-              {wiki.project_approved.length} trang đã duyệt · {wiki.project_drafts.length} bản nháp ·{" "}
-              {wiki.company_approved.length} trang chung công ty
+              {wiki.project_approved.length} trang đã duyệt · {wiki.project_drafts.length} bản nháp · {wiki.company_approved.length} trang chung công ty
             </p>
           </div>
           <ArrowRight size={16} className="dim" />
@@ -617,10 +1159,7 @@ function AssetsTab({ projectId }: { projectId: string }) {
       {items === null ? (
         <div className="card skeleton tall" />
       ) : items.length === 0 ? (
-        <div className="empty">
-          <Boxes size={28} />
-          <p>Chưa có artifact nào. Export BA package hoặc hoàn tất một thiết kế để thấy ở đây.</p>
-        </div>
+        <div className="empty"><Boxes size={28} /><p>Chưa có artifact nào. BA package và thiết kế đã duyệt sẽ xuất hiện ở đây.</p></div>
       ) : (
         <div className="card list">
           {items.map((a) => (
@@ -639,16 +1178,9 @@ function AssetsTab({ projectId }: { projectId: string }) {
                   {a.created_by && <> · {a.created_by}</>} · {timeAgo(a.created_at)}
                 </div>
               </div>
-              <div className="row-actions">
-                <a className="btn sm ghost" href={openArtifactUrl(a, projectId)}>
-                  Mở
-                </a>
-                {a.storage_key && (
-                  <a className="icon-btn" href={`/api/core/artifacts/${encodeURIComponent(a.id)}/download`} title="Tải xuống">
-                    <Download size={15} />
-                  </a>
-                )}
-              </div>
+              {a.storage_key && (
+                <a className="icon-btn" href={`/api/core/artifacts/${encodeURIComponent(a.id)}/download`} title="Tải xuống"><Download size={15} /></a>
+              )}
             </div>
           ))}
         </div>
@@ -667,38 +1199,15 @@ function WorkspaceTab({ projectId }: { projectId: string }) {
   const p = encodeURIComponent(projectId);
   return (
     <div className="modules">
-      <SessionList
-        kind="ba"
-        title="BA sessions"
-        icon={<MessagesSquare size={16} />}
-        items={features?.map((f) => ({
-          id: f.session_id,
-          title: f.title,
-          meta: f.feature_status,
-          href: `/ba/chat.html?session=${encodeURIComponent(f.session_id)}&project_id=${p}`,
-        }))}
-      />
-      <SessionList
-        kind="designer"
-        title="Designer sessions"
-        icon={<PenTool size={16} />}
-        items={sessions?.map((s) => ({
-          id: s.id,
-          title: s.title,
-          meta: s.source === "ba-handoff" ? "từ BA handoff" : timeAgo(s.updated_at),
-          href: `/designer/?project=${p}&session=${encodeURIComponent(s.id)}`,
-        }))}
-      />
+      <SessionList kind="ba" title="BA sessions" icon={<MessagesSquare size={16} />}
+        items={features?.map((f) => ({ id: f.session_id, title: f.title, meta: f.feature_status, href: `/projects/${p}/f/${encodeURIComponent(f.session_id)}` }))} />
+      <SessionList kind="designer" title="Designer sessions" icon={<PenTool size={16} />}
+        items={sessions?.map((s) => ({ id: s.id, title: s.title, meta: s.source === "ba-handoff" ? "từ BA" : timeAgo(s.updated_at), href: `/projects/${p}/designer?session=${encodeURIComponent(s.id)}` }))} />
     </div>
   );
 }
 
-function SessionList(props: {
-  kind: "ba" | "designer";
-  title: string;
-  icon: ReactNode;
-  items?: { id: string; title: string; meta: string; href: string }[];
-}) {
+function SessionList(props: { kind: "ba" | "designer"; title: string; icon: ReactNode; items?: { id: string; title: string; meta: string; href: string }[] }) {
   return (
     <div className={`card sessions sessions-${props.kind}`}>
       <div className="sessions-head">
@@ -726,13 +1235,13 @@ function SessionList(props: {
   );
 }
 
-const ROLES = ["BA", "DESIGNER", "REVIEWER", "ADMIN"];
+const ROLES = ["PM", "BA", "DESIGNER", "REVIEWER", "ADMIN"];
 
 function MembersTab({ project, me, onChanged }: { project: ProjectDetail; me: User; onChanged: () => void }) {
   const isAdmin = project.my_roles.includes("ADMIN");
   const [users, setUsers] = useState<User[]>([]);
   const [newUser, setNewUser] = useState("");
-  const [newRole, setNewRole] = useState("BA");
+  const [newRole, setNewRole] = useState("PM");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -766,17 +1275,12 @@ function MembersTab({ project, me, onChanged }: { project: ProjectDetail; me: Us
           <div key={m.id} className="row">
             <Avatar name={m.name} size={34} />
             <div className="row-main">
-              <div className="row-title">
-                {m.name}
-                {m.id === me.id && <span className="pill dim">bạn</span>}
-              </div>
+              <div className="row-title">{m.name}{m.id === me.id && <span className="pill dim">bạn</span>}</div>
               <div className="row-meta mono">{m.username}</div>
             </div>
             <RoleChips roles={m.roles} />
             {isAdmin && m.id !== me.id && (
-              <button className="icon-btn danger" onClick={() => void remove(m.id)} title="Xoá khỏi dự án">
-                <X size={15} />
-              </button>
+              <button className="icon-btn danger" onClick={() => void remove(m.id)} title="Xoá khỏi dự án"><X size={15} /></button>
             )}
           </div>
         ))}
@@ -786,22 +1290,15 @@ function MembersTab({ project, me, onChanged }: { project: ProjectDetail; me: Us
           <UserPlus size={18} className="dim" />
           <select value={newUser} onChange={(e) => setNewUser(e.target.value)} required>
             <option value="">Chọn người dùng…</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.username})
-              </option>
-            ))}
+            {users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.username})</option>)}
           </select>
           <select value={newRole} onChange={(e) => setNewRole(e.target.value)}>
-            {ROLES.map((r) => (
-              <option key={r}>{r}</option>
-            ))}
+            {ROLES.map((r) => <option key={r} value={r}>{r === "PM" ? "PM (BA + Designer)" : r}</option>)}
           </select>
-          <button className="btn primary" disabled={!newUser}>
-            Thêm
-          </button>
+          <button className="btn primary" disabled={!newUser}>Thêm</button>
         </form>
       )}
+      <p className="muted small">PM làm trọn hành trình (BA + Designer). BA hoặc Designer riêng lẻ chỉ xem phần còn lại.</p>
     </div>
   );
 }

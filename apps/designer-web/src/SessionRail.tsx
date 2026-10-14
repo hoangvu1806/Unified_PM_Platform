@@ -7,6 +7,7 @@ import {
     Sparkles,
     Trash2,
 } from "lucide-react";
+import { BaStatusPanel } from "./BaStatusPanel";
 import type { Session } from "./types";
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
     onDelete: (session: Session) => void;
     onCreate: () => void;
     onSettings: () => void;
+    activeSession?: Session;
 }
 
 export function SessionRail(props: Props) {
@@ -101,6 +103,8 @@ export function SessionRail(props: Props) {
                     </div>
                 )}
             </nav>
+
+            {!props.collapsed && <BaStatusPanel session={props.activeSession} />}
 
             <div className="rail-footer">
                 <button

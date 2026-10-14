@@ -9,7 +9,7 @@
  */
 
 // Platform: login, project context and read-only mode (must load first).
-import './platform.js';
+import { isEmbedded } from './platform.js';
 import { sendChatMessage, getFeature, getChatHistory, exportFeature, exportAndOpenDesigner, getFeatureDocuments, downloadBpmn, saveTouchpoints } from './api.js';
 import { initColumnResize } from './column-resize.js';
 import { escapeHtml, formatChatMarkdown } from './markdown.js';
@@ -171,17 +171,13 @@ function flagProgress(sec, flagValues) {
   return { pass, warning, fail };
 }
 
-function pluralCount(n, singular, pluralForm) {
-  return `${n} ${n === 1 ? singular : pluralForm}`;
-}
-
 function formatFlagProgressParts(sec, flagValues) {
   if (!sec.flags.length) return null;
   const p = flagProgress(sec, flagValues);
   return {
-    pass: pluralCount(p.pass, 'pass', 'passes'),
-    warnings: pluralCount(p.warning, 'warning', 'warnings'),
-    fails: p.fail ? pluralCount(p.fail, 'fail', 'fails') : '',
+    pass: `${p.pass} đạt`,
+    warnings: `${p.warning} cảnh báo`,
+    fails: p.fail ? `${p.fail} chưa đạt` : '',
   };
 }
 
@@ -318,9 +314,9 @@ function applyStateUpdate(stateData, fallbackSectionId) {
 }
 
 const VALIDATE_STATUSES = ['PENDING_VALIDATION', 'VALIDATED', 'VALIDATION_FAILED', 'EXPORTED'];
-const CHAT_FROZEN_REASON = 'Chat is frozen after Export';
+const CHAT_FROZEN_REASON = 'Chat đã khoá sau khi Export';
 const INFLIGHT_REASON = 'Đang xử lý — chờ lượt hiện tại kết thúc';
-const CHAT_FROZEN_HINT = 'Chat is frozen after Export. Validate and Export can still refresh against current approved wiki.';
+const CHAT_FROZEN_HINT = 'Chat đã khoá sau khi Export. Vẫn có thể Validate và Export lại theo wiki đã duyệt mới nhất.';
 
 function isChatFrozen() {
   return packageExported || featureStatus === 'EXPORTED';
@@ -526,6 +522,10 @@ const checklistGrid = document.getElementById('checklistGrid');
 const pendingEditsBanner = document.getElementById('pendingEditsBanner');
 const referenceAssetInput = document.getElementById('referenceAssetInput');
 const btnAttachReference = document.getElementById('btnAttachReference');
+function setAttachLabel(text) {
+  const label = btnAttachReference?.querySelector('.attach-label');
+  if (label) label.textContent = text;
+}
 let referenceAssets = [];
 
 function readReferenceAsset(file) {
@@ -557,7 +557,7 @@ async function handleReferenceAssetChange() {
   try {
     const added = await Promise.all(files.slice(0, 3).map(readReferenceAsset));
     referenceAssets.push(...added);
-    if (btnAttachReference) btnAttachReference.textContent = `Ảnh reference (${referenceAssets.length})`;
+    setAttachLabel(`Ảnh tham chiếu (${referenceAssets.length})`);
   } catch (err) {
     window.alert(err.message);
   } finally {
@@ -1044,11 +1044,28 @@ async function loadSectionHistory(sectionId, initialPitch = '') {
 
 // ── Initialization ───────────────────────────────────────────
 
+function setupChecklistToggle() {
+  const card = document.getElementById('checklistCard');
+  const head = card?.querySelector('.checklist-header');
+  if (!card || !head) return;
+  let collapsed = false;
+  try { collapsed = localStorage.getItem('ba.checklist.collapsed') === '1'; } catch { /* private mode */ }
+  card.classList.toggle('is-collapsed', collapsed);
+  head.setAttribute('aria-expanded', String(!collapsed));
+  head.addEventListener('click', () => {
+    const next = !card.classList.contains('is-collapsed');
+    card.classList.toggle('is-collapsed', next);
+    head.setAttribute('aria-expanded', String(!next));
+    try { localStorage.setItem('ba.checklist.collapsed', next ? '1' : '0'); } catch { /* ignore */ }
+  });
+}
+
 async function init() {
+  setupChecklistToggle();
   // Parse URL params
   const params = new URLSearchParams(window.location.search);
   sessionId = params.get('session') || '';
-  featureTitle = params.get('title') || 'Untitled Feature';
+  featureTitle = params.get('title') || 'Feature';
   projectId = params.get('project_id') || '';
 
   if (!sessionId) {
@@ -1057,11 +1074,20 @@ async function init() {
     return;
   }
 
-  // Set header info
+  // Set header info (the title comes from the feature itself when the URL has none)
   document.getElementById('headerFeatureTitle').textContent = featureTitle;
+  if (!params.get('title')) {
+    getFeature(sessionId).then((f) => {
+      const title = f?.title || f?.feature_title;
+      if (title) {
+        featureTitle = title;
+        document.getElementById('headerFeatureTitle').textContent = title;
+      }
+    }).catch(() => {});
+  }
   document.getElementById('sessionTag').textContent = projectId
-    ? `[SESSION] ${sessionId.slice(0, 12)}... · ${projectId}`
-    : `[SESSION] ${sessionId.slice(0, 12)}...`;
+    ? `Phiên ${sessionId.slice(0, 8)} · ${projectId}`
+    : `Phiên ${sessionId.slice(0, 8)}`;
 
   // Initialize chat histories
   SECTIONS.forEach(sec => {
@@ -1286,10 +1312,10 @@ function renderSectionList() {
 
 function getStatusStamp(status) {
   const map = {
-    locked: '<span class="stamp stamp-pending">[LOCKED]</span>',
-    active: '<span class="stamp stamp-auto">[ACTIVE]</span>',
-    in_progress: '<span class="stamp stamp-draft">[IN_PROGRESS]</span>',
-    completed: '<span class="stamp stamp-approved">[COMPLETED]</span>',
+    locked: '<span class="stamp stamp-pending">Khoá</span>',
+    active: '<span class="stamp stamp-auto">Đang làm</span>',
+    in_progress: '<span class="stamp stamp-draft">Đang xử lý</span>',
+    completed: '<span class="stamp stamp-approved">Hoàn thành</span>',
   };
   return map[status] || map.active;
 }
@@ -1321,7 +1347,7 @@ function renderChecklist() {
     const value = flagStatusOf(flagValues[flag.id]);
     const tone = flagVisualTone(flag, value);
     const isRequired = flag.severity === 'blocker';
-    const role = isRequired ? 'required' : 'optional';
+    const role = isRequired ? 'bắt buộc' : 'tuỳ chọn';
 
     const el = document.createElement('div');
     el.className = `check-item ${FLAG_TONE_CLASS[tone]}`;
@@ -1355,7 +1381,7 @@ function renderChatMessages() {
         : `<div class="bubble">${escapeHtml(msg.text)}</div>`;
     row.innerHTML = `
       <div class="avatar ${msg.sender === 'user' ? 'user-avatar' : 'agent'}">
-        ${msg.sender === 'user' ? 'YOU' : 'BA'}
+        ${msg.sender === 'user' ? 'Bạn' : 'BA'}
       </div>
       ${body}
     `;
@@ -1413,21 +1439,21 @@ function renderWorkspace() {
       <div class="field-group">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <label class="field-label">Tác nhân chính (Actors)</label>
-          <span style="font-size: 10px; color: var(--accent-cyan); font-family: monospace;">${actorsList.length} items</span>
+          <span class="count-pill">${actorsList.length}</span>
         </div>
         ${renderChips(actorsList, 'actors', 'chip-cyan')}
       </div>
       <div class="field-group">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <label class="field-label">Phạm vi bao gồm (Scope In)</label>
-          <span style="font-size: 10px; color: var(--status-approved); font-family: monospace;">${scopeInList.length} items</span>
+          <span class="count-pill">${scopeInList.length}</span>
         </div>
         ${renderChips(scopeInList, 'scope_in', 'chip-emerald')}
       </div>
       <div class="field-group">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <label class="field-label">Phạm vi ngoại trừ (Scope Out)</label>
-          <span style="font-size: 10px; color: var(--status-warning); font-family: monospace;">${scopeOutList.length} items</span>
+          <span class="count-pill">${scopeOutList.length}</span>
         </div>
         ${renderChips(scopeOutList, 'scope_out', 'chip-amber')}
       </div>
@@ -1587,10 +1613,10 @@ function updateGlobalProgress() {
   const pct = Math.round((completed / total) * 100);
 
   document.getElementById('globalProgressFill').style.width = `${pct}%`;
-  document.getElementById('progressLabel').textContent = `${completed} / ${total} Required`;
+  document.getElementById('progressLabel').textContent = `${completed} / ${total} bắt buộc`;
 
   const g1Completed = SECTIONS.filter(s => s.group === 1 && sectionStates[s.id].status === 'completed').length;
-  document.getElementById('globalProgressStamp').textContent = `[${g1Completed}/4 GROUP 1]`;
+  document.getElementById('globalProgressStamp').textContent = `Nhóm 1 · ${g1Completed}/4`;
 }
 
 // ── Section Navigation ───────────────────────────────────────
@@ -1656,10 +1682,12 @@ async function handleExportAndOpenDesigner() {
     btn.disabled = true;
     btn.textContent = 'Opening Designer...';
   }
+  // Platform journey: when embedded, the shell switches to Designer itself (no new tabs).
+  const embedded = isEmbedded;
   // Reserve both tabs during the click gesture; browsers may block a popup
   // opened after the async handoff request has started.
-  const designerWindow = window.open('about:blank', 'designer-agent');
-  const openpencilWindow = window.open('about:blank', 'openpencil-editor');
+  const designerWindow = embedded ? null : window.open('about:blank', 'designer-agent');
+  const openpencilWindow = embedded ? null : window.open('about:blank', 'openpencil-editor');
   try {
     const result = await exportAndOpenDesigner(sessionId);
     featureStatus = 'EXPORTED';
@@ -1676,6 +1704,10 @@ async function handleExportAndOpenDesigner() {
         ? `http://127.0.0.1:3232/?session=${encodeURIComponent(result.designer_session_id)}`
         : '');
     const openpencilUrl = result.openpencil_url || 'http://127.0.0.1:1420/';
+    if (embedded) {
+      window.parent.postMessage({ type: 'platform:open-designer', session: result.designer_session_id }, window.location.origin);
+      return;
+    }
     if (designerUrl) {
       if (designerWindow) designerWindow.location.replace(designerUrl);
       else window.open(designerUrl, 'designer-agent');
@@ -1916,7 +1948,7 @@ async function handleSendWithAction(action = null) {
     });
   } finally {
     referenceAssets = [];
-    if (btnAttachReference) btnAttachReference.textContent = 'Ảnh reference';
+    setAttachLabel('Ảnh tham chiếu');
     isSending = false;
     setSendBusy(false);
     syncControlButtons();
@@ -1953,4 +1985,14 @@ function removeTypingIndicator() {
 }
 
 // ── Boot ─────────────────────────────────────────────────────
+// The platform journey asks the embedded page to show a section (its step strip).
+window.addEventListener('message', (event) => {
+  if (event.origin !== window.location.origin) return;
+  if (event.data?.type !== 'platform:select-section') return;
+  const idx = SECTIONS.findIndex((sec) => sec.id === event.data.key);
+  if (idx >= 0 && idx !== activeSectionIndex && sectionStates[SECTIONS[idx].id]?.status !== 'locked') {
+    void selectSection(idx);
+  }
+});
+
 init();

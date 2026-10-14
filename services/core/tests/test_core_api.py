@@ -43,7 +43,7 @@ def test_projects_follow_membership(client):
 def test_create_project_and_admin_only_membership(client):
     login(client, "designer.binh")
     created = client.post("/api/core/projects", json={"name": "Test Shop"}).json()
-    assert "ADMIN" in created["my_roles"] and "DESIGNER" in created["my_roles"]
+    assert set(created["my_roles"]) == {"ADMIN", "PM"}  # PM = BA + DESIGNER
     pid = created["id"]
     r = client.post(f"/api/core/projects/{pid}/members", json={"user_id": "u-ba-chi", "project_role": "BA"})
     assert r.status_code == 201

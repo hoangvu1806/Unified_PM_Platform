@@ -3922,3 +3922,22 @@
     width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
     background: var(--violet); color: #fff; font: 700 9px var(--font-main);
 }
+
+/* ── Platform: BA status in the left rail ───────────────────────── */
+.ba-status { padding: 4px 4px 10px; }
+.ba-status .rail-label { margin: 8px 8px 8px; }
+.ba-status-empty { margin: 0 8px; font-size: 12.5px; color: var(--text-muted); }
+.ba-status-card { margin: 0 4px; padding: 10px 10px 8px; border-radius: 12px; background: var(--bg-surface-raised); }
+.ba-status-title { font: 700 13px var(--font-main); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ba-status-state { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 999px; background: var(--violet-soft); color: var(--violet); font: 700 11px var(--font-main); }
+.ba-status-card ul { list-style: none; margin: 8px 0 6px; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.ba-status-card li button {
+    width: 100%; display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: none; border-radius: 8px;
+    background: transparent; color: var(--text-secondary); font: 600 12.5px var(--font-main); text-align: left; cursor: pointer;
+}
+.ba-status-card li button:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+.ba-status-card .ok { color: var(--mint); }
+.ba-status-card .now { color: var(--violet); }
+.ba-status-card .warn { color: var(--amber); }
+.ba-status-package { display: flex; align-items: center; gap: 6px; padding: 6px 6px 0; border-top: 1px solid var(--border-strong); font-size: 11.5px; color: var(--text-muted); }
+.ba-status-stale { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: var(--amber-soft); color: var(--amber); font: 600 11.5px var(--font-main); }

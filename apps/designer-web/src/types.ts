@@ -17,6 +17,12 @@ export interface Session {
     created_at: string;
     updated_at: string;
     workspace?: SessionWorkspace | null;
+    // Platform: project and provenance (BA handoff -> source_ref = BA feature id)
+    project_id?: string | null;
+    created_by?: string | null;
+    source?: string | null;
+    source_ref?: string | null;
+    source_artifact_id?: string | null;
 }
 
 export interface SessionWorkspace {

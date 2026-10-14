@@ -170,7 +170,8 @@ def create_project(body: ProjectIn) -> dict[str, Any]:
     user = get_current_user()
     slug = re.sub(r"[^A-Z0-9]+", "-", body.name.upper()).strip("-")[:16] or "PROJECT"
     project_id = f"PRJ-{slug}-{uuid.uuid4().hex[:4].upper()}"
-    roles = ["ADMIN", *sorted(user.roles)]
+    # Default: the creator runs the whole journey (PM = BA + Designer) and administers it.
+    roles = ["ADMIN", "PM"]
     with connection() as conn:
         conn.execute(
             "INSERT INTO projects (id, name, description, created_by) VALUES (%s, %s, %s, %s)",
@@ -368,3 +369,19 @@ def wiki_source_markdown(project_id: str, source_id: str) -> Response:
         media_type="text/markdown; charset=utf-8",
         headers={"Content-Disposition": _disposition(f"{stem}.md")},
     )
+
+
+# ── Journey (guided BA -> Design path of one feature) ────
+
+
+@private.get("/projects/{project_id}/features/{feature_id}/journey")
+def feature_journey(project_id: str, feature_id: str) -> dict[str, Any]:
+    from .journey import build_journey
+
+    with connection() as conn:
+        roles = _require_member(conn, project_id, get_current_user())
+        journey = build_journey(conn, project_id, feature_id)
+    if journey is None:
+        raise HTTPException(404, detail={"code": "FEATURE_NOT_FOUND", "message": "Feature not found in this project"})
+    journey["my_roles"] = roles
+    return journey

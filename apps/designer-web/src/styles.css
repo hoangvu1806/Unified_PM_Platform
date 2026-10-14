@@ -829,3 +829,7 @@ select option {
 @media (max-width: 1100px) {
     .platform-user, .platform-project { display: none; }
 }
+
+/* Embedded in the platform journey: the portal header already shows the brand. */
+.platform-embed .brand-lockup { display: none; }
+.platform-embed .new-session { margin-top: 4px; }

@@ -21,6 +21,7 @@ playwright-report/
 
 # Runtime data
 data/
+*.dump
 *.db
 *.sqlite
 *.sqlite3
@@ -33,3 +34,5 @@ Thumbs.db
 .vscode/
 backups/
 logs/
+scripts/screens/
+.claude/

@@ -9,6 +9,8 @@
  * - A thin bar links back to the Portal and shows project, user, role.
  */
 
+import './platform-theme.css';
+
 const STORAGE_KEY = 'platform.projectId';
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -28,6 +30,34 @@ function readProjectId() {
 }
 
 export const projectId = readProjectId();
+
+// Embedded in the platform journey page (?embed=1): no own platform bar.
+export const isEmbedded = (() => {
+  const fromUrl = new URLSearchParams(window.location.search).get('embed') === '1';
+  try {
+    if (fromUrl) sessionStorage.setItem('platform.embed', '1');
+    return fromUrl || (window.self !== window.top && sessionStorage.getItem('platform.embed') === '1');
+  } catch {
+    return fromUrl;
+  }
+})();
+if (isEmbedded) document.documentElement.classList.add('platform-embed-root');
+
+// Shared theme with Portal and Designer (same storage key), dark by default.
+(function applyTheme() {
+  let mode = 'dark';
+  try {
+    const saved = localStorage.getItem('designer.theme');
+    if (saved === 'light' || saved === 'dark') mode = saved;
+    else if (saved === 'system') mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch { /* private mode */ }
+  document.documentElement.setAttribute('data-theme', mode);
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'designer.theme' && (e.newValue === 'light' || e.newValue === 'dark')) {
+      document.documentElement.setAttribute('data-theme', e.newValue);
+    }
+  });
+})();
 
 // Existing BA pages read ?project_id= at import time: make sure it is there.
 (function syncUrl() {
@@ -49,14 +79,17 @@ window.fetch = async (input, init) => {
 };
 
 const BAR_CSS = `
-#platformBar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:14px;height:34px;padding:0 16px;
-  background:#0d0d10;border-bottom:1px solid #27272a;font:12px Inter,system-ui,sans-serif;color:#a1a1aa}
-#platformBar a{color:#00f2fe;text-decoration:none}
-#platformBar .pb-project{color:#f4f4f5;font-weight:600}
+#platformBar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:14px;height:40px;padding:0 18px;
+  background:var(--bg-surface);box-shadow:0 1px 0 var(--border-subtle);font:600 12.5px 'Plus Jakarta Sans',system-ui,sans-serif;color:var(--text-dim)}
+#platformBar a{color:var(--text-dim);text-decoration:none}
+#platformBar a:hover{color:var(--text-main)}
+#platformBar .pb-project{color:var(--text-main);font-weight:700}
+#platformBar .pb-id{font-weight:500;opacity:.8}
 #platformBar .pb-spacer{flex:1}
-#platformBar .pb-role{padding:1px 7px;border-radius:20px;border:1px solid #3f3f46;font-size:10px;letter-spacing:.06em}
-#platformBar .pb-ro{color:#f59e0b;border-color:rgba(245,158,11,.5)}
-#platformBar button{background:none;border:0;color:#a1a1aa;cursor:pointer;font:inherit}
+#platformBar .pb-role{padding:2px 9px;border-radius:999px;background:var(--accent-cyan-subtle);color:var(--accent-cyan);font-size:11px;font-weight:700}
+#platformBar .pb-ro{color:#f59e0b;background:rgba(245,158,11,.14)}
+#platformBar button{background:none;border:0;color:var(--text-dim);cursor:pointer;font:inherit}
+#platformBar button:hover{color:var(--text-main)}
 body.platform-readonly #btnCreateFeature, body.platform-readonly #btnCreateFeature2, body.platform-readonly #btnStartChat,
 body.platform-readonly #btnValidate, body.platform-readonly #btnExport, body.platform-readonly #btnExportBpmn,
 body.platform-readonly #btnRegenBpmn, body.platform-readonly #btnExportDesigner,
@@ -75,7 +108,7 @@ function renderBar(user, project, roles, readOnly) {
   bar.innerHTML = `
     <a href="/">← Dự án</a>
     <span class="pb-project">${esc(project?.name || projectId)}</span>
-    <span class="mono">${esc(projectId)}</span>
+    <span class="pb-id">${esc(projectId)}</span>
     <a href="index.html?project_id=${encodeURIComponent(projectId)}">Features</a>
     <a href="wiki.html?project_id=${encodeURIComponent(projectId)}">Wiki</a>
     <span class="pb-spacer"></span>
@@ -101,8 +134,9 @@ export const platformReady = (async () => {
   if (!pRes.ok) { window.location.assign('/'); return new Promise(() => {}); }
   const project = await pRes.json();
   const roles = project.my_roles || [];
-  const readOnly = !roles.includes('BA') && !roles.includes('ADMIN');
+  const readOnly = !roles.includes('BA') && !roles.includes('ADMIN') && !roles.includes('PM');
   if (readOnly) document.body.classList.add('platform-readonly');
-  renderBar(user, project, roles, readOnly);
+  if (isEmbedded) document.body.classList.add('platform-embed');
+  else renderBar(user, project, roles, readOnly);
   return { user, project, roles, readOnly };
 })();

@@ -23,7 +23,7 @@ USER = sys.argv[4] if len(sys.argv) > 4 else "lead.dung"
 API = f"{BASE}/designer/api/v1"
 PROFILE = {
     "endpoint": "http://127.0.0.1:7600/mcp",  # mapped to the user's / default instance server-side
-    "source_file": "design-systems/shadcn-ui.fig",
+    "source_file": "shadcn-ui",  # matched by name in DESIGN_DATA_DIR/design-systems
     "knowledge_id": "shadcn-ui",
 }
 DEADLINE = time.time() + 60 * 60
@@ -96,7 +96,16 @@ while time.time() < DEADLINE:
         print("\nDESIGN FINISHED", json.dumps({"session": session, "run": run_id}), flush=True)
         break
     if state in {"failed", "blocked"}:
-        say("error", json.dumps(run.get("error"), ensure_ascii=False))
+        error = run.get("error") or {}
+        say("error", json.dumps(error, ensure_ascii=False))
+        retries = globals().setdefault("_retries", {})
+        if error.get("retryable") and retries.get(run_id, 0) < 2:
+            retries[run_id] = retries.get(run_id, 0) + 1
+            say(USER, f"Retry ({retries[run_id]}/2)")
+            status, body = call("POST", f"{API}/runs/{run_id}/retry", {"mcp_profile": PROFILE})
+            assert status == 202, f"retry failed: {status} {body}"
+            time.sleep(3)
+            continue
         if turn >= len(answers):
             raise SystemExit(1)
     if turn >= len(answers):

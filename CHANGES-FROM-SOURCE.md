@@ -67,6 +67,12 @@ Every later edit to imported files is listed here.
 | `apps/designer-web/src/{projectFiles.ts,ProjectFilesPanel.tsx,MentionMenu.tsx}` (new), `ChatWorkspace.tsx`, `ReviewPanel.tsx`, `App.tsx`, `workspace.css` | Right panel "Files dự án" (creator, time, filters); drag a file into the composer, "+" button, or `@` mention picker — all reuse the existing attachment parser | Cite shared project files in Designer chats | 4 |
 | `apps/designer-web/src/{platform.ts,WorkspaceHeader.tsx,styles.css}` | Project, role, user and logout moved into the Designer header (no extra top bar) | Cleaner Designer UI | 4 |
 | `apps/ba-web/index.html`, `src/main.js`, `src/platform.js` | "Tạo Dự Án Mới" → "Tạo Feature mới"; page title names the project; empty project opens the new-feature dialog | Feature ≠ project on the platform | 4 |
+| `packages/platform_core/platform_core/projects.py`, `services/core/app/{schema,seed,routes}.py` | Role **PM** (counts as BA + DESIGNER, like ADMIN); a new project makes its creator ADMIN + PM; demo user `pm.hoa` | One person does the whole journey | 5 |
+| `services/core/app/journey.py` (new), `routes.py` | `GET /projects/{id}/features/{fid}/journey`: 9 steps (BA 1–6, Design 7–9) built from the shared DB, with locked reasons and BA package version / stale state | Guided BA → Design journey | 5 |
+| `apps/portal/src/*` | Designer-style shell (project rail, breadcrumb header), journey page with the 9 steps in the single header row, embedded BA / Designer (`?embed=1`), guide dialogs on every step change, project page always shows both agents with their state ("Chờ BA"), Designer page inside the portal | Unified workspace in one app | 5 |
+| `apps/ba-web/{chat.html,src/chat.js,src/design-tokens.css,src/platform-theme.css,src/platform.js}` | Designer look: Plus Jakarta Sans, borderless surfaces, pills instead of mono `[TAGS]`, Vietnamese labels, collapsible completion flags, compact action dock; embedded mode hides BA's own header; title read from the feature; journey step selects the BA section (`platform:select-section`); "Bàn giao & mở Designer" asks the portal to switch role | Same style as Designer, more room for the chat | 5 |
+| `apps/designer-web/src/{BaStatusPanel.tsx,SessionRail.tsx,platform.ts,styles.css,...}` | Left rail shows the BA state of a handed-off feature (steps, package version, stale warning); embedded mode hides the brand block | Designer sees BA read-only | 5 |
+| `scripts/{e2e_full_flow.sh,reset_platform_data.py,case_designer.py,e2e_ui.py}` | Full real flow (PM → BA → handoff → design → storage), data reset, UI walk-through for the new portal | Real end-to-end checks | 5 |
 
 ## Test results (Docker)
 
@@ -76,7 +82,7 @@ Every later edit to imported files is listed here.
 | `packages/wiki` | 24 passed, 1 skipped (live LLM) | — |
 | `services/ba` | 162 passed, 3 skipped | — |
 | `services/designer` | 107 passed, 10 failed | **same 10 failures** on the original Designer source (Python 3.11 + SQLite): missing `data/evals/golden-projects.json`, stale mocks |
-| `services/core` | 4 passed | (new) |
+| `services/core` | 5 passed | (new) |
 | `scripts/e2e_access.py` (gateway, mock users) | 36 passed | (new) |
 | `scripts/e2e_assets.sh` (real S3 bucket) | PASS: BA v1 → handoff → design published → BA v2 → design stale; download ACL | (new) |
 

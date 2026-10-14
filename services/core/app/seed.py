@@ -9,6 +9,7 @@ DEMO_PASSWORD = "demo123"
 
 USERS = [
     # id, username, display name, platform roles
+    ("u-pm-hoa", "pm.hoa", "Hòa (PM)", ["BA", "DESIGNER"]),
     ("u-ba-an", "ba.an", "An (BA)", ["BA"]),
     ("u-ba-chi", "ba.chi", "Chi (BA)", ["BA"]),
     ("u-designer-binh", "designer.binh", "Bình (Designer)", ["DESIGNER"]),
@@ -21,6 +22,8 @@ PROJECTS = [
 ]
 
 MEMBERS = [
+    ("PRJ-AURORA", "u-pm-hoa", "PM"),
+    ("PRJ-DEMO", "u-pm-hoa", "PM"),
     ("PRJ-AURORA", "u-ba-an", "BA"),
     ("PRJ-AURORA", "u-designer-binh", "DESIGNER"),
     ("PRJ-AURORA", "u-lead-dung", "ADMIN"),

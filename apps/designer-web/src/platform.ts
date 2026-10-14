@@ -31,6 +31,19 @@ function readProjectId(): string {
 
 export const projectId = readProjectId();
 
+/** Embedded in the platform journey page (?embed=1): the shell shows project/user. */
+export const isEmbedded = (() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("embed") === "1";
+    try {
+        if (fromUrl) sessionStorage.setItem("platform.embed", "1");
+        return fromUrl || (window.self !== window.top && sessionStorage.getItem("platform.embed") === "1");
+    } catch {
+        return fromUrl;
+    }
+})();
+
+if (isEmbedded) document.documentElement.classList.add("platform-embed");
+
 const nativeFetch = window.fetch.bind(window);
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const res = await nativeFetch(input, init);
@@ -79,7 +92,7 @@ export const platformReady: Promise<PlatformContext> = (async () => {
         readOnly: false,
     };
     const roles = ctx.project.my_roles ?? [];
-    ctx.readOnly = !roles.includes("DESIGNER") && !roles.includes("ADMIN");
+    ctx.readOnly = !roles.includes("DESIGNER") && !roles.includes("ADMIN") && !roles.includes("PM");
     if (ctx.readOnly) {
         const style = document.createElement("style");
         style.textContent = READONLY_CSS;

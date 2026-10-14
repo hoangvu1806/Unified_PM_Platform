@@ -383,6 +383,7 @@ export default function App() {
             <SessionRail
                 sessions={sessions}
                 activeId={activeSession?.id}
+                activeSession={activeSession}
                 collapsed={collapsed}
                 onToggle={() => setCollapsed(!collapsed)}
                 onSelect={setActiveSession}

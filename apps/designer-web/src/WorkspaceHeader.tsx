@@ -1,5 +1,5 @@
 import { ArrowLeft, LogOut, Moon, PanelRight, Settings2, Sun } from "lucide-react";
-import { logout, usePlatform } from "./platform";
+import { isEmbedded, logout, usePlatform } from "./platform";
 import type { Run, Session } from "./types";
 
 export function WorkspaceHeader({
@@ -19,7 +19,7 @@ export function WorkspaceHeader({
     onReview: () => void;
     onSettings: () => void;
 }) {
-    const platform = usePlatform();
+    const platform = isEmbedded ? undefined : usePlatform();
     return (
         <header className="topbar">
             <div className="topbar-title">
@@ -81,14 +81,17 @@ export function WorkspaceHeader({
                     </span>
                 )}
                 <div className="topbar-divider" />
-                <button
-                    className="icon-button"
-                    onClick={onTheme}
-                    title={`Switch to ${theme === "dark" ? "Light" : "Dark"} theme`}
-                    type="button"
-                >
-                    {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-                </button>
+                {/* Embedded: the platform header owns the one light/dark switch. */}
+                {!isEmbedded && (
+                    <button
+                        className="icon-button"
+                        onClick={onTheme}
+                        title={`Switch to ${theme === "dark" ? "Light" : "Dark"} theme`}
+                        type="button"
+                    >
+                        {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+                    </button>
+                )}
                 <button
                     className={`icon-button ${reviewOpen ? "active" : ""}`}
                     onClick={onReview}

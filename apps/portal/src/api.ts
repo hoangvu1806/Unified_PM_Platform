@@ -35,6 +35,25 @@ export type BaFeature = { session_id: string; title: string; feature_status: str
 export type DesignerSession = { id: string; title: string; source?: string | null; updated_at: string };
 export type WikiList = { project_approved: unknown[]; project_drafts: unknown[]; company_approved: unknown[] };
 
+export type JourneyStep = {
+  key: string;
+  label: string;
+  role: "BA" | "DESIGNER";
+  hint: string;
+  status: "done" | "current" | "attention" | "locked" | "todo";
+  reason: string | null;
+};
+export type Journey = {
+  project_id: string;
+  feature: { id: string; title: string; status: string };
+  current: string;
+  role: "BA" | "DESIGNER";
+  steps: JourneyStep[];
+  ba_package: { latest_version: number | null; used_by_design: number | null; stale: boolean };
+  designer: { session_id: string | null; latest_run: { stage: string; status: string } | null; design_artifact_id: string | null };
+  my_roles: string[];
+};
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -62,7 +81,31 @@ async function moduleGet<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function modulePost<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const detail = data?.detail;
+    throw new ApiError(res.status, typeof detail === "string" ? detail : detail?.message ?? res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
 export const api = {
+  journey: (projectId: string, featureId: string) =>
+    call<Journey>(`/projects/${encodeURIComponent(projectId)}/features/${encodeURIComponent(featureId)}/journey`),
+  createFeature: (projectId: string, title: string, description: string) =>
+    modulePost<BaFeature>("/ba/api/features", { title, description, project_id: projectId }),
+  handoff: (featureId: string) =>
+    modulePost<{ designer_session_id: string; designer_run_id: string }>(
+      `/ba/api/features/${encodeURIComponent(featureId)}/designer-handoff`,
+      {},
+    ),
   artifacts: (projectId: string) => call<Artifact[]>(`/projects/${encodeURIComponent(projectId)}/artifacts`),
   baFeatures: (projectId: string) =>
     moduleGet<BaFeature[]>(`/ba/api/features?project_id=${encodeURIComponent(projectId)}`),
@@ -94,5 +137,5 @@ export function moduleUrl(module: "ba" | "designer", projectId: string): string 
 }
 
 export function canWrite(roles: string[], role: "BA" | "DESIGNER"): boolean {
-  return roles.includes(role) || roles.includes("ADMIN");
+  return roles.includes(role) || roles.includes("ADMIN") || roles.includes("PM");
 }

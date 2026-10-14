@@ -71,6 +71,17 @@ export function useTheme() {
         }
     }, [theme]);
 
+    // Follow a theme switched elsewhere (the platform header when embedded, or another tab).
+    useEffect(() => {
+        const onStorage = (event: StorageEvent) => {
+            if (event.key !== THEME_STORAGE_KEY) return;
+            const next = event.newValue;
+            if (next === "light" || next === "dark" || next === "system") setThemeState(next);
+        };
+        window.addEventListener("storage", onStorage);
+        return () => window.removeEventListener("storage", onStorage);
+    }, []);
+
     const resolvedTheme = theme === "system" ? getSystemTheme() : theme;
 
     return { theme, resolvedTheme, setTheme, toggleTheme };

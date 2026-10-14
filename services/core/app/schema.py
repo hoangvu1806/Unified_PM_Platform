@@ -20,9 +20,13 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS project_members (
   project_id   TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  project_role TEXT NOT NULL CHECK (project_role IN ('BA','DESIGNER','REVIEWER','ADMIN')),
+  project_role TEXT NOT NULL,
   added_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (project_id, user_id, project_role)
 );
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
+-- PM = one person doing BA and Design (the default role).
+ALTER TABLE project_members DROP CONSTRAINT IF EXISTS project_members_project_role_check;
+ALTER TABLE project_members ADD CONSTRAINT project_members_project_role_check
+  CHECK (project_role IN ('PM','BA','DESIGNER','REVIEWER','ADMIN'));
 """
