@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     shared_llm_base_url: str = Field("", validation_alias="LLM_BASE_URL")
 
     openpencil_mcp_auth_token: str = ""
+    # Default OpenPencil instance; per-designer instances live in the
+    # designer.openpencil_instances table (refactor-plan/06).
+    openpencil_default_mcp_url: str = "http://host.docker.internal:7600/mcp"
+    openpencil_default_editor_url: str = "http://localhost:1420"
+    platform_env: str = "dev"
+    designer_shared_secret: str = ""
     mcp_timeout_seconds: int = 150
     # The workspace root owns the read-only design-systems folder. Runtime
     # caches may still live alongside it under ``designer-data``.

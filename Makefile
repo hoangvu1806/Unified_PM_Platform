@@ -3,7 +3,7 @@ COMPOSE          = docker compose
 COMPOSE_BA       = docker compose -f compose.ba.yml
 COMPOSE_DESIGNER = docker compose -f compose.designer.yml
 
-.PHONY: help up up-ba up-designer down build logs ps test test-ba test-wiki test-designer test-core psql openpencil config
+.PHONY: help up up-ba up-designer down build logs ps test test-ba test-wiki test-designer test-core test-core-api e2e e2e-ui legacy psql openpencil config
 
 help:
 	@echo "make up            # whole platform  -> http://localhost:8080"
@@ -46,7 +46,7 @@ psql:
 openpencil:
 	cd ../../BA/open-pencil && docker compose up -d
 
-test: test-core test-wiki test-ba test-designer
+test: test-core test-wiki test-ba test-designer test-core-api
 
 test-ba: .env
 	$(COMPOSE) --profile test run --rm --build ba-test
@@ -60,3 +60,15 @@ test-designer: .env
 test-core:
 	docker run --rm -v "$(CURDIR)/packages/platform_core:/src" -w /src python:3.12-slim \
 		sh -c "pip install -q -e '.[dev]' && pytest -q -p no:cacheprovider"
+
+test-core-api: .env
+	$(COMPOSE) --profile test run --rm --build core-test
+
+legacy:
+	$(COMPOSE) exec core-api python -m app.legacy
+
+e2e:
+	docker run --rm --network platform_default -v "$(CURDIR)/scripts:/s:ro" python:3.12-slim python /s/e2e_access.py http://gateway
+
+e2e-ui:
+	docker run --rm --network platform_default -v "$(CURDIR)/scripts:/s" mcr.microsoft.com/playwright/python:v1.48.0-jammy 		sh -c "pip install -q playwright==1.48.0 && python /s/e2e_ui.py http://gateway"

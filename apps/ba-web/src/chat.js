@@ -8,6 +8,8 @@
  * - Workspace form rendering
  */
 
+// Platform: login, project context and read-only mode (must load first).
+import './platform.js';
 import { sendChatMessage, getFeature, getChatHistory, exportFeature, exportAndOpenDesigner, getFeatureDocuments, downloadBpmn, saveTouchpoints } from './api.js';
 import { initColumnResize } from './column-resize.js';
 import { escapeHtml, formatChatMarkdown } from './markdown.js';

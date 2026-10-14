@@ -8,6 +8,8 @@ import type {
     ExactAsset,
 } from "./types";
 
+import { projectId } from "./platform";
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 if (!API_BASE) throw new Error("VITE_API_BASE_URL is required");
@@ -58,11 +60,14 @@ export const api = {
                 data_base64: await fileAsBase64(file),
             }),
         }),
-    listSessions: () => request<Session[]>("/sessions"),
+    listSessions: () =>
+        request<Session[]>(
+            projectId ? `/sessions?project_id=${encodeURIComponent(projectId)}` : "/sessions",
+        ),
     createSession: (title: string) =>
         request<Session>("/sessions", {
             method: "POST",
-            body: JSON.stringify({ title }),
+            body: JSON.stringify({ title, project_id: projectId || undefined }),
         }),
     deleteSession: (sessionId: string) =>
         request<{ status: string }>(`/sessions/${sessionId}`, {

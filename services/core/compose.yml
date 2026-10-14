@@ -1,0 +1,43 @@
+# core-api (users, projects, mock login) + Portal UI.
+services:
+  core-api:
+    build:
+      context: ../..
+      dockerfile: services/core/Dockerfile
+    env_file:
+      - path: ../../.env
+        required: true
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/api/core/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+    restart: unless-stopped
+
+  portal-web:
+    build:
+      context: ../../apps/portal
+    restart: unless-stopped
+
+  core-test:
+    profiles: ["test"]
+    build:
+      context: ../..
+      dockerfile: services/core/Dockerfile
+    env_file:
+      - path: ../../.env
+        required: true
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "pip install -q -r requirements-dev.txt && pytest -q --tb=short -p no:cacheprovider"]

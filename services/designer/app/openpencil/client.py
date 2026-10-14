@@ -30,6 +30,13 @@ class OpenPencilClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
+    def _token(self, endpoint: str) -> str:
+        # Platform: per-instance token when the endpoint is a registered
+        # designer instance, else the default instance token from .env.
+        from .instances import token_for
+
+        return token_for(endpoint) or self.settings.openpencil_mcp_auth_token
+
     @asynccontextmanager
     async def session(self, endpoint: str) -> AsyncIterator[ClientSession]:
         url = endpoint.strip()
@@ -44,8 +51,8 @@ class OpenPencilClient:
         if parsed.hostname == "localhost":
             url = urlunsplit(parsed._replace(netloc=f"127.0.0.1:{parsed.port or 7600}"))
         headers = {}
-        if self.settings.openpencil_mcp_auth_token:
-            headers["Authorization"] = f"Bearer {self.settings.openpencil_mcp_auth_token}"
+        if self._token(endpoint):
+            headers["Authorization"] = f"Bearer {self._token(endpoint)}"
         body_error: Exception | None = None
         try:
             async with streamablehttp_client(url, headers=headers) as (read, write, _):
@@ -155,8 +162,8 @@ class OpenPencilClient:
         base = urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
         url = f"{base}/data/{clean}"
         headers = {}
-        if self.settings.openpencil_mcp_auth_token:
-            headers["Authorization"] = f"Bearer {self.settings.openpencil_mcp_auth_token}"
+        if self._token(endpoint):
+            headers["Authorization"] = f"Bearer {self._token(endpoint)}"
 
         def read() -> tuple[bytes, str]:
             request = Request(url, headers=headers)
@@ -327,10 +334,8 @@ class OpenPencilClient:
 
         def fetch() -> dict[str, str]:
             headers = {}
-            if self.settings.openpencil_mcp_auth_token:
-                headers["Authorization"] = (
-                    f"Bearer {self.settings.openpencil_mcp_auth_token}"
-                )
+            if self._token(endpoint):
+                headers["Authorization"] = f"Bearer {self._token(endpoint)}"
             with urlopen(Request(health_url, headers=headers), timeout=3) as response:
                 value = json.loads(response.read().decode("utf-8"))
             if not isinstance(value, dict):

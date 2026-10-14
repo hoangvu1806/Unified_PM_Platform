@@ -129,6 +129,10 @@ class CreateFeatureRequest(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=255, description="Feature title")
     description: str = Field(default="", description="Feature description / pitch")
+    project_id: str | None = Field(
+        default=None,
+        description="Platform project (core.projects.id); required when auth is on",
+    )
 
 
 class SectionProgress(BaseModel):

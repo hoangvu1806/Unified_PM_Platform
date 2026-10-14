@@ -2,10 +2,11 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .api.access import designer_access, handoff_secret
 from .api.routes import router
 from .api.handoff_routes import router as handoff_router
 from .api.stream import EventStream
@@ -79,8 +80,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.include_router(router)
-    app.include_router(handoff_router)
+    # Platform: users must log in and are checked against the session's
+    # project; BA -> Designer handoffs authenticate with X-Agent-Secret.
+    app.include_router(router, dependencies=[Depends(designer_access)])
+    app.include_router(handoff_router, dependencies=[Depends(handoff_secret)])
 
     @app.exception_handler(AppError)
     async def handle_app_error(_request: Request, error: AppError) -> JSONResponse:

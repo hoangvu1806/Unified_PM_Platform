@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any, Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Header, Request, Response, status
+from fastapi import APIRouter, Header, Query, Request, Response, status
+from platform_core.fastapi import auth_disabled, require_project
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -33,6 +34,8 @@ from ..models import (
     ExactAsset,
 )
 from ..openpencil.client import OpenPencilCapability
+from ..openpencil.instances import resolve_endpoint, resolve_instance
+from .access import DESIGNER_ROLE, current_user_id, current_username, require_platform_admin
 
 router = APIRouter(prefix="/api/v1")
 
@@ -263,15 +266,45 @@ async def parse_attachment(
 
 @router.post("/sessions", response_model=SessionView, status_code=status.HTTP_201_CREATED)
 async def create_session(request: Request, body: SessionCreate) -> SessionView:
+    project_id = (body.project_id or "").strip() or None
+    if not auth_disabled() or project_id:
+        require_project(project_id, DESIGNER_ROLE)
     llm = getattr(request.app.state, "llm", None)
     if llm is not None:
         asyncio.create_task(llm.prewarm())
-    return await request.app.state.store.create_session(body.title.strip() or "Untitled session")
+    return await request.app.state.store.create_session(
+        body.title.strip() or "Untitled session",
+        project_id=project_id,
+        created_by=current_username(),
+        source="ui",
+    )
 
 
 @router.get("/sessions", response_model=list[SessionView])
-async def list_sessions(request: Request) -> list[SessionView]:
-    return await request.app.state.store.list_sessions()
+async def list_sessions(
+    request: Request,
+    project_id: str | None = Query(None, description="Platform project; required when auth is on"),
+) -> list[SessionView]:
+    pid = (project_id or "").strip() or None
+    if not auth_disabled() or pid:
+        require_project(pid)
+    return await request.app.state.store.list_sessions(pid)
+
+
+async def _resolved_profile(request: Request, profile: OpenPencilProfile | None) -> OpenPencilProfile | None:
+    """Platform: point the run at the caller's OpenPencil instance."""
+    if profile is None:
+        return None
+    endpoint = await resolve_endpoint(
+        request.app.state.store, request.app.state.settings, current_user_id(), profile.endpoint
+    )
+    return profile.model_copy(update={"endpoint": endpoint})
+
+
+async def _resolved_url(request: Request, requested: str) -> str:
+    return await resolve_endpoint(
+        request.app.state.store, request.app.state.settings, current_user_id(), requested
+    )
 
 
 @router.delete("/sessions/{session_id}")
@@ -314,9 +347,10 @@ async def create_message(
             platform=body.platform_hint,
             style_name=body.style_hint,
             library_ids=body.library_ids,
-            mcp_profile=body.mcp_profile,
+            mcp_profile=await _resolved_profile(request, body.mcp_profile),
             assets=body.assets,
         ),
+        triggered_by=current_user_id(),
     )
     await request.app.state.events.emit(
         run.id,
@@ -336,7 +370,8 @@ async def create_message(
 async def create_run(request: Request, session_id: UUID, body: RunCreate) -> RunView:
     if not await request.app.state.store.get_session(session_id):
         raise not_found("Session")
-    run = await request.app.state.store.create_run(session_id, body)
+    body = body.model_copy(update={"mcp_profile": await _resolved_profile(request, body.mcp_profile)})
+    run = await request.app.state.store.create_run(session_id, body, triggered_by=current_user_id())
     await request.app.state.events.emit(
         run.id,
         run.revision,
@@ -427,6 +462,7 @@ async def stream_events(
 
 @router.post("/runs/{run_id}/reviews", status_code=status.HTTP_202_ACCEPTED)
 async def review_run(request: Request, run_id: UUID, body: ReviewCreate) -> dict[str, str]:
+    body = body.model_copy(update={"mcp_profile": await _resolved_profile(request, body.mcp_profile)})
     await request.app.state.runs.review(run_id, body)
     return {"status": "accepted"}
 
@@ -500,7 +536,8 @@ async def retry_run(
     run_id: UUID,
     body: RunRetry | None = None,
 ) -> dict[str, str]:
-    await request.app.state.runs.retry(run_id, body.mcp_profile if body else None)
+    profile = await _resolved_profile(request, body.mcp_profile) if body else None
+    await request.app.state.runs.retry(run_id, profile)
     return {"status": "accepted"}
 
 
@@ -512,7 +549,7 @@ async def cancel_run(request: Request, run_id: UUID) -> dict[str, str]:
 
 @router.post("/integrations/openpencil/probe", response_model=OpenPencilCapability)
 async def probe_mcp(request: Request, body: McpProbeRequest) -> OpenPencilCapability:
-    return await request.app.state.openpencil.probe(str(body.endpoint))
+    return await request.app.state.openpencil.probe(await _resolved_url(request, str(body.endpoint)))
 
 
 @router.post(
@@ -522,7 +559,7 @@ async def probe_mcp(request: Request, body: McpProbeRequest) -> OpenPencilCapabi
 async def openpencil_documents(
     request: Request, body: McpProbeRequest
 ) -> list[OpenPencilDocumentView]:
-    return await request.app.state.openpencil.documents(str(body.endpoint))
+    return await request.app.state.openpencil.documents(await _resolved_url(request, str(body.endpoint)))
 
 
 @router.post(
@@ -534,7 +571,7 @@ async def create_openpencil_document(
     request: Request, body: NamedMcpRequest
 ) -> OpenPencilDocumentView:
     return await request.app.state.openpencil.create_document(
-        str(body.endpoint), body.name
+        await _resolved_url(request, str(body.endpoint)), body.name
     )
 
 
@@ -547,7 +584,7 @@ async def create_openpencil_page(
     request: Request, document_id: str, body: NamedMcpRequest
 ) -> OpenPencilDocumentView:
     return await request.app.state.openpencil.create_page(
-        str(body.endpoint), document_id, body.name
+        await _resolved_url(request, str(body.endpoint)), document_id, body.name
     )
 
 
@@ -556,6 +593,7 @@ async def openpencil_components(
     request: Request,
     profile: OpenPencilProfile,
 ) -> list[dict[str, object]]:
+    profile = await _resolved_profile(request, profile)
     components = await request.app.state.openpencil.components(profile)
     return [component.model_dump(mode="json") for component in components]
 
@@ -605,3 +643,44 @@ async def list_design_systems(request: Request) -> list[DesignSystemView]:
             )
         )
     return results
+
+
+# ── Platform: OpenPencil instance per designer (refactor-plan/06) ──────────
+
+
+class OpenPencilInstanceIn(BaseModel):
+    mcp_url: HttpUrl
+    editor_url: HttpUrl
+    auth_token: str | None = Field(default=None, max_length=400)
+
+
+@router.get("/openpencil/me")
+async def my_openpencil(request: Request) -> dict[str, str]:
+    """The OpenPencil instance the current user's runs use."""
+    instance = await resolve_instance(request.app.state.store, request.app.state.settings, current_user_id())
+    return {"mcp_url": instance.mcp_url, "editor_url": instance.editor_url, "source": instance.source}
+
+
+@router.get("/openpencil-instances")
+async def list_openpencil_instances(request: Request, project_id: str = Query(...)) -> list[dict[str, Any]]:
+    require_platform_admin(project_id)
+    rows = await request.app.state.store.list_openpencil_instances()
+    return [{k: v for k, v in row.items() if k != "auth_token"} for row in rows]
+
+
+@router.put("/openpencil-instances/{user_id}")
+async def put_openpencil_instance(
+    request: Request, user_id: str, body: OpenPencilInstanceIn, project_id: str = Query(...)
+) -> dict[str, str]:
+    require_platform_admin(project_id)
+    await request.app.state.store.upsert_openpencil_instance(
+        user_id, str(body.mcp_url), str(body.editor_url), body.auth_token
+    )
+    return {"status": "saved", "user_id": user_id}
+
+
+@router.delete("/openpencil-instances/{user_id}")
+async def delete_openpencil_instance(request: Request, user_id: str, project_id: str = Query(...)) -> dict[str, str]:
+    require_platform_admin(project_id)
+    await request.app.state.store.delete_openpencil_instance(user_id)
+    return {"status": "deleted", "user_id": user_id}

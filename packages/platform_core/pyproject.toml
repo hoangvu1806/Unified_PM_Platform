@@ -5,10 +5,12 @@ description = "Shared settings, database and storage helpers for the BA x Design
 requires-python = ">=3.12"
 dependencies = [
   "pydantic-settings>=2.0",
+  "PyJWT>=2.8",
+  "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "fastapi>=0.115", "httpx>=0.27"]
 
 [build-system]
 requires = ["setuptools>=69"]

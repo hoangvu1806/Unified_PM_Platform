@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
+from platform_core.fastapi import auth_disabled
 
 from agents.ba_agent.constants import TIER1_SECTIONS
 from factory_wiki.store import get_wiki_store
@@ -62,6 +63,7 @@ from managers.service.schema import (
     WikiDocumentList,
     WikiValidationSummary,
 )
+from managers.service.access import BA_ROLE, current_username, require_project
 from managers.service.state_helpers import is_user_facing_author
 from managers.service.wiki_validation_status import (
     annotate_document_hit,
@@ -125,9 +127,16 @@ def _build_feature_list_item(
 @router.post("", response_model=FeatureListItem, status_code=201)
 @router.post("/", response_model=FeatureListItem, status_code=201, include_in_schema=False)
 async def create_feature(req: CreateFeatureRequest):
-    """Create a BA feature; assigns project_id = PRJ- + sha256(session_id)[:12]."""
+    """Create a BA feature inside a platform project (core.projects).
+
+    Without auth (tests), a missing project_id falls back to the historical
+    per-session id PRJ- + sha256(session_id)[:12].
+    """
     session_id = str(uuid.uuid4())
-    project_id = project_id_for_session(session_id)
+    requested = (req.project_id or "").strip() or None
+    if not auth_disabled() or requested:
+        require_project(requested, BA_ROLE)
+    project_id = requested or project_id_for_session(session_id)
     session_service = get_session_service()
 
     await session_service.create_session(
@@ -149,6 +158,8 @@ async def create_feature(req: CreateFeatureRequest):
             feature_title=req.title,
             feature_description=req.description,
             feature_status="DRAFT",
+            project_id=requested,
+            created_by=current_username(default=None),
         )
         db.add(pkg)
         db.commit()
@@ -175,18 +186,25 @@ async def create_feature(req: CreateFeatureRequest):
 
 @router.get("", response_model=list[FeatureListItem])
 @router.get("/", response_model=list[FeatureListItem], include_in_schema=False)
-async def list_features():
-    """List all BA features (each item includes hashed project_id)."""
+async def list_features(
+    project_id: str | None = Query(None, description="Platform project; required when auth is on"),
+):
+    """List the BA features of one project (data workspace, BA sessions)."""
+    pid_filter = (project_id or "").strip() or None
+    if not auth_disabled() or pid_filter:
+        require_project(pid_filter)
     db = _get_db()
     try:
-        packages = (
-            db.query(BaPackageModel).order_by(BaPackageModel.updated_at.desc()).all()
-        )
+        query = db.query(BaPackageModel)
+        if pid_filter:
+            query = query.filter(BaPackageModel.project_id == pid_filter)
+        packages = query.order_by(BaPackageModel.updated_at.desc()).all()
         items: list[FeatureListItem] = []
         for pkg in packages:
             control = await load_control_state(str(pkg.session_id))
             pid = str(
-                control.get("project_id")
+                pkg.project_id
+                or control.get("project_id")
                 or project_id_for_session(str(pkg.session_id))
             )
             items.append(_build_feature_list_item(pkg, project_id=pid))
@@ -306,6 +324,8 @@ async def designer_handoff(session_id: str):
     db = _get_db()
     record = None
     try:
+        pkg = db.get(BaPackageModel, session_id)
+        project_id = getattr(pkg, "project_id", None)
         record = (
             db.query(DesignerHandoffModel)
             .filter_by(feature_id=session_id, correlation_id=correlation_id)
@@ -317,9 +337,10 @@ async def designer_handoff(session_id: str):
             # Rebuild browser URLs from current configuration so old handoffs
             # created with the previous OpenPencil URL are repaired on retry.
             if record.designer_session_id:
+                query = f"project={project_id}&" if project_id else ""
                 cached["designer_url"] = (
                     settings.designer_ui_base_url.rstrip("/")
-                    + f"/?session={record.designer_session_id}"
+                    + f"/?{query}session={record.designer_session_id}"
                 )
                 cached["openpencil_url"] = settings.openpencil_ui_base_url.rstrip("/")
             return cached
@@ -328,6 +349,7 @@ async def designer_handoff(session_id: str):
                 feature_id=session_id,
                 correlation_id=correlation_id,
                 status="CREATING",
+                project_id=project_id,
             )
             db.add(record)
         else:
@@ -342,6 +364,8 @@ async def designer_handoff(session_id: str):
             base_url=settings.designer_base_url,
             timeout_seconds=settings.designer_timeout_seconds,
             shared_secret=settings.designer_shared_secret,
+            project_id=project_id,
+            requested_by=current_username(default=None),
         )
     except Exception as error:  # noqa: BLE001
         db = _get_db()

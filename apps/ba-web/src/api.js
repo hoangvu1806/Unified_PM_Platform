@@ -5,6 +5,8 @@
  * All endpoints are proxied via Vite dev server (/api → localhost:8000).
  */
 
+import { projectId as platformProjectId } from './platform.js';
+
 // Behind the platform gateway the BA API lives at /ba/api (build arg VITE_API_BASE).
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -20,7 +22,7 @@ export async function createFeature(title, description = '') {
   const res = await fetch(`${API_BASE}/features`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, description }),
+    body: JSON.stringify({ title, description, project_id: platformProjectId || undefined }),
   });
   if (!res.ok) throw new Error(`Create feature failed: ${res.status}`);
   return res.json();
@@ -31,7 +33,8 @@ export async function createFeature(title, description = '') {
  * @returns {Promise<Object[]>} Array of feature items
  */
 export async function listFeatures() {
-  const res = await fetch(`${API_BASE}/features`);
+  const qs = platformProjectId ? `?project_id=${encodeURIComponent(platformProjectId)}` : '';
+  const res = await fetch(`${API_BASE}/features${qs}`);
   if (!res.ok) throw new Error(`List features failed: ${res.status}`);
   return res.json();
 }
@@ -415,6 +418,7 @@ export async function clearWikiStore({
   const body = new FormData();
   body.append('confirm', confirm);
   body.append('actor', actor);
+  if (platformProjectId) body.append('project_id', platformProjectId);
   const res = await fetch(`${API_BASE}/wiki/clear`, { method: 'POST', body });
   if (!res.ok) {
     const errText = await res.text();

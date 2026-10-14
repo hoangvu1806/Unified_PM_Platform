@@ -564,6 +564,8 @@ class LayoutReview(BaseModel):
 
 class SessionCreate(BaseModel):
     title: str = "Untitled session"
+    # Platform: the core.projects row; required when auth is on.
+    project_id: str | None = Field(default=None, max_length=120)
 
 
 class DesignerHandoffRequest(BaseModel):
@@ -581,6 +583,9 @@ class DesignerHandoffRequest(BaseModel):
     mcp_profile: OpenPencilProfile | None = None
     assets: list[ExactAsset] = Field(default_factory=list, max_length=4)
     asset_data_urls: dict[str, str] = Field(default_factory=dict)
+    # Platform: project of the BA feature and the BA user who handed off.
+    project_id: str | None = Field(default=None, max_length=120)
+    requested_by: str | None = Field(default=None, max_length=120)
     ba_package: dict[str, Any] | None = None
 
 
@@ -629,6 +634,11 @@ class SessionView(BaseModel):
     workspace: SessionWorkspace | None = None
     pending_workspace_action: WorkspaceActionDecision | None = None
     screen_registry: dict[str, WorkspaceScreenReference] = Field(default_factory=dict)
+    # Platform scoping and provenance.
+    project_id: str | None = None
+    created_by: str | None = None
+    source: str | None = None
+    source_ref: str | None = None
 
 
 class DesignSystemView(BaseModel):

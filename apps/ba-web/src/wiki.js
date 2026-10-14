@@ -9,6 +9,8 @@
  * so you can demote/delete the violator, then re-Validate.
  */
 
+// Platform: login, project context and read-only mode (must load first).
+import './platform.js';
 import {
   listWikiPages,
   uploadWikiSource,

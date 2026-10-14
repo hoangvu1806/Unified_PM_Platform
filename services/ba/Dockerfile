@@ -19,7 +19,10 @@ COPY services/ba/pyproject.toml services/ba/README.md ./
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir ".[dev]"
 
-# Shared wiki package (factory_wiki adds it to sys.path via WIKI_MVP_ROOT).
+# Shared platform library (auth, project access) and wiki package
+# (factory_wiki adds the wiki to sys.path via WIKI_MVP_ROOT).
+COPY packages/platform_core /opt/platform/packages/platform_core
+RUN pip install --no-cache-dir /opt/platform/packages/platform_core
 COPY packages/wiki /opt/platform/packages/wiki
 
 COPY services/ba/ .

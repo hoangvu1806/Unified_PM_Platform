@@ -19,7 +19,7 @@ from sqlalchemy import text
 
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -28,6 +28,7 @@ from config.llm_resolve import resolve_llm_endpoint
 from managers.database.connection import SessionLocal
 from managers.runner_context import get_runner, init_adk
 from managers.service import chat_router, features_router, va_router, wiki_router
+from managers.service.access import ba_access
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +61,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(chat_router)
-app.include_router(features_router)
-app.include_router(wiki_router)
-app.include_router(va_router)
+# Platform: every BA route needs a logged-in user; routes with {session_id}
+# are also checked against the feature's project (managers/service/access.py).
+_ba_guard = [Depends(ba_access)]
+app.include_router(chat_router, dependencies=_ba_guard)
+app.include_router(features_router, dependencies=_ba_guard)
+app.include_router(wiki_router, dependencies=_ba_guard)
+app.include_router(va_router, dependencies=_ba_guard)
 
 
 # ── Health Check ──────────────────────────────────────────────

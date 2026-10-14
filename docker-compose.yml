@@ -5,6 +5,8 @@ include:
     env_file: .env
   - path: infra/gateway/compose.yml
     env_file: .env
+  - path: services/core/compose.yml
+    env_file: .env
   - path: services/ba/compose.yml
     env_file: .env
   - path: services/designer/compose.yml

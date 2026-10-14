@@ -37,6 +37,20 @@ Every later edit to imported files is listed here.
 | `packages/wiki/tests/conftest.py`, `pyproject.toml` | Schema + storage per test; `psycopg2-binary` | Postgres tests | 2 |
 | `services/ba/factory_wiki/reset.py` | Delegates to `WikiService.reset_store` (schema guard) | No SQLite | 2 |
 | `services/ba/tests/conftest.py` (new), `tests/test_control_plane.py` | Wiki schema per test; clear/guard tests assert the Postgres store | Postgres wiki | 2 |
+| `packages/platform_core/platform_core/{auth,projects,fastapi}.py` (new) | Mock JWT (Keycloak-shaped claims), project membership/role checks, FastAPI `authenticate` + `require_project` | Shared identity and authorization | 3 |
+| `services/core/` (new) | core-api: users, projects, members, mock login (HttpOnly cookie), demo seed, `python -m app.legacy` (assigns pre-platform rows to `PRJ-LEGACY`, adds `project_id` foreign keys) | Project is the root of the data model | 3 |
+| `apps/portal/` (new) | Portal: login (quick demo accounts), projects by user, project page (members, open BA/Designer) | Shared UI | 3 |
+| `services/ba/server.py`, `managers/service/access.py` (new) | Every router depends on `ba_access`: login required; `{session_id}` routes checked against the feature's project (GET = member, other = BA/ADMIN) | Project scoping, chat visible to members only | 3 |
+| `services/ba/managers/service/features.py`, `schema.py` | Create needs `project_id` (BA role); list filters by `project_id`; handoff sends `project_id`/`requested_by`; designer link carries the project | Project scoping | 3 |
+| `services/ba/managers/service/wiki_pages.py` | Project membership for reads; BA role for project pages; company wiki writes and clear need ADMIN; audit actor = logged-in user | Wiki in project Assets | 3 |
+| `services/ba/managers/database/models.py`, `connection.py` | `ba_packages.project_id/created_by`, `designer_handoffs.project_id` (+ in-place column upgrade) | Project scoping | 3 |
+| `services/ba/managers/integrations/designer/service.py` | Optional `project_id`, `requested_by` in the handoff payload | Session lands in the same project | 3 |
+| `apps/ba-web/src/platform.js` (new), entry scripts, `api.js` | Login redirect, project from `?project=`, platform bar, read-only mode for non-BA members, project-scoped list/create/clear | Project context in the BA UI | 3 |
+| `services/designer/app/api/access.py` (new), `app/main.py` | `designer_access` on the UI router (health stays public); `X-Agent-Secret` checked on handoffs when configured | Project scoping; the source never verified the secret | 3 |
+| `services/designer/app/api/routes.py` | Sessions need/list by `project_id`; runs record `triggered_by`; MCP endpoint resolved per user; OpenPencil instance endpoints | Project scoping; OpenPencil per designer (plan 06) | 3 |
+| `services/designer/app/openpencil/instances.py` (new), `client.py` | User instance → default instance; loopback endpoints from the browser map to the default instance; per-instance MCP token | OpenPencil per designer | 3 |
+| `services/designer/app/{models,storage}` | `SessionView`/`SessionCreate`/handoff carry project fields; store helpers; `openpencil_instances` table | Project scoping | 3 |
+| `apps/designer-web/src/platform.ts` (new), `main.tsx`, `api.ts` | Same platform context as BA; project-scoped sessions; read-only for non-designers | Project context in the Designer UI | 3 |
 
 ## Test results (Docker)
 
@@ -46,3 +60,7 @@ Every later edit to imported files is listed here.
 | `packages/wiki` | 24 passed, 1 skipped (live LLM) | — |
 | `services/ba` | 162 passed, 3 skipped | — |
 | `services/designer` | 107 passed, 10 failed | **same 10 failures** on the original Designer source (Python 3.11 + SQLite): missing `data/evals/golden-projects.json`, stale mocks |
+| `services/core` | 4 passed | (new) |
+| `scripts/e2e_access.py` (gateway, mock users) | 36 passed | (new) |
+
+Legacy suites run with `AUTH_MODE=off`; access rules are covered by `platform_core` tests, `services/core` tests and `scripts/e2e_access.py`.

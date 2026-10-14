@@ -14,6 +14,13 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from factory_wiki.paths import ensure_manifest, ensure_mvp_importable, wiki_service_root
 from factory_wiki.reset import WikiResetError, reset_wiki_store
 from factory_wiki.store import human_actor
+from managers.service.access import (
+    BA_ROLE,
+    current_username,
+    require_company_wiki_admin,
+    require_project,
+)
+from platform_core.fastapi import auth_disabled
 
 router = APIRouter(prefix="/api/wiki", tags=["Wiki Knowledge"])
 
@@ -60,6 +67,28 @@ def _visible(page: Any, project_id: str | None) -> bool:
     return (page.project_id or "") == pid
 
 
+def _check_page_write(svc: Any, page_id: str, project_id: str) -> None:
+    """Platform: BA role in the request project; the page must belong to it
+    (project namespace) or be company-wide (ADMIN only)."""
+    if auth_disabled():
+        return
+    row = svc.conn.execute(
+        "SELECT namespace, project_id FROM wiki_page WHERE page_id = ?", (page_id,)
+    ).fetchone()
+    if row is None:
+        require_project(project_id, BA_ROLE)
+        return  # WikiService answers 404
+    if row["namespace"] == "company":
+        require_company_wiki_admin(project_id)
+        return
+    require_project(project_id, BA_ROLE)
+    if (row["project_id"] or "") != project_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "PROJECT_FORBIDDEN", "message": "Page belongs to another project"},
+        )
+
+
 @router.get("/pages")
 def list_wiki_pages(
     status: str | None = Query(
@@ -75,6 +104,7 @@ def list_wiki_pages(
     ),
 ):
     """List wiki pages scoped to project_id (+ shared company namespace)."""
+    require_project(project_id)
     svc = _wiki_service()
     try:
         if status in {"draft", "proposed"}:
@@ -148,6 +178,12 @@ async def upload_wiki_source(
                 "message": "project_id is required when namespace=project",
             },
         )
+    # Platform: project uploads need BA in that project; company uploads need ADMIN.
+    if namespace == "company":
+        require_company_wiki_admin((project_id or "").strip() or None)
+    else:
+        require_project((project_id or "").strip(), BA_ROLE)
+    actor = current_username(default=actor)
     # Company wiki is org-scoped — do not bind private project_id on the page.
     scoped_project = None if namespace == "company" else ((project_id or "").strip() or None)
     svc = _wiki_service()
@@ -201,6 +237,8 @@ def approve_wiki_page(
         ensure_mvp_importable()
         from wiki.models import WikiError
 
+        _check_page_write(svc, page_id, project_id.strip())
+        actor = current_username(default=actor)
         who = human_actor(project_id.strip())
         who = who.model_copy(update={"actor": actor or "ba.lead", "actor_type": "human"})
         try:
@@ -232,6 +270,8 @@ def demote_wiki_page(
         ensure_mvp_importable()
         from wiki.models import WikiError
 
+        _check_page_write(svc, page_id, project_id.strip())
+        actor = current_username(default=actor)
         who = human_actor(project_id.strip())
         who = who.model_copy(update={"actor": actor or "ba.lead", "actor_type": "human"})
         try:
@@ -267,6 +307,8 @@ def delete_wiki_page(
         ensure_mvp_importable()
         from wiki.models import WikiError
 
+        _check_page_write(svc, page_id, project_id.strip())
+        actor = current_username(default=actor)
         who = human_actor(project_id.strip())
         who = who.model_copy(update={"actor": actor or "ba.lead", "actor_type": "human"})
         try:
@@ -290,6 +332,7 @@ CLEAR_CONFIRM_TOKEN = "CLEAR"
 def clear_wiki_store(
     confirm: str = Form(...),
     actor: str = Form("ba.lead"),
+    project_id: str = Form("", description="Platform: project the ADMIN acts from"),
 ):
     """Human-only wipe of wiki.db (pages, sources, blobs) — never BA/ADK files.
 
@@ -301,6 +344,8 @@ def clear_wiki_store(
             status_code=400,
             detail="confirm must be CLEAR — this deletes all wiki pages, drafts, sources, blobs",
         )
+    require_company_wiki_admin((project_id or "").strip() or None)
+    actor = current_username(default=actor)
     try:
         info = reset_wiki_store()
     except WikiResetError as exc:

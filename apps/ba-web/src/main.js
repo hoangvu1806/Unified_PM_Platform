@@ -4,6 +4,8 @@
  * Handles feature listing, search/filter, and create modal.
  */
 
+// Platform: login, project context and read-only mode (must load first).
+import './platform.js';
 import { listFeatures, createFeature, deleteFeature } from './api.js';
 
 // ── State ────────────────────────────────────────────────────

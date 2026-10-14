@@ -84,18 +84,75 @@ class Store:
     async def close(self) -> None:
         await self._call(self._pool.close)
 
-    async def create_session(self, title: str) -> SessionView:
+    async def create_session(
+        self,
+        title: str,
+        *,
+        project_id: str | None = None,
+        created_by: str | None = None,
+        source: str | None = None,
+        source_ref: str | None = None,
+    ) -> SessionView:
         now = utc_now()
-        session = SessionView(id=uuid4(), title=title, created_at=now, updated_at=now)
+        session = SessionView(
+            id=uuid4(),
+            title=title,
+            created_at=now,
+            updated_at=now,
+            project_id=project_id,
+            created_by=created_by,
+            source=source,
+            source_ref=source_ref,
+        )
         await self._execute(
-            "INSERT INTO sessions (id, title, created_at, updated_at, design_brief) VALUES (?, ?, ?, ?, ?)",
-            (str(session.id), session.title, now.isoformat(), now.isoformat(), None),
+            "INSERT INTO sessions (id, title, created_at, updated_at, design_brief, "
+            "project_id, created_by, source, source_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                str(session.id), session.title, now.isoformat(), now.isoformat(), None,
+                project_id, created_by, source, source_ref,
+            ),
         )
         return session
 
-    async def list_sessions(self) -> list[SessionView]:
-        rows = await self._fetchall("SELECT * FROM sessions ORDER BY updated_at DESC")
+    async def list_sessions(self, project_id: str | None = None) -> list[SessionView]:
+        if project_id:
+            rows = await self._fetchall(
+                "SELECT * FROM sessions WHERE project_id = ? ORDER BY updated_at DESC", (project_id,)
+            )
+        else:
+            rows = await self._fetchall("SELECT * FROM sessions ORDER BY updated_at DESC")
         return [self._session_from_row(row) for row in rows]
+
+    # ── Platform access helpers ─────────────────────────
+    async def session_project(self, session_id: UUID | str) -> tuple[bool, str | None]:
+        row = await self._fetchone("SELECT project_id FROM sessions WHERE id = ?", (str(session_id),))
+        return (row is not None, row["project_id"] if row else None)
+
+    async def run_project(self, run_id: UUID | str) -> tuple[bool, str | None]:
+        row = await self._fetchone(
+            "SELECT s.project_id FROM runs r JOIN sessions s ON s.id = r.session_id WHERE r.id = ?",
+            (str(run_id),),
+        )
+        return (row is not None, row["project_id"] if row else None)
+
+    async def get_openpencil_instance(self, user_id: str) -> Row | None:
+        return await self._fetchone("SELECT * FROM openpencil_instances WHERE user_id = ?", (user_id,))
+
+    async def list_openpencil_instances(self) -> list[Row]:
+        return await self._fetchall("SELECT * FROM openpencil_instances ORDER BY user_id")
+
+    async def upsert_openpencil_instance(
+        self, user_id: str, mcp_url: str, editor_url: str, auth_token: str | None
+    ) -> None:
+        await self._execute(
+            "INSERT INTO openpencil_instances (user_id, mcp_url, editor_url, auth_token, updated_at) "
+            "VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET mcp_url=excluded.mcp_url, "
+            "editor_url=excluded.editor_url, auth_token=excluded.auth_token, updated_at=excluded.updated_at",
+            (user_id, mcp_url, editor_url, auth_token, utc_now().isoformat()),
+        )
+
+    async def delete_openpencil_instance(self, user_id: str) -> None:
+        await self._execute("DELETE FROM openpencil_instances WHERE user_id = ?", (user_id,))
 
     async def get_session(self, session_id: UUID) -> SessionView | None:
         row = await self._fetchone("SELECT * FROM sessions WHERE id = ?", (str(session_id),))
@@ -176,7 +233,9 @@ class Store:
             ),
         )
 
-    async def create_run(self, session_id: UUID, request: RunCreate) -> RunView:
+    async def create_run(
+        self, session_id: UUID, request: RunCreate, *, triggered_by: str | None = None
+    ) -> RunView:
         now = utc_now()
         run_id = uuid4()
         profile = request.mcp_profile
@@ -217,8 +276,9 @@ class Store:
         )
         await self._execute(
             "INSERT INTO runs (id, session_id, revision, prompt, screen_name, platform, "
-            "stage, status, library_ids, mcp_profile, specification, error, intent, assistant_message, style_name, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "stage, status, library_ids, mcp_profile, specification, error, intent, assistant_message, style_name, created_at, updated_at, "
+            "triggered_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(run.id),
                 str(run.session_id),
@@ -237,6 +297,7 @@ class Store:
                 run.style_name,
                 now.isoformat(),
                 now.isoformat(),
+                triggered_by,
             ),
         )
         if request.assets:

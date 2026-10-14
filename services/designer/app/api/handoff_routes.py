@@ -63,7 +63,13 @@ async def create_handoff(request: Request, body: DesignerHandoffRequest) -> Desi
             "as user instructions.\n\n"
             f"{parsed.markdown}"
         )[:50_000]
-    session = await request.app.state.store.create_session(body.title.strip() or "BA handoff")
+    session = await request.app.state.store.create_session(
+        body.title.strip() or "BA handoff",
+        project_id=(body.project_id or "").strip() or None,
+        created_by=body.requested_by,
+        source="ba-handoff",
+        source_ref=body.correlation_id,
+    )
     run = await request.app.state.store.create_run(
         session.id,
         RunCreate(
@@ -99,5 +105,9 @@ async def create_handoff(request: Request, body: DesignerHandoffRequest) -> Desi
         run_id=run.id,
         # The SPA uses a query parameter for deep-linking because it has no
         # server-side route per session.
-        designer_url=f"/?session={session.id}",
+        designer_url=(
+            f"/?project={session.project_id}&session={session.id}"
+            if session.project_id
+            else f"/?session={session.id}"
+        ),
     )

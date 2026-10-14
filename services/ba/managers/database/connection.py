@@ -95,6 +95,22 @@ def _ensure_ba_package_columns() -> None:
     if "ba_packages" not in inspector.get_table_names():
         return
     existing = {col["name"] for col in inspector.get_columns("ba_packages")}
+    # Platform columns (Sprint 3): project scoping and provenance.
+    platform_columns = {
+        ("ba_packages", "project_id"): "VARCHAR(120)",
+        ("ba_packages", "created_by"): "VARCHAR(120)",
+        ("designer_handoffs", "project_id"): "VARCHAR(120)",
+    }
+    tables = set(inspector.get_table_names())
+    with sync_engine.begin() as conn:
+        for (table, column), ddl_type in platform_columns.items():
+            if table not in tables:
+                continue
+            cols = existing if table == "ba_packages" else {
+                c["name"] for c in inspector.get_columns(table)
+            }
+            if column not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))
     if "feature_status" in existing:
         return
     dialect = sync_engine.dialect.name
