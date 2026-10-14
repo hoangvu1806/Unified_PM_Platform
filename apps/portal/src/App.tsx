@@ -22,6 +22,7 @@ import {
   Sun,
   UserPlus,
   Users,
+  Workflow,
   X,
 } from "lucide-react";
 import { FormEvent, Fragment, ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -1129,6 +1130,8 @@ function GuideDialog({
 
 const KIND: Record<Artifact["kind"], { label: string; icon: ReactNode; cls: string }> = {
   ba_package: { label: "BA package", icon: <FileJson size={16} />, cls: "ba" },
+  bpmn: { label: "BPMN", icon: <Workflow size={16} />, cls: "ba" },
+  ui_spec: { label: "UI specification", icon: <FileJson size={16} />, cls: "designer" },
   designer_output: { label: "Thiết kế", icon: <Layers size={16} />, cls: "designer" },
 };
 
@@ -1170,6 +1173,8 @@ function AssetsTab({ projectId }: { projectId: string }) {
                   {a.title}
                   <span className="pill">v{a.version}</span>
                   {a.version < a.latest_version && <span className="pill dim">mới nhất v{a.latest_version}</span>}
+                  {a.meta?.state === "review" && <span className="pill warn">Chờ duyệt</span>}
+                  {a.meta?.state === "approved" && <span className="pill ok">Đã duyệt</span>}
                   {a.stale && <span className="pill warn">Cần xem lại · BA v{a.derived_latest_version}</span>}
                 </div>
                 <div className="row-meta">

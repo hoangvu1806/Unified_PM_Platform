@@ -893,50 +893,65 @@ function renderTouchpointsWorkspace(wsEl, data, state) {
     return;
   }
   const items = Array.isArray(data.ui_touchpoints) ? data.ui_touchpoints : [];
+  // Older packages may hold a markdown table rule (":---") parsed as a screen: not shown.
+  const isRule = (tp) => /^[\s:|-]*$/.test(String(tp.name || tp.screen || ''));
+  const shown = items.filter((tp) => !isRule(tp)).length;
   const readonly = featureStatus === 'EXPORTED';
+  // Read-only (after export): plain wrapping text instead of inputs.
+  const field = (idx, name, value, label, placeholder = '') => readonly
+    ? `<div class="tp-row"><span class="tp-row-label">${label}</span><span class="tp-value">${escapeHtml(value) || '—'}</span></div>`
+    : `<label class="tp-row">
+      <span class="tp-row-label">${label}</span>
+      <input class="tp-input tp-field" data-field="${name}" data-index="${idx}" value="${escapeHtml(value)}" placeholder="${placeholder}" />
+    </label>`;
   const cards = items.length === 0
     ? emptyWorkspaceHint('Chưa có touchpoint. Hoàn tất UC để Agent sinh danh sách màn hình.')
-    : items.map((tp, idx) => `
-        <div class="ws-item-card" data-tp-index="${idx}">
-          <div class="ws-item-header">
-            <span class="ws-item-id">${escapeHtml(tp.id || `UIT-${idx + 1}`)}</span>
-            <span class="ws-item-meta">${escapeHtml(tp.interaction || 'form')} · ${escapeHtml(tp.bpmn_node_id || '')}</span>
+    : items.map((tp, idx) => {
+      if (isRule(tp)) return '';
+      const name = tp.name || tp.screen || '';
+      const ucs = (tp.related_uc_ids || []).join(', ');
+      const summary = [tp.actor, ucs, tp.notes].filter(Boolean).map(escapeHtml).join(' · ');
+      return `
+        <details class="tp-card" data-tp-index="${idx}" ${idx === items.findIndex((t) => !isRule(t)) ? 'open' : ''}>
+          <summary class="tp-head">
+            <span class="tp-num">${escapeHtml(tp.id || `UIT-${idx + 1}`)}</span>
+            <span class="tp-title">
+              <strong>${escapeHtml(name) || 'Màn hình chưa đặt tên'}</strong>
+              <small>${summary || '—'}</small>
+            </span>
+            <span class="tp-kind">${escapeHtml(tp.interaction || 'form')}</span>
+            <svg class="tp-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <div class="tp-body">
+            ${field(idx, 'name', name, 'Màn hình', 'Tên màn hình')}
+            <div class="tp-grid">
+              ${field(idx, 'actor', tp.actor || '', 'Actor', 'ACT-…')}
+              ${field(idx, 'related_uc_ids', ucs, 'UC', 'UC-01, UC-02')}
+            </div>
+            ${field(idx, 'trigger', tp.trigger || '', 'Trigger', 'Khi nào màn hình xuất hiện')}
+            ${field(idx, 'goal', tp.goal || '', 'Mục tiêu', 'Người dùng cần làm được gì')}
+            ${readonly
+              ? field(idx, 'notes', tp.notes || '', 'Ghi chú')
+              : `<label class="tp-row tp-row-top">
+              <span class="tp-row-label">Ghi chú</span>
+              <textarea class="tp-input tp-notes tp-field" data-field="notes" data-index="${idx}" rows="2" placeholder="BR liên quan, lưu ý cho Designer">${escapeHtml(tp.notes || '')}</textarea>
+            </label>`}
+            ${tp.bpmn_node_id ? `<span class="tp-node">BPMN · ${escapeHtml(tp.bpmn_node_id)}</span>` : ''}
           </div>
-          <div class="field-group" style="margin-top:8px;">
-            <label class="field-label">Name / Screen</label>
-            <input class="field-input tp-field" data-field="name" data-index="${idx}" value="${escapeHtml(tp.name || tp.screen || '')}" ${readonly ? 'readonly' : ''} />
-          </div>
-          <div class="field-group">
-            <label class="field-label">Actor</label>
-            <input class="field-input tp-field" data-field="actor" data-index="${idx}" value="${escapeHtml(tp.actor || '')}" ${readonly ? 'readonly' : ''} />
-          </div>
-          <div class="field-group">
-            <label class="field-label">Trigger</label>
-            <input class="field-input tp-field" data-field="trigger" data-index="${idx}" value="${escapeHtml(tp.trigger || '')}" ${readonly ? 'readonly' : ''} />
-          </div>
-          <div class="field-group">
-            <label class="field-label">Goal</label>
-            <input class="field-input tp-field" data-field="goal" data-index="${idx}" value="${escapeHtml(tp.goal || '')}" ${readonly ? 'readonly' : ''} />
-          </div>
-          <div class="field-group">
-            <label class="field-label">Related UC ids</label>
-            <input class="field-input tp-field" data-field="related_uc_ids" data-index="${idx}" value="${escapeHtml((tp.related_uc_ids || []).join(', '))}" ${readonly ? 'readonly' : ''} />
-          </div>
-          <div class="field-group">
-            <label class="field-label">Notes</label>
-            <textarea class="field-textarea tp-field" data-field="notes" data-index="${idx}" ${readonly ? 'readonly' : ''}>${escapeHtml(tp.notes || '')}</textarea>
-          </div>
-        </div>
-      `).join('');
+        </details>`;
+    }).join('');
   wsEl.innerHTML = `
-    <div class="field-group">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <label class="field-label">UI Touchpoints (Designer handoff)</label>
-        <span class="mono" style="font-size:10px;color:var(--accent-cyan);">${items.length} screens</span>
+    <div class="tp-section ${readonly ? 'is-readonly' : ''}">
+      <div class="tp-section-head">
+        <div>
+          <strong>Màn hình cho Designer</strong>
+          <small>${readonly ? 'Đã bàn giao — chỉ xem' : 'Kiểm tra và chỉnh trước khi bàn giao'}</small>
+        </div>
+        <span class="count-pill">${shown}</span>
       </div>
       ${cards}
     </div>
-    ${readonly ? '' : '<button class="btn btn-cyan" type="button" id="btnSaveTouchpoints">Lưu touchpoints</button>'}
+    ${readonly ? '' : '<button class="btn btn-cyan tp-save" type="button" id="btnSaveTouchpoints">Lưu touchpoints</button>'}
   `;
   const btn = document.getElementById('btnSaveTouchpoints');
   if (btn) {

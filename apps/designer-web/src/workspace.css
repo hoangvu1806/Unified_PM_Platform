@@ -3883,14 +3883,6 @@
 .file-row:hover .file-actions { opacity: 1; }
 .file-actions .icon-button { width: 30px; height: 30px; text-decoration: none; display: grid; place-items: center; }
 
-.files-hint {
-    display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
-    padding: 10px 16px 14px; font-size: 11.5px; color: var(--text-muted);
-}
-.files-hint kbd {
-    padding: 0 5px; border-radius: 4px; background: var(--bg-surface-raised);
-    font: 700 11px var(--font-main); color: var(--text-secondary);
-}
 
 /* ── Platform: @-mention menu above the composer ───────────────── */
 .composer-input-area { position: relative; }

@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS core.artifacts (
 CREATE INDEX IF NOT EXISTS idx_artifacts_project ON core.artifacts(project_id, kind);
 """
 
-KINDS = ("ba_package", "designer_output")
+KINDS = ("ba_package", "bpmn", "ui_spec", "designer_output")
 
 
 _schema_ready = False
@@ -127,6 +127,27 @@ def register(
             ),
         ).fetchone()
         return row, True
+
+
+def update(
+    artifact_id: str,
+    *,
+    storage_key: str | None = None,
+    content_hash: str | None = None,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Refresh one version in place: new file / hash, and ``meta`` keys merged in."""
+    with _connect() as conn:
+        return conn.execute(
+            """
+            UPDATE core.artifacts
+               SET storage_key = COALESCE(%s, storage_key),
+                   content_hash = COALESCE(%s, content_hash),
+                   meta = COALESCE(meta, '{}'::jsonb) || %s::jsonb
+             WHERE id = %s RETURNING *
+            """,
+            (storage_key, content_hash, json.dumps(meta or {}), artifact_id),
+        ).fetchone()
 
 
 def list_for_project(project_id: str) -> list[dict[str, Any]]:

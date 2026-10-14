@@ -190,6 +190,7 @@ p { margin: 0; }
 }
 .pill.dim { color: var(--text-muted); }
 .pill.warn { background: var(--amber-soft); color: var(--amber); margin-left: 0; }
+.pill.ok { background: var(--mint-soft); color: var(--mint); }
 
 .avatar {
   --h: 250;

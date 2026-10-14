@@ -6,6 +6,7 @@ from uuid import UUID
 
 from ..core.errors import AppError, not_found
 from ..generation.layout import deterministic_layout_review
+from .publish import publish_design
 from ..models import OpenPencilProfile, ProjectSpecification, ReviewCreate, RunStage, RunStatus, UiSpecification
 from ..openpencil.qa import measure_screen
 from .build import _summarize_layout_reviews
@@ -41,6 +42,9 @@ class HumanReviewFlow:
             )
         if request.checkpoint == "specification" and request.mcp_profile:
             run = await self.store.update_mcp_profile(run.id, request.mcp_profile)
+        if request.decision == "approved" and request.checkpoint == "final":
+            # Check before recording the review: a refused approval must not look approved.
+            await self._require_valid_layout(run)
         await self.store.add_review(
             run.id,
             run.revision,
@@ -319,9 +323,9 @@ class HumanReviewFlow:
             f"continue:{run.id}",
         )
 
-    async def _approve_final(self, run: Any, request: ReviewCreate) -> None:
+    async def _require_valid_layout(self, run: Any) -> None:
         layout = await self.store.get_artifact(run.id, run.revision, "layout_review")
-        if request.checkpoint == "final" and (not layout or layout.get("status") != "valid"):
+        if not layout or layout.get("status") != "valid":
             raise AppError(
                 "LAYOUT_NOT_VALID",
                 "Layout cannot be approved yet",
@@ -329,6 +333,9 @@ class HumanReviewFlow:
                 409,
                 action="Request changes and address the layout findings.",
             )
+
+    async def _approve_final(self, run: Any, request: ReviewCreate) -> None:
+        await self._require_valid_layout(run)
         await self.store.update_run(
             run.id,
             stage=RunStage.FINISHED,
@@ -352,10 +359,13 @@ class HumanReviewFlow:
         approved_msg = (
             f"✅ **Thiết kế đã được phê duyệt thành công!**\n\n"
             f"File OpenPencil đã được lưu hoàn tất tại:\n`{out_file}`\n\n"
+            f"Bản .fig cũng được lưu vào **Assets** của dự án (đánh dấu đã duyệt).\n\n"
             f"Bạn có thể mở trực tiếp trong OpenPencil Studio để xem, chỉnh sửa hoặc xuất mã nguồn bất cứ lúc nào."
         )
         await self.store.update_run(run.id, assistant_message=approved_msg)
         await self.events.emit(run.id, run.revision, "assistant.message", {"message": approved_msg})
+        # No task runs after an approval: publish the approved file to Assets here.
+        asyncio.get_running_loop().create_task(publish_design(self.owner, run.id))
 
     async def _request_changes(self, run: Any, request: ReviewCreate) -> None:
         await self.events.emit(

@@ -1,8 +1,10 @@
-import { BookOpen, FileJson, Layers } from "lucide-react";
+import { BookOpen, FileJson, Layers, Workflow } from "lucide-react";
 import { KIND_LABEL, type ProjectFile, type ProjectFileKind, initials } from "./projectFiles";
 
 const KIND_ICON: Record<ProjectFileKind, typeof FileJson> = {
     ba_package: FileJson,
+    bpmn: Workflow,
+    ui_spec: FileJson,
     designer_output: Layers,
     wiki_source: BookOpen,
 };

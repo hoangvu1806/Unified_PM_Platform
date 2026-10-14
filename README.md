@@ -87,8 +87,10 @@ rail shows the BA state of the feature, and the project page always shows both a
 
 **Assets.** Files use S3-style keys: `projects/<id>/ba/packages/…`, `projects/<id>/designer/outputs/…`,
 `projects/<id>/wiki/blobs/…`, `projects/<id>/logs/…`, `shared/…`. S3 is the source of truth, `STORAGE_LOCAL_ROOT`
-is a write-through cache. Every BA export publishes a versioned BA package; every finished design publishes a
-design linked to the BA version it came from. A newer BA version marks the design "cần xem lại".
+is a write-through cache. Every BA export publishes a versioned BA package and its BPMN. When a design waits
+for the final review, its UI specification and the OpenPencil `.fig` are published as "Chờ duyệt"; the approval
+marks them "Đã duyệt". Designs link to the BA package version they came from, so a newer BA version marks them
+"cần xem lại".
 
 **OpenPencil.** One default instance today. A designer's own instance is a row in `designer.openpencil_instances`
 (`PUT /designer/api/v1/openpencil-instances/{user_id}?project_id=…`, project ADMIN only).

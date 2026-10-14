@@ -3,7 +3,7 @@
 // browser, turned into File objects and parsed like a file dropped from disk.
 import { projectId } from "./platform";
 
-export type ProjectFileKind = "ba_package" | "designer_output" | "wiki_source";
+export type ProjectFileKind = "ba_package" | "bpmn" | "ui_spec" | "designer_output" | "wiki_source";
 
 export type ProjectFile = {
     id: string;
@@ -27,6 +27,8 @@ export const ATTACH_EVENT = "platform:attach-file";
 
 export const KIND_LABEL: Record<ProjectFileKind, string> = {
     ba_package: "BA package",
+    bpmn: "BPMN",
+    ui_spec: "UI spec",
     designer_output: "Thiết kế",
     wiki_source: "Wiki",
 };

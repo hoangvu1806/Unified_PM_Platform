@@ -111,7 +111,10 @@ def build_journey(conn, project_id: str, feature_id: str) -> dict[str, Any] | No
     reviewed_final = any(cp == "final" for cp, _d in reviews)
     build["status"] = "done" if ("review_final" in stages or reviewed_final or design) else "todo"
     final = _step("design_review", "Duyệt thiết kế", "DESIGNER", "Duyệt bản cuối; thiết kế được lưu vào Assets.")
-    final["status"] = "done" if ("final", "approved") in reviews or design else "todo"
+    # A stored "approved" review is not enough: the Designer can still reject it
+    # (e.g. LAYOUT_NOT_VALID) and send the run back to review. Done = run finished.
+    finished = any(r["stage"] == "finished" and r["status"] == "completed" for r in runs)
+    final["status"] = "done" if finished or design else "todo"
     steps += [scope, build, final]
 
     # Order + locks: everything after the first unfinished step is locked.

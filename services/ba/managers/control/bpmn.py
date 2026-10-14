@@ -85,6 +85,11 @@ def _normalize_gateway(raw: str) -> str:
     return ""
 
 
+def _is_separator_row(cells: list[str]) -> bool:
+    """Markdown table rule row, including alignment colons (``|:---|---:|``)."""
+    return all(re.fullmatch(r":?-+:?", c or "") or not c for c in cells)
+
+
 def parse_workflow_steps(workflow_md: str) -> dict[str, Any]:
     """Extract main-flow steps, exceptions, and end states from markdown.
 
@@ -99,7 +104,7 @@ def parse_workflow_steps(workflow_md: str) -> dict[str, Any]:
             continue
         if line.startswith("|"):
             cells = [c.strip() for c in line.strip("|").split("|")]
-            if not cells or re.match(r"^-+$", cells[0] or ""):
+            if not cells or _is_separator_row(cells):
                 continue
             header = " ".join(cells).lower()
             if header.startswith("step") or set(header.replace(" ", "")) <= {"-"}:
@@ -154,7 +159,7 @@ def parse_workflow_steps(workflow_md: str) -> dict[str, Any]:
             continue
         if line.startswith("|"):
             cells = [c.strip() for c in line.strip("|").split("|")]
-            if not cells or re.match(r"^-+$", cells[0] or ""):
+            if not cells or _is_separator_row(cells):
                 continue
             header = " ".join(cells).lower()
             if "id" in header and "condition" in header:

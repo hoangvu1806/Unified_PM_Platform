@@ -1,4 +1,4 @@
-import { AtSign, BookOpen, Download, FileJson, GripVertical, Layers, Plus, RefreshCw, Search } from "lucide-react";
+import { BookOpen, Download, FileJson, GripVertical, Layers, Plus, RefreshCw, Search, Workflow } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     KIND_LABEL,
@@ -14,6 +14,8 @@ import {
 
 const KIND_ICON: Record<ProjectFileKind, typeof FileJson> = {
     ba_package: FileJson,
+    bpmn: Workflow,
+    ui_spec: FileJson,
     designer_output: Layers,
     wiki_source: BookOpen,
 };
@@ -23,6 +25,8 @@ type Filter = "all" | ProjectFileKind;
 const FILTERS: { id: Filter; label: string }[] = [
     { id: "all", label: "Tất cả" },
     { id: "ba_package", label: "BA" },
+    { id: "bpmn", label: "BPMN" },
+    { id: "ui_spec", label: "UI spec" },
     { id: "wiki_source", label: "Wiki" },
     { id: "designer_output", label: "Thiết kế" },
 ];
@@ -151,10 +155,6 @@ export function ProjectFilesPanel({ onShowWorkbench }: { onShowWorkbench: () => 
                 })}
             </div>
 
-            <footer className="files-hint">
-                <AtSign size={13} /> Kéo file vào khung chat, bấm <Plus size={12} />, hoặc gõ <kbd>@</kbd> trong ô nhập để
-                trích dẫn.
-            </footer>
         </aside>
     );
 }

@@ -207,6 +207,20 @@ def test_bpmn_does_not_invent_actors_outside_fd():
     assert "ACT-KE-TOAN" in xml
 
 
+def test_aligned_table_rule_row_is_not_a_step():
+    from managers.control.bpmn import parse_workflow_steps
+
+    md = (
+        "## Main Flow\n"
+        "| Step | Actor | Action | BR |\n"
+        "|:---|:---|:---:|---:|\n"
+        "| 1 | ACT-REQUESTER | Create material request | BR-01 |\n"
+        "| 2 | ACT-PO | Approve request | BR-02 |\n"
+    )
+    steps = parse_workflow_steps(md)["steps"]
+    assert [s["action"] for s in steps] == ["Create material request", "Approve request"]
+
+
 def test_touchpoints_schema_and_envelope():
     state = _complete_package()
     ensure_bpmn_artifact(state)

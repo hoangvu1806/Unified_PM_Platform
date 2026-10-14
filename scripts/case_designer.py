@@ -65,10 +65,14 @@ status, _ = call("POST", f"{BASE}/api/core/auth/login", {"username": USER, "pass
 assert status == 200, f"login failed: {status}"
 print(f"logged in as {USER}")
 
-status, handoff = call("POST", f"{BASE}/ba/api/features/{FEATURE}/designer-handoff", {}, timeout=300)
-assert status == 200, f"handoff failed: {status} {handoff}"
-session, run_id = handoff["designer_session_id"], handoff["designer_run_id"]
-print(f"handoff -> designer session {session} ({handoff['designer_url']})")
+if len(sys.argv) > 6:  # resume: ... USER SESSION RUN
+    session, run_id = sys.argv[5], sys.argv[6]
+    print(f"resume designer session {session} run {run_id}")
+else:
+    status, handoff = call("POST", f"{BASE}/ba/api/features/{FEATURE}/designer-handoff", {}, timeout=300)
+    assert status == 200, f"handoff failed: {status} {handoff}"
+    session, run_id = handoff["designer_session_id"], handoff["designer_run_id"]
+    print(f"handoff -> designer session {session} ({handoff['designer_url']})")
 
 answers = [
     "Đồng ý thiết kế. Phạm vi: 1 màn hình desktop 'Tạo yêu cầu vật tư' cho nhân viên kho "
@@ -90,7 +94,18 @@ while time.time() < DEADLINE:
             "checkpoint": checkpoint, "decision": "approved", "revision": run["revision"],
             "feedback": "", "mcp_profile": PROFILE,
         })
+        fixes = globals().setdefault("_layout_fixes", 0)
+        if status == 409 and "LAYOUT_NOT_VALID" in str(body) and fixes < 3:
+            # Like a reviewer: ask the agent to fix the blocking layout findings, then approve again.
+            globals()["_layout_fixes"] = fixes + 1
+            feedback = "Sửa các lỗi layout đang chặn duyệt (chồng lấn, tràn khung, căn lề), giữ nguyên nội dung màn hình."
+            say(USER, f"Yêu cầu sửa layout ({fixes + 1}/3): {feedback}")
+            status, body = call("POST", f"{API}/runs/{run_id}/reviews", {
+                "checkpoint": checkpoint, "decision": "changes_requested", "revision": run["revision"],
+                "feedback": feedback, "mcp_profile": PROFILE,
+            })
         assert status == 202, f"review failed: {status} {body}"
+        time.sleep(3)
         continue
     if state == "completed" and stage == "finished" and run.get("mcp_profile") and run.get("specification"):
         print("\nDESIGN FINISHED", json.dumps({"session": session, "run": run_id}), flush=True)
