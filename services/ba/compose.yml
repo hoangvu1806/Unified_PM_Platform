@@ -60,6 +60,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       AUTH_MODE: "off"          # legacy suites run without login; access rules have their own tests
+      STORAGE_BACKEND: local    # tests never write to the real bucket
       WIKI_MVP_ROOT: /opt/platform/packages/wiki
     depends_on:
       postgres:
@@ -78,6 +79,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       AUTH_MODE: "off"          # legacy suites run without login; access rules have their own tests
+      STORAGE_BACKEND: local    # tests never write to the real bucket
     working_dir: /opt/platform/packages/wiki
     depends_on:
       postgres:

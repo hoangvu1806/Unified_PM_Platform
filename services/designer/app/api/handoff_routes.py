@@ -9,7 +9,8 @@ from fastapi import APIRouter, Request, status
 
 from ..models import DesignerHandoffRequest, DesignerHandoffResponse, RunCreate
 from ..attachments.parser import parse_json_document
-from .routes import MAX_ATTACHMENT_BYTES, _asset_path
+from ..core.config import save_designer_asset
+from .routes import MAX_ATTACHMENT_BYTES
 
 router = APIRouter(prefix="/api/v1/handoffs", tags=["Handoffs"])
 
@@ -34,7 +35,18 @@ def _ingest_asset_data_urls(body: DesignerHandoffRequest) -> None:
             raise ValueError(f"Invalid asset data for {asset_id}") from error
         if len(raw) > MAX_ATTACHMENT_BYTES:
             raise ValueError(f"Asset {asset_id} exceeds the 8 MB limit")
-        _asset_path(asset_id).write_bytes(raw)
+        save_designer_asset(asset_id, raw)
+
+
+def _latest_ba_package(feature_id: str) -> str | None:
+    """Platform Assets: the BA package version this design starts from."""
+    try:
+        from platform_core import artifacts
+
+        row = artifacts.latest("ba_package", feature_id)
+        return row["id"] if row else None
+    except Exception:  # noqa: BLE001 — Assets are optional for the handoff
+        return None
 
 
 @router.post("", response_model=DesignerHandoffResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -68,7 +80,8 @@ async def create_handoff(request: Request, body: DesignerHandoffRequest) -> Desi
         project_id=(body.project_id or "").strip() or None,
         created_by=body.requested_by,
         source="ba-handoff",
-        source_ref=body.correlation_id,
+        source_ref=body.feature_id,
+        source_artifact_id=_latest_ba_package(body.feature_id),
     )
     run = await request.app.state.store.create_run(
         session.id,

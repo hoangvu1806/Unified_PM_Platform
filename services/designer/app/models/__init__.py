@@ -639,6 +639,7 @@ class SessionView(BaseModel):
     created_by: str | None = None
     source: str | None = None
     source_ref: str | None = None
+    source_artifact_id: str | None = None
 
 
 class DesignSystemView(BaseModel):

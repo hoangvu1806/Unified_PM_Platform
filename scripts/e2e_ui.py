@@ -58,6 +58,12 @@ with sync_playwright() as p:
     expect(page.get_by_role("link", name="BA")).to_be_visible()
     page.screenshot(path=f"{OUT}/6-project-lead.png")
     print("lead.dung -> project page ok")
+    expect(page.get_by_role("button", name="Assets")).to_be_visible()
+    page.get_by_role("button", name="Data workspace").click()
+    expect(page.get_by_role("heading", name="BA sessions")).to_be_visible()
+    expect(page.get_by_role("heading", name="Designer sessions")).to_be_visible()
+    page.screenshot(path=f"{OUT}/7-project-workspace.png")
+    print("lead.dung -> Assets / Data workspace tabs ok")
 
     # Not a member: BA URL of Aurora bounces back to the portal.
     page = browser.new_page()

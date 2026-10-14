@@ -21,7 +21,7 @@ from wiki.models import (
     WikiSource,
 )
 from wiki.llm_config import build_sorter
-from wiki.paths import blob_key, blob_path
+from wiki.paths import blob_key, delete_blob, put_blob
 from wiki.permissions import require_project_scope, require_tool
 from wiki.sort import Sorter
 
@@ -90,12 +90,9 @@ class WikiService:
         removed_blobs = 0
         for key in keys:
             try:
-                path = blob_path(key)
+                removed_blobs += int(delete_blob(key))
             except ValueError:
                 continue  # legacy absolute paths are not ours to delete
-            if path.is_file():
-                path.unlink()
-                removed_blobs += 1
         return {"pages": 0, "sources": 0, "removed_blobs": removed_blobs, "wiki_db": f"postgres:{schema}"}
 
     def ingest_source(
@@ -195,9 +192,7 @@ class WikiService:
         else:
             ext = ".txt" if suffix == "" else suffix
         storage_key = blob_key(f"{source_id}{ext}", namespace, project_id)
-        blob = blob_path(storage_key)
-        blob.parent.mkdir(parents=True, exist_ok=True)
-        blob.write_bytes(data)
+        blob = put_blob(storage_key, data)
 
         markdown, page_map = extract_pdf(blob, filename)
         ingested_at = _now()

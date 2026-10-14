@@ -6,7 +6,12 @@ import re
 import uuid
 from typing import Any
 
+import mimetypes
+import unicodedata
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, Response
+from platform_core import artifacts
 from platform_core.auth import CurrentUser, get_auth_settings, issue_token
 from platform_core.fastapi import authenticate, get_current_user
 from platform_core.projects import PROJECT_ROLES, clear_cache
@@ -17,6 +22,13 @@ from .passwords import verify_password
 from .seed import DEMO_PASSWORD, USERS
 
 public = APIRouter(prefix="/api/core")
+
+
+def _disposition(filename: str) -> str:
+    """attachment header that survives non-ASCII names (RFC 5987)."""
+    ascii_name = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode() or "download"
+    ascii_name = ascii_name.replace('"', "")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
 private = APIRouter(prefix="/api/core", dependencies=[Depends(authenticate)])
 
 
@@ -233,3 +245,124 @@ def remove_member(project_id: str, user_id: str, role: str | None = None) -> dic
             )
     clear_cache()
     return {"removed": cur.rowcount}
+
+
+# ── Assets (Sprint 4) ────────────────────────────────────
+
+
+@private.get("/projects/{project_id}/artifacts")
+def list_artifacts(project_id: str) -> list[dict[str, Any]]:
+    """Published artifacts of the project, newest first; any member may read."""
+    with connection() as conn:
+        _require_member(conn, project_id, get_current_user())
+    rows = artifacts.list_for_project(project_id)
+    return [{k: v for k, v in r.items() if k not in {"content_hash"}} for r in rows]
+
+
+@private.get("/artifacts/{artifact_id}/download")
+def download_artifact(artifact_id: str) -> Response:
+    from platform_core.storage import get_storage
+
+    row = artifacts.get(artifact_id)
+    if not row:
+        raise HTTPException(404, detail={"code": "ARTIFACT_NOT_FOUND", "message": "Artifact not found"})
+    with connection() as conn:
+        _require_member(conn, row["project_id"], get_current_user())
+    if not row["storage_key"]:
+        raise HTTPException(404, detail={"code": "ARTIFACT_NO_FILE", "message": "Artifact has no stored file"})
+    try:
+        data = get_storage().get(row["storage_key"])
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(502, detail={"code": "STORAGE_ERROR", "message": str(exc)}) from exc
+    filename = row["storage_key"].rsplit("/", 1)[-1]
+    media = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return Response(data, media_type=media, headers={"Content-Disposition": _disposition(filename)})
+
+
+# ── Project files (shared files for agents and chats) ────
+
+
+def _file_name(storage_key: str | None, fallback: str) -> str:
+    return (storage_key or "").rsplit("/", 1)[-1] or fallback
+
+
+@private.get("/projects/{project_id}/files")
+def list_project_files(project_id: str) -> list[dict[str, Any]]:
+    """Every shared file a member can cite: published artifacts + wiki sources.
+
+    ``citable`` says whether the Designer attachment parser can read it
+    (wiki sources are served as their Markdown extract; .fig designs are not).
+    """
+    with connection() as conn:
+        _require_member(conn, project_id, get_current_user())
+        users = {
+            r["username"]: r["display_name"]
+            for r in conn.execute("SELECT username, display_name FROM users").fetchall()
+        }
+        has_wiki = conn.execute("SELECT to_regclass('wiki.wiki_source') IS NOT NULL AS ok").fetchone()["ok"]
+        sources = (
+            conn.execute(
+                "SELECT source_id, filename, namespace, project_id, ingested_by, ingested_at, "
+                "length(markdown_extract) AS chars FROM wiki.wiki_source "
+                "WHERE (namespace = 'project' AND project_id = %s) OR namespace = 'company' "
+                "ORDER BY ingested_at DESC",
+                (project_id,),
+            ).fetchall()
+            if has_wiki
+            else []
+        )
+    files: list[dict[str, Any]] = []
+    for a in artifacts.list_for_project(project_id):
+        name = _file_name(a["storage_key"], a["title"])
+        files.append({
+            "id": a["id"],
+            "kind": a["kind"],
+            "name": name,
+            "title": a["title"],
+            "version": a["version"],
+            "stale": a["stale"],
+            "created_by": a["created_by"],
+            "created_by_name": users.get(a["created_by"] or "", a["created_by"]),
+            "created_at": a["created_at"],
+            "scope": "project",
+            "citable": a["kind"] == "ba_package",
+            "download_url": f"/api/core/artifacts/{a['id']}/download",
+        })
+    for s in sources:
+        stem = s["filename"].rsplit(".", 1)[0] or s["source_id"]
+        files.append({
+            "id": s["source_id"],
+            "kind": "wiki_source",
+            "name": f"{stem}.md",
+            "title": s["filename"],
+            "version": None,
+            "stale": False,
+            "created_by": s["ingested_by"],
+            "created_by_name": users.get(s["ingested_by"], s["ingested_by"]),
+            "created_at": s["ingested_at"],
+            "scope": s["namespace"],
+            "citable": True,
+            "download_url": f"/api/core/projects/{project_id}/wiki-sources/{s['source_id']}/markdown",
+        })
+    files.sort(key=lambda f: str(f["created_at"]), reverse=True)
+    return files
+
+
+@private.get("/projects/{project_id}/wiki-sources/{source_id}/markdown")
+def wiki_source_markdown(project_id: str, source_id: str) -> Response:
+    """The lossless Markdown extract of a wiki source (company or this project)."""
+    with connection() as conn:
+        _require_member(conn, project_id, get_current_user())
+        row = conn.execute(
+            "SELECT filename, markdown_extract FROM wiki.wiki_source WHERE source_id = %s "
+            "AND ((namespace = 'project' AND project_id = %s) OR namespace = 'company')",
+            (source_id, project_id),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, detail={"code": "FILE_NOT_FOUND", "message": "File not found"})
+    stem = row["filename"].rsplit(".", 1)[0] or source_id
+    return Response(
+        row["markdown_extract"].encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": _disposition(f"{stem}.md")},
+    )

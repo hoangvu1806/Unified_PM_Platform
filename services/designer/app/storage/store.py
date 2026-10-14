@@ -92,6 +92,7 @@ class Store:
         created_by: str | None = None,
         source: str | None = None,
         source_ref: str | None = None,
+        source_artifact_id: str | None = None,
     ) -> SessionView:
         now = utc_now()
         session = SessionView(
@@ -103,13 +104,15 @@ class Store:
             created_by=created_by,
             source=source,
             source_ref=source_ref,
+            source_artifact_id=source_artifact_id,
         )
         await self._execute(
             "INSERT INTO sessions (id, title, created_at, updated_at, design_brief, "
-            "project_id, created_by, source, source_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "project_id, created_by, source, source_ref, source_artifact_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(session.id), session.title, now.isoformat(), now.isoformat(), None,
-                project_id, created_by, source, source_ref,
+                project_id, created_by, source, source_ref, source_artifact_id,
             ),
         )
         return session

@@ -36,6 +36,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.masked_api_key,
         settings.api_key_fingerprint,
     )
+    from platform_core.settings import startup_report
+
+    startup_report("designer-api")
     store = Store(settings.postgres_dsn)
     await store.initialize()
     events = EventStream(store)

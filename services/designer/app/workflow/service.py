@@ -13,6 +13,7 @@ from ..openpencil.knowledge import KnowledgeIndex
 from ..storage.store import Store
 from .analysis import analyze_request
 from .build import build_after_review
+from .publish import publish_design
 from .review import HumanReviewFlow
 
 
@@ -47,6 +48,9 @@ class RunService:
         def discard(completed: asyncio.Task[None]) -> None:
             if self.tasks.get(run_id) is completed:
                 self.tasks.pop(run_id, None)
+            if not completed.cancelled():
+                # Platform Assets: a finished design is published to the project.
+                asyncio.get_running_loop().create_task(publish_design(self, run_id))
 
         task.add_done_callback(discard)
 

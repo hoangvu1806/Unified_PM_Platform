@@ -31,6 +31,7 @@ interface Props {
         decision: "approved" | "changes_requested",
         feedback?: string,
     ) => void;
+    onShowFiles?: () => void;
 }
 
 interface ScreenItem {
@@ -132,7 +133,7 @@ function SkeletonSectionCard({ node, index }: { node: UiNode; index: number }) {
     );
 }
 
-export function ReviewPanel({ run, artifacts, onRecheckLayout, onReview }: Props) {
+export function ReviewPanel({ run, artifacts, onRecheckLayout, onReview, onShowFiles }: Props) {
     const [tab, setTab] = useState<"review" | "preview" | "json">("review");
     const [jsonSubTab, setJsonSubTab] = useState<"project" | "screen">(
         "project",
@@ -287,6 +288,11 @@ export function ReviewPanel({ run, artifacts, onRecheckLayout, onReview }: Props
                         >
                             R{String(run?.revision ?? 1).padStart(2, "0")}
                         </span>
+                        {onShowFiles && (
+                            <button className="panel-switch" type="button" onClick={onShowFiles}>
+                                Files dự án
+                            </button>
+                        )}
                     </div>
                 </header>
 

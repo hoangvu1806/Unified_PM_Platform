@@ -54,6 +54,7 @@ MIGRATIONS = (
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS source TEXT",
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS source_ref TEXT",
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS triggered_by TEXT",
+    "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS source_artifact_id TEXT",
     "CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)",
     # Which OpenPencil instance each designer uses (hosted elsewhere, later
     # one per designer). No row = the default instance from .env.

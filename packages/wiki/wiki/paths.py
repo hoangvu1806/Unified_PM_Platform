@@ -47,3 +47,37 @@ def blob_path(key: str) -> Path:
     if root not in path.parents:
         raise ValueError(f"blob key escapes storage root: {key!r}")
     return path
+
+
+def _platform_storage():
+    """platform_core storage when installed (platform), else None (standalone MVP)."""
+    try:
+        from platform_core.storage import get_storage
+    except ImportError:
+        return None
+    return get_storage()
+
+
+def put_blob(key: str, data: bytes) -> Path:
+    """Store a source blob (S3 + local cache on the platform) and return its local path."""
+    storage = _platform_storage()
+    if storage is not None:
+        storage.put(key, data)
+        return storage.local_path(key)
+    path = blob_path(key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return path
+
+
+def delete_blob(key: str) -> bool:
+    storage = _platform_storage()
+    if storage is not None:
+        existed = storage.local_path(key).is_file() or storage.exists(key)
+        storage.delete(key)
+        return existed
+    path = blob_path(key)
+    if path.is_file():
+        path.unlink()
+        return True
+    return False

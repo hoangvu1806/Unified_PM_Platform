@@ -31,6 +31,15 @@ def isolated_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     schema = f"wiki_test_{uuid.uuid4().hex[:12]}"
     monkeypatch.setenv("WIKI_DB_SCHEMA", schema)
     monkeypatch.setenv("STORAGE_LOCAL_ROOT", str(tmp_path / "storage"))
+    monkeypatch.setenv("STORAGE_BACKEND", "local")  # never touch the real bucket
+    try:
+        from platform_core.settings import get_common_settings
+        from platform_core.storage import get_storage
+
+        get_common_settings.cache_clear()
+        get_storage.cache_clear()
+    except ImportError:
+        pass
     yield
     raw = psycopg2.connect(dsn())
     raw.autocommit = True

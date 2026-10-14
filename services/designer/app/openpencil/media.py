@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp import ClientSession
 
-from ..core.config import designer_asset_dir
+from ..core.config import designer_asset_dir, designer_asset_file
 from ..core.errors import AppError
 from ..models import UiNode, UiSpecification
 
@@ -141,7 +141,7 @@ async def apply_uploaded_component_media(
             )
             continue
         asset_id = str((asset or {}).get("id") or "")
-        asset_file = asset_root / asset_id if asset_id else None
+        asset_file = designer_asset_file(asset_id) if asset_id else None
         if not asset_file or not asset_file.is_file():
             source_path = (component_media or {}).get(str(getattr(binding, "component_id", "")), "")
             asset_file = Path(source_path) if source_path else None
@@ -203,7 +203,7 @@ async def apply_uploaded_asset_markers(
         asset_id = str(item.get("id") or "") if isinstance(item, dict) else ""
         if not asset_id:
             continue
-        asset_file = asset_root / asset_id
+        asset_file = designer_asset_file(asset_id)
         if not asset_file.is_file():
             failed.append({"asset_id": asset_id, "error": "asset bytes missing"})
             continue

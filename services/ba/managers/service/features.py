@@ -64,6 +64,7 @@ from managers.service.schema import (
     WikiValidationSummary,
 )
 from managers.service.access import BA_ROLE, current_username, require_project
+from managers.service.assets import publish_ba_package
 from managers.service.state_helpers import is_user_facing_author
 from managers.service.wiki_validation_status import (
     annotate_document_hit,
@@ -311,7 +312,17 @@ async def export_feature(session_id: str):
             raise HTTPException(status_code=404, detail="Feature not found")
     finally:
         db.close()
-    return await export_validated_package(session_id, user_id=USER_ID)
+    envelope = await export_validated_package(session_id, user_id=USER_ID)
+    _publish_assets(session_id, envelope)
+    return envelope
+
+
+def _publish_assets(session_id: str, envelope: dict) -> None:
+    """Platform: every export becomes a versioned ba_package in project Assets."""
+    try:
+        publish_ba_package(session_id, envelope, current_username(default=None))
+    except Exception:  # noqa: BLE001 — Assets must never block the BA export
+        logger.exception("Publishing BA package %s to Assets failed", session_id)
 
 
 @router.post("/{session_id}/designer-handoff")
@@ -320,6 +331,7 @@ async def designer_handoff(session_id: str):
     if not settings.designer_enabled:
         raise HTTPException(status_code=503, detail="Designer handoff is disabled")
     envelope = await export_validated_package(session_id, user_id=USER_ID)
+    _publish_assets(session_id, envelope)
     correlation_id = str(envelope.get("correlation_id") or session_id)
     db = _get_db()
     record = None

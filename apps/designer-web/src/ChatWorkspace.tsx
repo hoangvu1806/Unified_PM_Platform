@@ -15,6 +15,15 @@ import {
     X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { MentionMenu } from "./MentionMenu";
+import {
+    ATTACH_EVENT,
+    type ProjectFile,
+    filterFiles,
+    listProjectFiles,
+    readDraggedFile,
+    toBrowserFile,
+} from "./projectFiles";
 import { api } from "./api";
 import { STARTER_PROMPTS, StyleSelector } from "./ChatControls";
 import { MarkdownRenderer } from "./MarkdownRenderer";
@@ -320,6 +329,13 @@ export function ChatWorkspace({
     const [activityLogOpen, setActivityLogOpen] = useState(false);
     const conversationEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    // Platform: shared project files can be cited with "@" or dragged in.
+    const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
+    const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
+    const [mentionIndex, setMentionIndex] = useState(0);
+    const mentionMatches = mention
+        ? filterFiles(projectFiles, mention.query).filter((f) => f.citable).slice(0, 8)
+        : [];
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const canReview =
@@ -417,6 +433,64 @@ export function ChatWorkspace({
         } finally {
             setUploading(false);
         }
+    };
+
+    const attachProjectFile = async (file: ProjectFile) => {
+        if (!file.citable) {
+            setAttachmentError(`${file.name} không đính kèm vào chat được.`);
+            return;
+        }
+        if (attachments.some((item) => item.name === file.name)) return;
+        setUploading(true);
+        setAttachmentError("");
+        try {
+            const browserFile = await toBrowserFile(file);
+            await addFiles([browserFile]);
+        } catch (error) {
+            setAttachmentError((error as Error).message);
+            setUploading(false);
+        }
+    };
+
+    // "+" in the Files panel dispatches ATTACH_EVENT.
+    const attachRef = useRef(attachProjectFile);
+    attachRef.current = attachProjectFile;
+    useEffect(() => {
+        const onAttach = (event: Event) => {
+            void attachRef.current((event as CustomEvent<ProjectFile>).detail);
+            textareaRef.current?.focus();
+        };
+        window.addEventListener(ATTACH_EVENT, onAttach);
+        return () => window.removeEventListener(ATTACH_EVENT, onAttach);
+    }, []);
+
+    const updateMention = (value: string, caret: number) => {
+        const match = /(^|\s)@([^\s@]*)$/.exec(value.slice(0, caret));
+        if (!match) {
+            setMention(null);
+            return;
+        }
+        if (!mention) listProjectFiles().then(setProjectFiles).catch(() => setProjectFiles([]));
+        setMention({ start: caret - match[2].length - 1, query: match[2] });
+        setMentionIndex(0);
+    };
+
+    const pickMention = (file: ProjectFile) => {
+        if (!mention) return;
+        const caret = mention.start + 1 + mention.query.length;
+        const token = `@${file.name} `;
+        const next = prompt.slice(0, mention.start) + token + prompt.slice(caret);
+        setPrompt(next);
+        setMention(null);
+        void attachProjectFile(file);
+        requestAnimationFrame(() => {
+            const el = textareaRef.current;
+            if (el) {
+                const pos = mention.start + token.length;
+                el.focus();
+                el.setSelectionRange(pos, pos);
+            }
+        });
     };
 
     const selectStarter = (starter: (typeof STARTER_PROMPTS)[number]) => {
@@ -855,8 +929,10 @@ export function ChatWorkspace({
                     onDrop={(event) => {
                         event.preventDefault();
                         setDragging(false);
-                        if (!busy)
-                            void addFiles(Array.from(event.dataTransfer.files));
+                        if (busy) return;
+                        const projectFile = readDraggedFile(event.dataTransfer);
+                        if (projectFile) void attachProjectFile(projectFile);
+                        else void addFiles(Array.from(event.dataTransfer.files));
                     }}
                 >
                     {dragging && (
@@ -918,23 +994,54 @@ export function ChatWorkspace({
                         </div>
                     )}
                     <div className="composer-input-area">
+                        {mention && (
+                            <MentionMenu
+                                files={mentionMatches}
+                                activeIndex={mentionIndex}
+                                query={mention.query}
+                                onPick={pickMention}
+                                onHover={setMentionIndex}
+                            />
+                        )}
                         <textarea
                             ref={textareaRef}
                             value={prompt}
+                            onBlur={() => setTimeout(() => setMention(null), 150)}
                             onChange={(event) => {
                                 setPrompt(event.target.value);
+                                updateMention(event.target.value, event.target.selectionStart ?? event.target.value.length);
                                 if (textareaRef.current) {
                                     textareaRef.current.style.height = "auto";
                                     textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 140)}px`;
                                 }
                             }}
                             onKeyDown={(event) => {
+                                if (mention && mentionMatches.length > 0) {
+                                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                                        event.preventDefault();
+                                        const step = event.key === "ArrowDown" ? 1 : -1;
+                                        setMentionIndex(
+                                            (i) => (i + step + mentionMatches.length) % mentionMatches.length,
+                                        );
+                                        return;
+                                    }
+                                    if (event.key === "Enter" || event.key === "Tab") {
+                                        event.preventDefault();
+                                        pickMention(mentionMatches[Math.min(mentionIndex, mentionMatches.length - 1)]);
+                                        return;
+                                    }
+                                }
+                                if (mention && event.key === "Escape") {
+                                    event.preventDefault();
+                                    setMention(null);
+                                    return;
+                                }
                                 if (event.key === "Enter" && !event.shiftKey) {
                                     event.preventDefault();
                                     submit();
                                 }
                             }}
-                            placeholder="Ask anything, or describe a screen to generate..."
+                            placeholder="Ask anything, or describe a screen to generate… (@ để trích dẫn file dự án)"
                             maxLength={8000}
                             rows={1}
                         />

@@ -56,3 +56,13 @@ def test_create_project_and_admin_only_membership(client):
 
     with connection() as conn:
         conn.execute("DELETE FROM projects WHERE id = %s", (pid,))
+
+
+def test_project_files_members_only(client):
+    login(client, "ba.an")
+    r = client.get("/api/core/projects/PRJ-AURORA/files")
+    assert r.status_code == 200
+    for f in r.json():
+        assert {"id", "kind", "name", "created_by_name", "citable", "download_url"} <= set(f)
+    login(client, "ba.chi")
+    assert client.get("/api/core/projects/PRJ-AURORA/files").status_code == 404

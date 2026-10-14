@@ -9,6 +9,7 @@ import {
     requireMcpProfile,
 } from "./connection";
 import { openRunStream } from "./events";
+import { ProjectFilesPanel } from "./ProjectFilesPanel";
 import { ReviewPanel } from "./ReviewPanel";
 import { SessionRail } from "./SessionRail";
 import { SettingsDrawer } from "./SettingsDrawer";
@@ -41,6 +42,7 @@ export default function App() {
     const [collapsed, setCollapsed] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [reviewOpen, setReviewOpen] = useState(false);
+    const [rightPanel, setRightPanel] = useState<"workbench" | "files">("workbench");
     const [connection, setConnection] = useState(readSettings);
     const [notice, setNotice] = useState("");
     const { resolvedTheme, toggleTheme } = useTheme();
@@ -452,13 +454,17 @@ export default function App() {
                 }}
             />
 
-            {reviewOpen && (
+            {reviewOpen && rightPanel === "workbench" && (
                 <ReviewPanel
                     run={activeRun}
                     artifacts={artifacts}
                     onRecheckLayout={() => recheckLayout(true)}
                     onReview={review}
+                    onShowFiles={() => setRightPanel("files")}
                 />
+            )}
+            {reviewOpen && rightPanel === "files" && (
+                <ProjectFilesPanel onShowWorkbench={() => setRightPanel("workbench")} />
             )}
 
             {notice && (

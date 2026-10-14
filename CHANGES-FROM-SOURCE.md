@@ -51,16 +51,33 @@ Every later edit to imported files is listed here.
 | `services/designer/app/openpencil/instances.py` (new), `client.py` | User instance → default instance; loopback endpoints from the browser map to the default instance; per-instance MCP token | OpenPencil per designer | 3 |
 | `services/designer/app/{models,storage}` | `SessionView`/`SessionCreate`/handoff carry project fields; store helpers; `openpencil_instances` table | Project scoping | 3 |
 | `apps/designer-web/src/platform.ts` (new), `main.tsx`, `api.ts` | Same platform context as BA; project-scoped sessions; read-only for non-designers | Project context in the Designer UI | 3 |
+| `packages/platform_core/platform_core/storage.py` | `S3Storage` (S3/MinIO/Ceph via boto3) with a write-through local cache; `make_storage`/`get_storage`; HEAD 403 falls back to LIST | Files in S3, code that reads by path keeps working | 4 |
+| `packages/platform_core/platform_core/artifacts.py` (new) | `core.artifacts` registry: versions, `derived_from`, `stale` computed on read | Project Assets | 4 |
+| `packages/platform_core/platform_core/sync_storage.py` (new), `settings.py` | One-off local → S3 copy; S3 settings; `startup_report` (logs config, refuses default secrets in production) | S3 switch, operability | 4 |
+| `services/core/app/routes.py`, `main.py`, `compose.yml` | `GET /projects/{id}/artifacts`, `GET /artifacts/{id}/download` (members only); artifacts schema at startup; storage volume | Assets in the Portal | 4 |
+| `services/ba/managers/service/assets.py` (new), `features.py` | Export / handoff publish the envelope to storage + `ba_package` artifact; version moves only when `payload` changes | Versioned BA packages | 4 |
+| `services/designer/app/workflow/publish.py` (new), `service.py` | Finished run with an output file → .fig copied from OpenPencil to storage + `designer_output` artifact linked to the BA package version | Designs in Assets, stale marking | 4 |
+| `services/designer/app/api/handoff_routes.py`, `app/storage/*`, `app/models` | Handoff session: `source_ref` = BA feature id, `source_artifact_id` = latest BA package | Design ↔ BA version link | 4 |
+| `services/designer/app/core/config.py`, `routes.py`, `openpencil/media.py`, `workflow/analysis.py` | Assets saved via storage (`save_designer_asset`), read via `designer_asset_file` (downloads on cache miss) | Assets in S3 | 4 |
+| `packages/wiki/wiki/paths.py`, `service.py` | Source blobs stored/deleted via platform storage when available (`put_blob`/`delete_blob`) | Wiki blobs in S3 | 4 |
+| `apps/portal/src/{App.tsx,api.ts,styles.css}` | Project page tabs: **Assets** (artifacts, versions, "Cần xem lại", download, wiki counts) and **Data workspace** (BA and Designer sessions) | HTML structure: Project → Assets + Data workspace | 4 |
+| `services/*/compose.yml`, test `conftest.py` | Test containers force `STORAGE_BACKEND=local` | Tests never write to the real bucket | 4 |
+| `apps/portal/src/*`, `package.json` | Portal redesign: split login with demo account cards, home with search and per-project accent cards (quick BA/Design buttons), create-project dialog, project page with module cards and Assets / Data workspace / Members tabs; `lucide-react` 0.453.0 | Modern shared UI | 4 |
+| `services/core/app/routes.py` | `GET /projects/{id}/files` (artifacts + wiki sources with creator), `GET /projects/{id}/wiki-sources/{sid}/markdown`; RFC 5987 `Content-Disposition` | Project files for agents/chats | 4 |
+| `apps/designer-web/src/{projectFiles.ts,ProjectFilesPanel.tsx,MentionMenu.tsx}` (new), `ChatWorkspace.tsx`, `ReviewPanel.tsx`, `App.tsx`, `workspace.css` | Right panel "Files dự án" (creator, time, filters); drag a file into the composer, "+" button, or `@` mention picker — all reuse the existing attachment parser | Cite shared project files in Designer chats | 4 |
+| `apps/designer-web/src/{platform.ts,WorkspaceHeader.tsx,styles.css}` | Project, role, user and logout moved into the Designer header (no extra top bar) | Cleaner Designer UI | 4 |
+| `apps/ba-web/index.html`, `src/main.js`, `src/platform.js` | "Tạo Dự Án Mới" → "Tạo Feature mới"; page title names the project; empty project opens the new-feature dialog | Feature ≠ project on the platform | 4 |
 
 ## Test results (Docker)
 
 | Suite | Result | Original source |
 |---|---|---|
-| `platform_core` | 5 passed | (new) |
+| `platform_core` | 13 passed (incl. S3Storage on moto) | (new) |
 | `packages/wiki` | 24 passed, 1 skipped (live LLM) | — |
 | `services/ba` | 162 passed, 3 skipped | — |
 | `services/designer` | 107 passed, 10 failed | **same 10 failures** on the original Designer source (Python 3.11 + SQLite): missing `data/evals/golden-projects.json`, stale mocks |
 | `services/core` | 4 passed | (new) |
 | `scripts/e2e_access.py` (gateway, mock users) | 36 passed | (new) |
+| `scripts/e2e_assets.sh` (real S3 bucket) | PASS: BA v1 → handoff → design published → BA v2 → design stale; download ACL | (new) |
 
 Legacy suites run with `AUTH_MODE=off`; access rules are covered by `platform_core` tests, `services/core` tests and `scripts/e2e_access.py`.

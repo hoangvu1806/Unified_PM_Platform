@@ -39,10 +39,17 @@ Data created before Sprint 3 (no project): `docker compose exec core-api python 
 - Project members read everything in the project, including chat. Writing in BA needs role BA, in Designer role DESIGNER (ADMIN counts as both). Non-members get 403.
 - BA → Designer handoffs authenticate with `X-Agent-Secret` (`DESIGNER_SHARED_SECRET`).
 
+## Assets and storage
+
+- Files live in platform storage with S3-style keys: `projects/<id>/ba/packages/…`, `projects/<id>/designer/outputs/…`, `projects/<id>/wiki/blobs/…`, `shared/…`.
+- `STORAGE_BACKEND=s3`: S3 (MinIO / Ceph RGW / AWS) is the source of truth; `STORAGE_LOCAL_ROOT` is a cache. `local`: files stay on the `platform-storage` volume.
+- After switching to S3 once: `docker compose exec core-api python -m platform_core.sync_storage`.
+- Every BA export publishes a versioned **BA package**; every finished design publishes a **design** linked to the BA version it came from. A newer BA version marks the design "Cần xem lại" in the Portal (project page → Assets).
+
 ## OpenPencil
 
 One default instance (`OPENPENCIL_DEFAULT_MCP_URL`). A designer's own instance is a row in `designer.openpencil_instances` (`PUT /designer/api/v1/openpencil-instances/{user_id}?project_id=…`, project ADMIN only); runs then use it automatically.
 
-Run one module only: `make up-ba` or `make up-designer` (each includes postgres, gateway, core and portal). Run the tests: `make test`; access checks: `make e2e`.
+Run one module only: `make up-ba` or `make up-designer` (each includes postgres, gateway, core and portal). Run the tests: `make test`; access checks: `make e2e`; Assets flow on the configured storage: `make e2e-assets`; UI walk-through: `make e2e-ui`; database backup: `make backup`.
 
 Every edit to the imported sources is listed in `CHANGES-FROM-SOURCE.md`.

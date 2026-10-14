@@ -5,7 +5,7 @@
  */
 
 // Platform: login, project context and read-only mode (must load first).
-import './platform.js';
+import { platformReady } from './platform.js';
 import { listFeatures, createFeature, deleteFeature } from './api.js';
 
 // ── State ────────────────────────────────────────────────────
@@ -72,6 +72,14 @@ async function loadFeatures() {
   try {
     features = await listFeatures();
     renderFeatures();
+    // Platform: show which project this is; an empty project starts with the
+    // "new feature" dialog (members with the BA role only).
+    const ctx = await platformReady;
+    if (ctx?.project) {
+      const title = document.getElementById('pageTitle');
+      if (title) title.textContent = `Features của dự án ${ctx.project.name}`;
+    }
+    if (features.length === 0 && ctx && !ctx.readOnly) openModal();
   } catch (err) {
     console.error('Failed to load features:', err);
     features = [];

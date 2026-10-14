@@ -1,4 +1,5 @@
-import { Moon, PanelRight, Settings2, Sun } from "lucide-react";
+import { ArrowLeft, LogOut, Moon, PanelRight, Settings2, Sun } from "lucide-react";
+import { logout, usePlatform } from "./platform";
 import type { Run, Session } from "./types";
 
 export function WorkspaceHeader({
@@ -18,9 +19,23 @@ export function WorkspaceHeader({
     onReview: () => void;
     onSettings: () => void;
 }) {
+    const platform = usePlatform();
     return (
         <header className="topbar">
             <div className="topbar-title">
+                {platform && (
+                    <nav className="platform-crumbs" aria-label="Dự án">
+                        <a href="/" className="platform-back" title="Về danh sách dự án">
+                            <ArrowLeft size={14} />
+                            Dự án
+                        </a>
+                        <span className="platform-sep">/</span>
+                        <span className="platform-project" title={platform.project.id}>
+                            {platform.project.name}
+                        </span>
+                        <span className="platform-sep">/</span>
+                    </nav>
+                )}
                 <img
                     src={`${import.meta.env.BASE_URL}logo.png`}
                     alt="Designer Studio"
@@ -33,6 +48,26 @@ export function WorkspaceHeader({
                 <h2>{session?.title ?? "Agentic Designer Workspace"}</h2>
             </div>
             <div className="topbar-actions">
+                {platform && (
+                    <>
+                        {platform.readOnly ? (
+                            <span className="run-id-badge platform-readonly-badge" title="Bạn chỉ xem được dự án này">
+                                Chỉ đọc
+                            </span>
+                        ) : (
+                            <span className="run-id-badge" title="Vai trò của bạn trong dự án">
+                                {platform.project.my_roles.join(" · ")}
+                            </span>
+                        )}
+                        <span className="platform-user" title={platform.user.username}>
+                            {platform.user.name}
+                        </span>
+                        <button className="icon-button" onClick={() => void logout()} title="Đăng xuất" type="button">
+                            <LogOut size={16} />
+                        </button>
+                        <div className="topbar-divider" />
+                    </>
+                )}
                 {run ? (
                     <span
                         className="run-id-badge"

@@ -793,3 +793,39 @@ select option {
         transform: translate(-50%, 0);
     }
 }
+
+/* Platform context inside the Designer header */
+.platform-crumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.platform-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+    text-decoration: none;
+}
+.platform-back:hover { color: var(--text-primary); }
+.platform-project {
+    color: var(--text-secondary);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.platform-sep { opacity: 0.5; }
+.platform-user {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.platform-readonly-badge { color: #f59e0b; }
+@media (max-width: 1100px) {
+    .platform-user, .platform-project { display: none; }
+}

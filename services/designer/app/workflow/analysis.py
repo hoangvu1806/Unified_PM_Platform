@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from ..core.errors import AppError, unwrap_app_error
-from ..core.config import designer_asset_dir
+from ..core.config import designer_asset_file
 from ..core.logger import log_agent_error
 from ..generation.adk_hierarchical import generate_ui_specification
 from ..models import (
@@ -247,7 +247,7 @@ async def _generate_project(
         )
         first = exact_assets[0] if isinstance(exact_assets[0], dict) else {}
         asset_id = str(first.get("id") or "")
-        asset_file = designer_asset_dir() / asset_id
+        asset_file = designer_asset_file(asset_id)
         if asset_file.is_file():
             image_bytes = asset_file.read_bytes()
             image_mime_type = str(first.get("mime_type") or image_mime_type)

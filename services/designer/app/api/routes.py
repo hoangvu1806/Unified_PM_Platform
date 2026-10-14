@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, HttpUrl
 
 from ..attachments.parser import parse_bpmn_document, parse_json_document, parse_text_document
-from ..core.config import designer_asset_dir
+from ..core.config import designer_asset_dir, save_designer_asset
 from ..core.errors import AppError, not_found
 from ..core.llm import STRUCTURED_PARSER_VERSION
 from ..models import (
@@ -189,7 +189,7 @@ async def parse_attachment(
         if suffix in IMAGE_SUFFIXES:
             mime_type = IMAGE_SUFFIXES[suffix]
             asset_id = _standard_asset_id(safe_name, suffix)
-            _asset_path(asset_id).write_bytes(raw)
+            save_designer_asset(asset_id, raw)
             analysis = await request.app.state.llm.structured(
                 prompt=(
                     "Inspect this attached image as input to a UI design agent. "

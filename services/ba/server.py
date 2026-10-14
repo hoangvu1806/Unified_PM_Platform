@@ -39,6 +39,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — init ADK on startup."""
+    from platform_core.settings import startup_report
+
+    startup_report("ba-api")
     await init_adk()
     yield
     logger.info("Shutting down BA Agent server")

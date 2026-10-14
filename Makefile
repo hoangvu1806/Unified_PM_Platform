@@ -3,7 +3,7 @@ COMPOSE          = docker compose
 COMPOSE_BA       = docker compose -f compose.ba.yml
 COMPOSE_DESIGNER = docker compose -f compose.designer.yml
 
-.PHONY: help up up-ba up-designer down build logs ps test test-ba test-wiki test-designer test-core test-core-api e2e e2e-ui legacy psql openpencil config
+.PHONY: help up up-ba up-designer down build logs ps test test-ba test-wiki test-designer test-core test-core-api e2e e2e-ui e2e-assets legacy sync-storage backup psql openpencil config
 
 help:
 	@echo "make up            # whole platform  -> http://localhost:8080"
@@ -72,3 +72,15 @@ e2e:
 
 e2e-ui:
 	docker run --rm --network platform_default -v "$(CURDIR)/scripts:/s" mcr.microsoft.com/playwright/python:v1.48.0-jammy 		sh -c "pip install -q playwright==1.48.0 && python /s/e2e_ui.py http://gateway"
+
+e2e-assets:
+	sh scripts/e2e_assets.sh
+
+sync-storage:
+	$(COMPOSE) exec core-api python -m platform_core.sync_storage
+
+# Postgres dump (files are in S3 / the platform-storage volume).
+backup:
+	mkdir -p backups
+	$(COMPOSE) exec -T postgres sh -c 'pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB -Fc -f /tmp/platform.dump'
+	$(COMPOSE) cp postgres:/tmp/platform.dump backups/platform-$$(date +%Y%m%d-%H%M%S).dump

@@ -13,6 +13,28 @@ export type ProjectSummary = {
 export type Member = { id: string; username: string; name: string; roles: string[] };
 export type ProjectDetail = ProjectSummary & { members: Member[] };
 
+export type Artifact = {
+  id: string;
+  kind: "ba_package" | "designer_output";
+  source_module: string;
+  source_ref: string;
+  version: number;
+  latest_version: number;
+  title: string;
+  storage_key: string | null;
+  derived_from_id: string | null;
+  derived_version: number | null;
+  derived_title: string | null;
+  derived_latest_version: number | null;
+  stale: boolean;
+  meta: Record<string, string>;
+  created_by: string | null;
+  created_at: string;
+};
+export type BaFeature = { session_id: string; title: string; feature_status: string; updated_at: string };
+export type DesignerSession = { id: string; title: string; source?: string | null; updated_at: string };
+export type WikiList = { project_approved: unknown[]; project_drafts: unknown[]; company_approved: unknown[] };
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -34,7 +56,19 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function moduleGet<T>(url: string): Promise<T> {
+  const res = await fetch(url, { credentials: "same-origin" });
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  return res.json() as Promise<T>;
+}
+
 export const api = {
+  artifacts: (projectId: string) => call<Artifact[]>(`/projects/${encodeURIComponent(projectId)}/artifacts`),
+  baFeatures: (projectId: string) =>
+    moduleGet<BaFeature[]>(`/ba/api/features?project_id=${encodeURIComponent(projectId)}`),
+  designerSessions: (projectId: string) =>
+    moduleGet<DesignerSession[]>(`/designer/api/v1/sessions?project_id=${encodeURIComponent(projectId)}`),
+  wiki: (projectId: string) => moduleGet<WikiList>(`/ba/api/wiki/pages?project_id=${encodeURIComponent(projectId)}`),
   me: () => call<User>("/me"),
   mockUsers: () => call<MockUser[]>("/auth/mock-users"),
   login: (username: string, password: string) =>

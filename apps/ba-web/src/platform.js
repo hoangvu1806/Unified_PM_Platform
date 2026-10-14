@@ -57,7 +57,7 @@ const BAR_CSS = `
 #platformBar .pb-role{padding:1px 7px;border-radius:20px;border:1px solid #3f3f46;font-size:10px;letter-spacing:.06em}
 #platformBar .pb-ro{color:#f59e0b;border-color:rgba(245,158,11,.5)}
 #platformBar button{background:none;border:0;color:#a1a1aa;cursor:pointer;font:inherit}
-body.platform-readonly #btnCreateFeature, body.platform-readonly #btnStartChat,
+body.platform-readonly #btnCreateFeature, body.platform-readonly #btnCreateFeature2, body.platform-readonly #btnStartChat,
 body.platform-readonly #btnValidate, body.platform-readonly #btnExport, body.platform-readonly #btnExportBpmn,
 body.platform-readonly #btnRegenBpmn, body.platform-readonly #btnExportDesigner,
 body.platform-readonly #chatInput, body.platform-readonly #btnSend, body.platform-readonly #btnAttachReference,

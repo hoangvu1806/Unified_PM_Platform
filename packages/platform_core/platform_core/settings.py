@@ -29,8 +29,17 @@ class CommonSettings(BaseSettings):
     postgres_pool_min: int = Field(default=2)
     postgres_pool_max: int = Field(default=15)
 
-    storage_backend: str = Field(default="local")
-    storage_local_root: str = Field(default="/data/storage")
+    storage_backend: str = Field(default="local")  # local | s3
+    storage_local_root: str = Field(default="/data/storage")  # local files, or the S3 cache
+
+    s3_endpoint_url: str = Field(default="")
+    s3_region: str = Field(default="us-east-1")
+    s3_bucket: str = Field(default="")
+    s3_prefix: str = Field(default="")
+    s3_access_key_id: str = Field(default="")
+    s3_secret_access_key: str = Field(default="")
+    s3_addressing_style: str = Field(default="path")  # path | virtual
+    s3_verify_ssl: bool = Field(default=True)
 
     @property
     def cors_origins(self) -> list[str]:
@@ -44,3 +53,37 @@ class CommonSettings(BaseSettings):
 @lru_cache
 def get_common_settings() -> CommonSettings:
     return CommonSettings()
+
+
+_WEAK = ("change-me", "change-me-to-at-least-32-random-characters", "")
+
+
+def startup_report(service: str) -> dict[str, str]:
+    """Log what a service loaded (secrets masked); refuse weak secrets in production.
+
+    Called from each service's startup so configuration mistakes show up in
+    ``docker compose logs`` instead of as odd runtime errors.
+    """
+    import logging
+    import os
+
+    s = get_common_settings()
+    report = {
+        "service": service,
+        "env": s.platform_env,
+        "postgres": f"{s.postgres_user}@{s.postgres_host}:{s.postgres_port}/{s.postgres_db}",
+        "auth_mode": os.environ.get("AUTH_MODE", "mock"),
+        "storage": s.storage_backend
+        + (f" ({s.s3_endpoint_url or 'aws'} bucket={s.s3_bucket}{'/' + s.s3_prefix if s.s3_prefix else ''})" if s.storage_backend == "s3" else f" ({s.storage_local_root})"),
+    }
+    logging.getLogger("platform.config").info("startup config: %s", report)
+    print(f"[platform] startup config: {report}", flush=True)
+    if s.platform_env == "production":
+        weak = [
+            name
+            for name in ("POSTGRES_PASSWORD", "AUTH_JWT_SECRET", "DESIGNER_SHARED_SECRET")
+            if os.environ.get(name, "") in _WEAK
+        ]
+        if weak:
+            raise RuntimeError(f"Refusing to start in production with default secrets: {weak}")
+    return report

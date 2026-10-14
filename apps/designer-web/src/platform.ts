@@ -1,5 +1,7 @@
-// Platform context for the Designer UI (Sprint 3): login, project, read-only.
+// Platform context for the Designer UI: login, project, read-only.
 // Imported first by main.tsx so the project is known before App renders.
+// The project/user/role are shown inside WorkspaceHeader (usePlatform).
+import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "platform.projectId";
 const API_BASE = import.meta.env.VITE_API_BASE_URL as string;
@@ -37,15 +39,8 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     return res;
 };
 
-const BAR_CSS = `
-#platformBar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:14px;height:34px;padding:0 16px;
-  background:#0d0d10;border-bottom:1px solid #27272a;font:12px Inter,system-ui,sans-serif;color:#a1a1aa}
-#platformBar a{color:#a855f7;text-decoration:none}
-#platformBar .pb-project{color:#f4f4f5;font-weight:600}
-#platformBar .pb-spacer{flex:1}
-#platformBar .pb-role{padding:1px 7px;border-radius:20px;border:1px solid #3f3f46;font-size:10px;letter-spacing:.06em}
-#platformBar .pb-ro{color:#f59e0b;border-color:rgba(245,158,11,.5)}
-#platformBar button{background:none;border:0;color:#a1a1aa;cursor:pointer;font:inherit}
+// Read-only members: hide the composer, review actions and "New Session".
+const READONLY_CSS = `
 body.platform-readonly .composer-wrapper, body.platform-readonly .chat-review-actions,
 body.platform-readonly .new-session { display:none !important; }
 `;
@@ -56,30 +51,9 @@ export type PlatformContext = {
     readOnly: boolean;
 };
 
-function esc(value: unknown): string {
-    return String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-}
-
-function renderBar(ctx: PlatformContext): void {
-    const style = document.createElement("style");
-    style.textContent = BAR_CSS;
-    document.head.appendChild(style);
-    const bar = document.createElement("div");
-    bar.id = "platformBar";
-    bar.innerHTML = `
-      <a href="/">← Dự án</a>
-      <span class="pb-project">${esc(ctx.project.name)}</span>
-      <span>${esc(ctx.project.id)}</span>
-      <span class="pb-spacer"></span>
-      ${ctx.readOnly ? '<span class="pb-role pb-ro">CHỈ ĐỌC</span>' : ""}
-      ${ctx.project.my_roles.map((r) => `<span class="pb-role">${esc(r)}</span>`).join("")}
-      <span>${esc(ctx.user.name)}</span>
-      <button type="button" id="pbLogout">Đăng xuất</button>`;
-    document.body.prepend(bar);
-    bar.querySelector("#pbLogout")?.addEventListener("click", async () => {
-        await nativeFetch("/api/core/auth/logout", { method: "POST" }).catch(() => undefined);
-        window.location.assign("/login");
-    });
+export async function logout(): Promise<void> {
+    await nativeFetch("/api/core/auth/logout", { method: "POST" }).catch(() => undefined);
+    window.location.assign("/login");
 }
 
 /** Resolves once user and project are known; otherwise redirects away. */
@@ -106,7 +80,24 @@ export const platformReady: Promise<PlatformContext> = (async () => {
     };
     const roles = ctx.project.my_roles ?? [];
     ctx.readOnly = !roles.includes("DESIGNER") && !roles.includes("ADMIN");
-    if (ctx.readOnly) document.body.classList.add("platform-readonly");
-    renderBar(ctx);
+    if (ctx.readOnly) {
+        const style = document.createElement("style");
+        style.textContent = READONLY_CSS;
+        document.head.appendChild(style);
+        document.body.classList.add("platform-readonly");
+    }
     return ctx;
 })();
+
+/** Platform context for React components (undefined while loading). */
+export function usePlatform(): PlatformContext | undefined {
+    const [ctx, setCtx] = useState<PlatformContext>();
+    useEffect(() => {
+        let alive = true;
+        platformReady.then((value) => alive && setCtx(value));
+        return () => {
+            alive = false;
+        };
+    }, []);
+    return ctx;
+}
