@@ -27,7 +27,8 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={"width": 1440, "height": 860})
 
     page.goto(f"{BASE}/")
-    expect(page.get_by_text("Tài khoản demo", exact=False)).to_be_visible()
+    expect(page.get_by_text("Đăng nhập nhanh", exact=False)).to_be_visible()
+    expect(page.get_by_role("button", name="Đăng nhập với Keycloak")).to_be_visible()
     page.screenshot(path=f"{OUT}/1-login.png")
 
     # PM: projects in the rail and as cards.
@@ -62,11 +63,11 @@ with sync_playwright() as p:
     page.screenshot(path=f"{OUT}/5-designer.png")
     print("designer in portal ok")
 
-    # Designer-only user: BA is read-only, Designer is writable.
+    # Quick sign-in lists PM accounts only.
     page = browser.new_page(viewport={"width": 1440, "height": 860})
-    login(page, "designer.binh")
-    page.screenshot(path=f"{OUT}/6-designer-user.png")
-    print("designer.binh login ok")
+    login(page, "lead.dung")
+    page.screenshot(path=f"{OUT}/6-second-pm.png")
+    print("lead.dung login ok")
 
     browser.close()
 print("UI walk-through PASS")

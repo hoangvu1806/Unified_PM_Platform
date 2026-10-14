@@ -96,6 +96,28 @@ def health() -> dict[str, str]:
     return {"status": "ok", "auth_mode": get_auth_settings().auth_mode}
 
 
+@public.get("/auth/providers")
+def auth_providers() -> dict[str, Any]:
+    """Sign-in options for the login page. Keycloak is shown once KEYCLOAK_* is configured."""
+    import os
+    from urllib.parse import urlencode
+
+    base = os.environ.get("KEYCLOAK_URL", "").rstrip("/")
+    realm = os.environ.get("KEYCLOAK_REALM", "")
+    client = os.environ.get("KEYCLOAK_CLIENT_ID", "")
+    keycloak: dict[str, Any] = {"enabled": bool(base and realm and client), "login_url": None}
+    if keycloak["enabled"]:
+        public_url = os.environ.get("PLATFORM_PUBLIC_URL", "http://localhost:8080").rstrip("/")
+        query = urlencode({
+            "client_id": client,
+            "response_type": "code",
+            "scope": "openid profile email",
+            "redirect_uri": f"{public_url}/api/core/auth/keycloak/callback",
+        })
+        keycloak["login_url"] = f"{base}/realms/{realm}/protocol/openid-connect/auth?{query}"
+    return {"mock": get_auth_settings().auth_mode == "mock", "keycloak": keycloak}
+
+
 @public.get("/auth/mock-users")
 def mock_users() -> list[dict[str, Any]]:
     _require_mock()

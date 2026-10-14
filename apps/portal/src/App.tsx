@@ -29,6 +29,7 @@ import { FormEvent, Fragment, ReactNode, createContext, useCallback, useContext,
 import {
   ApiError,
   type Artifact,
+  type AuthProviders,
   type BaFeature,
   type DesignerSession,
   type Journey,
@@ -341,15 +342,37 @@ function PageHeader({ crumbs, center, children }: { crumbs: Crumb[]; center?: Re
 
 // ── Login ────────────────────────────────────────────────────────────────
 
+function KeyIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="8" cy="15" r="4" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M10.8 12.2 20 3m-3 3 2.5 2.5M14.5 8.5 17 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+const LOGIN_POINTS: { icon: ReactNode; title: string; text: string }[] = [
+  { icon: <MessagesSquare size={17} />, title: "Phân tích với BA agent", text: "Mục tiêu, quy tắc, quy trình, use case — kiểm tra và bàn giao BA package." },
+  { icon: <PenTool size={17} />, title: "Thiết kế với Designer agent", text: "Từ BA package ra màn hình trên OpenPencil, duyệt spec và bản cuối." },
+  { icon: <Boxes size={17} />, title: "Một nơi cho mọi tài sản", text: "Wiki, BA package, BPMN, UI spec và file thiết kế có phiên bản." },
+];
+
 function LoginPage({ onLoggedIn }: { onLoggedIn: (u: User) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [demo, setDemo] = useState<MockUser[]>([]);
+  const [providers, setProviders] = useState<AuthProviders | null>(null);
+  const mode = useThemeMode();
 
   useEffect(() => {
-    api.mockUsers().then(setDemo).catch(() => setDemo([]));
+    api.authProviders().then(setProviders).catch(() => setProviders(null));
+    // Quick sign-in shows PM accounts only (BA + Designer in one person).
+    api
+      .mockUsers()
+      .then((users) => setDemo(users.filter((u) => u.roles.includes("PM") || (u.roles.includes("BA") && u.roles.includes("DESIGNER")))))
+      .catch(() => setDemo([]));
   }, []);
 
   const signIn = async (u: string, p: string) => {
@@ -370,44 +393,96 @@ function LoginPage({ onLoggedIn }: { onLoggedIn: (u: User) => void }) {
     void signIn(username, password);
   };
 
+  const keycloak = providers?.keycloak;
+
   return (
     <div className="login">
-      <div className="login-card">
+      <section className="login-hero" aria-hidden="true">
+        <div className="login-glow" />
         <Brand />
-        <h2>Đăng nhập</h2>
-        <p className="muted">Phân tích nghiệp vụ và thiết kế trong cùng một hành trình, cùng các agent.</p>
-        <form onSubmit={submit} className="form">
-          <label>
-            Tài khoản
-            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus />
-          </label>
-          <label>
-            Mật khẩu
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
-          </label>
-          {error && <div className="alert">{error}</div>}
-          <button className="btn primary block" disabled={!!busy || !username || !password}>
-            {busy === username ? <span className="spinner sm" /> : "Đăng nhập"}
+        <div className="login-hero-copy">
+          <span className="login-kicker">BA × Designer · một hành trình</span>
+          <h1>Từ yêu cầu nghiệp vụ đến màn hình, trong cùng một workspace.</h1>
+          <ul className="login-points">
+            {LOGIN_POINTS.map((p) => (
+              <li key={p.title}>
+                <span className="login-point-icon">{p.icon}</span>
+                <span>
+                  <strong>{p.title}</strong>
+                  <small>{p.text}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="login-flow">
+          {["Định nghĩa", "Quy tắc", "Quy trình", "Use case", "Bàn giao", "Thiết kế", "Duyệt"].map((s, i, all) => (
+            <Fragment key={s}>
+              <span className={`login-flow-step ${i >= 5 ? "design" : ""}`}>{s}</span>
+              {i < all.length - 1 && <span className="login-flow-line" />}
+            </Fragment>
+          ))}
+        </div>
+      </section>
+
+      <section className="login-panel">
+        <button className="icon-btn login-theme" onClick={toggleTheme} title={mode === "dark" ? "Giao diện sáng" : "Giao diện tối"} aria-label="Đổi giao diện">
+          {mode === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+        <div className="login-card">
+          <div className="login-card-brand"><Brand /></div>
+          <h2>Đăng nhập</h2>
+          <p className="muted">Chào mừng trở lại. Đăng nhập để tiếp tục dự án của bạn.</p>
+
+          <button
+            type="button"
+            className="btn sso"
+            disabled={!keycloak?.enabled}
+            onClick={() => keycloak?.login_url && window.location.assign(keycloak.login_url)}
+            title={keycloak?.enabled ? "Đăng nhập một lần (SSO) qua Keycloak" : "Keycloak chưa được cấu hình (KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_CLIENT_ID)"}
+          >
+            <KeyIcon />
+            Đăng nhập với Keycloak
+            {!keycloak?.enabled && <span className="sso-soon">Sắp có</span>}
           </button>
-        </form>
-        {demo.length > 0 && (
-          <div className="demo">
-            <div className="demo-title">Tài khoản demo · mật khẩu {demo[0].password}</div>
-            <div className="demo-list">
-              {demo.map((d) => (
-                <button key={d.username} className="demo-user" disabled={!!busy} onClick={() => void signIn(d.username, d.password)}>
-                  <Avatar name={d.name} size={30} />
-                  <span className="demo-info">
-                    <strong>{plainName(d.name)}</strong>
-                    <span className="mono">{d.username}</span>
-                  </span>
-                  {busy === d.username ? <span className="spinner sm" /> : <RoleChips roles={d.roles.length > 1 ? ["PM"] : d.roles} />}
-                </button>
-              ))}
+
+          <div className="login-divider"><span>hoặc dùng tài khoản</span></div>
+
+          <form onSubmit={submit} className="form login-form">
+            <label>
+              Tài khoản
+              <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" placeholder="vd. pm.hoa" autoFocus />
+            </label>
+            <label>
+              Mật khẩu
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••" />
+            </label>
+            {error && <div className="alert">{error}</div>}
+            <button className="btn primary block lg" disabled={!!busy || !username || !password}>
+              {busy === username ? <span className="spinner sm" /> : <>Đăng nhập <ArrowRight size={16} /></>}
+            </button>
+          </form>
+
+          {providers?.mock !== false && demo.length > 0 && (
+            <div className="login-demo">
+              <div className="login-demo-title">Đăng nhập nhanh · mật khẩu {demo[0].password}</div>
+              <div className="login-demo-list">
+                {demo.map((d) => (
+                  <button key={d.username} className="login-demo-user" disabled={!!busy} onClick={() => void signIn(d.username, d.password)}>
+                    <Avatar name={d.name} size={30} />
+                    <span className="demo-info">
+                      <strong>{plainName(d.name)}</strong>
+                      <span className="mono">{d.username}</span>
+                    </span>
+                    {busy === d.username ? <span className="spinner sm" /> : <span className="chip chip-pm">PM</span>}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+        <p className="login-foot">Unified Work AI Platform · PM làm trọn hành trình BA và Thiết kế</p>
+      </section>
     </div>
   );
 }

@@ -77,6 +77,7 @@ Every later edit to imported files is listed here.
 | `services/ba/managers/service/assets.py` | Each BA package version also publishes its reference BPMN (`bpmn` artifact linked to the package) | Artifacts: BPMN | 5 |
 | `services/ba/managers/control/bpmn.py`, `apps/ba-web/src/chat.js` | Aligned markdown table rules (`|:---|`) are no longer parsed as workflow steps (became a ":---" touchpoint / BPMN task); UI touchpoints shown as compact collapsible screen cards | Cleaner BA output | 5 |
 | `services/core/app/journey.py` | "Duyệt thiết kế" is done only when the run is finished or the design is in Assets | Correct journey state | 5 |
+| `apps/portal/src/{App.tsx,api.ts,styles.css}`, `services/core/app/routes.py`, `.env.example` | Login redesign: split screen fitted to the viewport (no scrollbar), quick sign-in lists PM accounts only, "Đăng nhập với Keycloak" button driven by `GET /api/core/auth/providers` (enabled once `KEYCLOAK_URL/REALM/CLIENT_ID` are set) | Keycloak later, modern login | 5 |
 
 ## Test results (Docker)
 

@@ -3,6 +3,7 @@
 
 export type User = { id: string; username: string; name: string; roles: string[] };
 export type MockUser = { username: string; name: string; roles: string[]; password: string };
+export type AuthProviders = { mock: boolean; keycloak: { enabled: boolean; login_url: string | null } };
 export type ProjectSummary = {
   id: string;
   name: string;
@@ -114,6 +115,7 @@ export const api = {
   wiki: (projectId: string) => moduleGet<WikiList>(`/ba/api/wiki/pages?project_id=${encodeURIComponent(projectId)}`),
   me: () => call<User>("/me"),
   mockUsers: () => call<MockUser[]>("/auth/mock-users"),
+  authProviders: () => call<AuthProviders>("/auth/providers"),
   login: (username: string, password: string) =>
     call<{ user: User }>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   logout: () => call<{ ok: boolean }>("/auth/logout", { method: "POST" }),
