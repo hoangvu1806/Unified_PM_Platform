@@ -54,7 +54,9 @@ real controls. Use exact Iconify names for icons. Keep all visible strings in te
 nodes or component content. Design intent stays on section containers.
 
 Avoid a default stack of identical white cards. Group by meaning first, vary scale
-and density with purpose, and make the primary state or action unmistakable. Use
+and density with purpose, and make the primary state or action unmistakable. Give
+the screen a hero section that carries the signature idea (display type, accent
+surface, visualisation) and compose the full viewport — no dead empty region. Use
 the approved palette and typography consistently. Creativity must improve the task,
 not add unrelated decoration.
 

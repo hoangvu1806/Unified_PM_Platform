@@ -39,8 +39,10 @@ OpenPencil JSX reference: {{jsx_knowledge}}
   Use modern, purposeful patterns where they fit: layered surfaces with soft depth,
   bold accent blocks, chips and segmented controls, progress/data visualisation,
   avatars or illustrative vector shapes, a floating or sticky primary action.
-  Radii 12–20, consistent light source for shadows, alignment to shared edges,
-  generous negative space. One signature detail per screen, named in the plan.
+  Separate surfaces by tone or soft elevation, not grey 1px borders; radii from the
+  style; one light source for shadows; shared edges; negative space that is
+  intentional — fill the viewport, no dead region above a bottom bar. One
+  signature detail per screen, named in the plan.
 - Realistic content: real labels, dates, names and numbers from the request —
   never "Lorem", "Title" or library sample text. Include the empty or edge state
   the specification asks for.

@@ -282,6 +282,7 @@ def design_lint(root: dict[str, Any], platform: str) -> dict[str, Any]:
     colors: set[tuple[float, float, float]] = set()
     tiny: list[str] = []
     low_contrast: list[dict[str, Any]] = []
+    grey_borders = 0
 
     def walk(node: dict[str, Any], background: tuple[float, float, float] | None) -> None:
         if node.get("visible", True) is False:
@@ -302,12 +303,26 @@ def design_lint(root: dict[str, Any], platform: str) -> dict[str, Any]:
             return
         if fill and node.get("type") != "INSTANCE":
             colors.add(tuple(round(c, 2) for c in fill))  # type: ignore[arg-type]
+        stroke = _rgb({"fills": node.get("strokes") or []})
+        if stroke and max(stroke) - min(stroke) < 0.06 and 0.75 < sum(stroke) / 3 < 0.95:
+            grey_borders += 1  # light neutral 1px outline
         for child in node.get("children", []) or []:
             if isinstance(child, dict):
                 walk(child, fill or background)
 
     walk(root, _rgb(root) or (1.0, 1.0, 1.0))
     notes = []
+    blocks = sorted(
+        (float(c.get("y") or 0), float(c.get("y") or 0) + float(c.get("height") or 0))
+        for c in root.get("children", []) or []
+        if isinstance(c, dict) and c.get("visible", True) is not False
+    )
+    height = float(root.get("height") or 0)
+    gaps = [b[0] - a[1] for a, b in zip(blocks, blocks[1:])]
+    if height and gaps and max(gaps) > 0.12 * height:
+        notes.append(f"Empty vertical region of {max(gaps):.0f}px between sections: recompose to use the viewport.")
+    if grey_borders > 4:
+        notes.append(f"{grey_borders} surfaces use light grey outlines: separate them by tone or soft elevation.")
     if len(sizes) > 6:
         notes.append(f"{len(sizes)} font sizes {sorted(sizes)}: tighten to a 3-5 step type scale.")
     if tiny:

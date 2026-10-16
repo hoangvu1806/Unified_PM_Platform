@@ -18,8 +18,11 @@ surface behavior and one memorable product-specific gesture. Translate a request
 style into this product's context instead of copying a preset recipe.
 
 Write `visual_direction` as concrete implementation guidance. Author the complete
-`StyleManifest`, using readable semantic color roles and type that supports the
-brief's language. Use `shared_patterns` only for recurring decisions that genuinely
+`StyleManifest` — every field explicitly, never the generic slate/white/#2563EB
+defaults: a primary hue born from the product concept, a tinted canvas, surfaces
+that separate by tone or soft elevation rather than grey 1px borders, a modern
+type family that supports the brief's language, and a radius matching the
+product's character (14–24 friendly consumer, 6–10 dense professional tools). Use `shared_patterns` only for recurring decisions that genuinely
 help screens stay coherent. Explain in `responsive_strategy` how hierarchy or
 information form changes across viewports.
 
