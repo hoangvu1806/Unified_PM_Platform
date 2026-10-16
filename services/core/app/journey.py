@@ -79,7 +79,7 @@ def build_journey(conn, project_id: str, feature_id: str) -> dict[str, Any] | No
     used_version = None
     if designer and _exists(conn, "core.artifacts"):
         design = conn.execute(
-            "SELECT id, version, storage_key FROM core.artifacts WHERE kind = 'designer_output' "
+            "SELECT id, version, storage_key, meta FROM core.artifacts WHERE kind = 'designer_output' "
             "AND meta->>'session_id' = %s ORDER BY created_at DESC LIMIT 1",
             (designer["id"],),
         ).fetchone()
@@ -106,15 +106,18 @@ def build_journey(conn, project_id: str, feature_id: str) -> dict[str, Any] | No
 
     stages = {r["stage"] for r in runs}
     scope = _step("design_scope", "Phạm vi thiết kế", "DESIGNER", "Designer agent đề xuất màn hình, bạn chốt phạm vi và duyệt spec.")
-    scope["status"] = "done" if ("specification", "approved") in reviews or stages & DESIGN_PAST_SPEC else "todo"
+    # "finished" alone is not progress: the scope-proposal run after a handoff also ends "finished".
+    scope["status"] = "done" if ("specification", "approved") in reviews or stages & (DESIGN_PAST_SPEC - {"finished"}) else "todo"
     build = _step("design_build", "Dựng màn hình", "DESIGNER", "Agent dựng màn hình trên OpenPencil (editor phải đang mở).")
     reviewed_final = any(cp == "final" for cp, _d in reviews)
     build["status"] = "done" if ("review_final" in stages or reviewed_final or design) else "todo"
     final = _step("design_review", "Duyệt thiết kế", "DESIGNER", "Duyệt bản cuối; thiết kế được lưu vào Assets.")
-    # A stored "approved" review is not enough: the Designer can still reject it
-    # (e.g. LAYOUT_NOT_VALID) and send the run back to review. Done = run finished.
+    # Done = the final design was approved: an accepted final review on a completed run,
+    # or the design in Assets marked approved (a "review" copy is published while waiting).
     finished = any(r["stage"] == "finished" and r["status"] == "completed" for r in runs)
-    final["status"] = "done" if finished or design else "todo"
+    design_state = ((design or {}).get("meta") or {}).get("state")
+    approved = (("final", "approved") in reviews and finished) or (design and design_state in (None, "approved"))
+    final["status"] = "done" if approved else "todo"
     steps += [scope, build, final]
 
     # Order + locks: everything after the first unfinished step is locked.

@@ -12,8 +12,11 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       DESIGN_DATA_DIR: /data/design-data
+      OPENPENCIL_DATA_DIR: /openpencil-data
     volumes:
       - designer-data:/app/data          # assets until Sprint 2 storage move, logs
+      # The default OpenPencil instance saves .fig files here: read them directly for Assets.
+      - openpencil-data:/openpencil-data:ro
       - platform-storage:/data/storage
       - ../../logs:/logs                    # platform/logs/designer-api/
       - designer-cache:/data/design-data/cache
@@ -62,3 +65,6 @@ services:
 volumes:
   designer-data:
   designer-cache:
+  openpencil-data:
+    external: true
+    name: open-pencil_openpencil-data   # created by ../BA/open-pencil (docker compose up)

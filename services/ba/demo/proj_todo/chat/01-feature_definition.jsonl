@@ -1,0 +1,2 @@
+{"active_section": "feature_definition", "user_message": "Goal: người dùng quản lý công việc cá nhân nhanh trên mobile, không quên việc đến hạn. Actors: ACT-USER (người dùng), ACT-NOTIFY (hệ thống nhắc việc). Scope-in: tạo, sửa, đánh dấu hoàn thành, khôi phục công việc, đặt hạn và nhắc hạn. Scope-out: chia sẻ công việc, làm việc nhóm, đồng bộ lịch."}
+{"active_section": "feature_definition", "user_message": "Xác nhận FD đủ: goal/actors/scope-in/scope-out như trên. Đóng OQ critical nếu còn. Chuyển sang Business Rules."}

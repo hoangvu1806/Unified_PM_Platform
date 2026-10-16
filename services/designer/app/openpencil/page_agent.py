@@ -6,6 +6,7 @@ import json
 import re
 from typing import Any
 
+from google.adk.agents.invocation_context import LlmCallsLimitExceededError
 from google.adk.tools import ToolContext
 from google.genai import types
 
@@ -50,6 +51,19 @@ def _compact_schema(value: Any) -> Any:
         return value
     keep = {"type", "enum", "required", "properties", "items", "anyOf", "oneOf", "allOf"}
     return {key: _compact_schema(item) for key, item in value.items() if key in keep}
+
+
+MAX_REFINEMENT_ROUNDS = 3
+
+
+def _acceptable_canvas(state: dict[str, Any], specification: UiSpecification) -> bool:
+    """A rendered, inspected page with a preview and no blocking geometry."""
+    return bool(
+        state.get("rendered")
+        and state.get("inspected")
+        and state.get("preview_available")
+        and not blocking_findings(state.get("telemetry") or {}, specification.viewport_width)
+    )
 
 
 async def design_page(
@@ -165,8 +179,12 @@ async def design_page(
                 if instance:
                     mounted[binding.node_id] = str(instance["id"])
                     break
+        # The page exists on the canvas, so it is inspectable and editable even when some
+        # mounts are missing (they surface as blocking findings). Without this, edit mode —
+        # which has no render_page tool — could never inspect the page and always stalled.
+        state.update(rendered=True, instances=len(mounted), instance_ids=mounted)
         if len(mounted) == len(resolved):
-            state.update(rendered=True, refined=True, instances=len(mounted), instance_ids=mounted)
+            state.update(refined=True)
             uploaded_media = await apply_uploaded_component_media(
                 gateway,
                 session,
@@ -829,6 +847,7 @@ async def design_page(
                     "content_gaps",
                     "small_touch_targets",
                     "instances",
+                    "design_lint",
                 )
             }
             model_telemetry["overlaps"] = {
@@ -902,6 +921,11 @@ async def design_page(
                         "edit_node or edit_canvas, then reinspect: "
                         f"{json.dumps(blockers, ensure_ascii=False)}"
                     )
+            rounds = int(state.get("refinement_rounds") or 0) + (1 if needs_refinement else 0)
+            state["refinement_rounds"] = rounds
+            if needs_refinement and rounds >= MAX_REFINEMENT_ROUNDS and _acceptable_canvas(state, specification):
+                # Polish is subjective past this point: hand the open items to the human reviewer.
+                needs_refinement = False
             reflection = {
                 "inspection_id": state["inspection_id"],
                 "assessment": assessment,
@@ -1140,22 +1164,39 @@ async def design_page(
             ).encode("utf-8")
         ).hexdigest()
 
+    settings = getattr(llm, "settings", None)
+    max_steps = int(getattr(settings, "designer_page_max_steps", 45) or 45)
+    page_timeout = float(getattr(settings, "designer_page_timeout_seconds", 720) or 720)
     reply = ""
+    budget_hit = False
     for restart in range(2):
-        reply = await llm.run_tools(
-            prompt=prompt,
-            tools=tools,
-            before_model_callback=attach_preview,
-            stop_when=lambda: bool(state["finished"] or state["blocking_error"] or state["stall_error"]),
-            progress_token=progress_token,
-            continuation_message=(
-                "The page is not complete. Continue with actual tool calls in this same session. "
-                "Use the returned MCP schemas and live node IDs, correct failed operations in a small batch, "
-                "inspect the changed canvas, and finish only through reflect_page. Do not return prose, "
-                "Markdown code, Python, or proposed operations."
-            ),
-            **({"model": designer_model} if designer_model else {}),
-        )
+        try:
+            reply = await llm.run_tools(
+                prompt=prompt,
+                tools=tools,
+                before_model_callback=attach_preview,
+                stop_when=lambda: bool(state["finished"] or state["blocking_error"] or state["stall_error"]),
+                progress_token=progress_token,
+                continuation_message=(
+                    "The page is not complete. Continue with actual tool calls in this same session. "
+                    "Use the returned MCP schemas and live node IDs, correct failed operations in a small batch, "
+                    "inspect the changed canvas, and finish only through reflect_page. Do not return prose, "
+                    "Markdown code, Python, or proposed operations."
+                ),
+                max_turns=max_steps,
+                timeout_seconds=page_timeout,
+                **({"model": designer_model} if designer_model else {}),
+            )
+        except (TimeoutError, LlmCallsLimitExceededError):
+            budget_hit = True  # bounded loop: judge the saved canvas below instead of polishing forever
+            break
+        except AppError as exc:
+            if exc.code != "AGENT_STALLED":
+                raise
+            # The model stopped calling tools: keep a canvas that already passes the blocking checks.
+            state["stall_error"] = exc.detail
+            budget_hit = True
+            break
         if not state["stall_error"] or restart:
             break
         prompt += (
@@ -1164,6 +1205,16 @@ async def design_page(
             "then reflect. Do not repeat the failed call. Current root: " + str(state["root_id"])
         )
         state.update(stall_error="", last_failed_action="", repeated_failure=0)
+    if (budget_hit or state["stall_error"]) and not state["finished"] and _acceptable_canvas(state, specification):
+        # The page is rendered, inspected and free of blocking geometry: hand it to the human
+        # reviewer with the open polish items instead of failing the whole run.
+        open_items = (state.get("reflection") or {}).get("remaining_issues") or []
+        state.update(
+            finished=True,
+            stall_error="",
+            summary="Step budget reached; the page passed the blocking checks. "
+            + (f"Open polish items for review: {open_items}" if open_items else ""),
+        )
     if state["blocking_error"]:
         raise AppError(
             "OPENPENCIL_PREVIEW_UNAVAILABLE",
@@ -1174,10 +1225,13 @@ async def design_page(
             action="Bring the OpenPencil tab to the foreground, then retry this stage.",
         )
     if state["stall_error"]:
+        blockers = blocking_findings(state.get("telemetry") or {}, specification.viewport_width)
         raise AppError(
             "AGENT_STALLED",
             "Designer repeated an action without progress",
-            state["stall_error"],
+            state["stall_error"][:600]
+            + f" | rendered={state.get('rendered')} inspected={state.get('inspected')}"
+            f" preview={state.get('preview_available')} blocking={json.dumps(blockers, ensure_ascii=False)[:900]}",
             502,
             True,
             action="Retry this stage to continue from the saved OpenPencil canvas.",

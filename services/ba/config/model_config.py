@@ -25,4 +25,6 @@ base_model = LiteLlm(
     timeout=100,
     num_retries=0,
     chat_template_kwargs={"enable_thinking": False},
+    # Models that reject top_p / penalties (e.g. OpenAI reasoning models) get them dropped.
+    drop_params=True,
 )

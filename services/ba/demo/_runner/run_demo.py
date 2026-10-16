@@ -151,10 +151,9 @@ def _seed_wiki(client: DemoClient, *, project_id: str, company: list[Path], proj
         if not ids and result.get("sort_status") == "unchanged_existing_source":
             print(f"    dedup {result.get('source_id')} (no new drafts)")
         elif not ids:
-            raise DemoClientError(
-                f"project wiki upload produced empty proposed_page_ids for {path.name}: "
-                f"sort_status={result.get('sort_status')} source_id={result.get('source_id')}"
-            )
+            # The sorter found no rule/glossary content (e.g. a pure flow document): keep going,
+            # the pack still needs one approved project RULE page (checked below).
+            print(f"    WARN no wiki page proposed for {path.name} (sort_status={result.get('sort_status')})")
         for page_id in ids:
             if not _should_approve_seed_page(
                 page_id, namespace="project", project_rule_approved=project_rule_approved

@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     platform_env: str = "dev"
     designer_shared_secret: str = ""
     mcp_timeout_seconds: int = 150
+    # Local mount of the default OpenPencil data volume (saved .fig files); HTTP is the fallback.
+    openpencil_data_dir: str = ""
+    # One page = a bounded Plan → Act → Inspect → Reflect loop (no endless polishing).
+    designer_page_max_steps: int = Field(45, validation_alias="DESIGNER_PAGE_MAX_STEPS")
+    designer_page_timeout_seconds: int = Field(720, validation_alias="DESIGNER_PAGE_TIMEOUT_SECONDS")
     # The workspace root owns the read-only design-systems folder. Runtime
     # caches may still live alongside it under ``designer-data``.
     design_data_dir: Path = PROJECT_DIR.parent

@@ -28,10 +28,17 @@ logger = logging.getLogger("designer_agent.publish")
 
 def _state(run) -> str | None:
     if run.status == RunStatus.COMPLETED:
-        return "approved"
+        # Chat/workspace design turns save the .fig without a final review: a draft.
+        return "draft" if run.intent == "design" else "approved"
     if run.status == RunStatus.WAITING_REVIEW and run.stage == RunStage.REVIEW_FINAL:
         return "review"
     return None
+
+
+def _spec_state(run) -> str:
+    if run.status == RunStatus.COMPLETED and run.intent != "design":
+        return "approved"
+    return "review" if run.status == RunStatus.WAITING_REVIEW else "draft"
 
 
 def _publish_spec(session, run, state: str) -> None:
@@ -79,16 +86,21 @@ def _publish_spec(session, run, state: str) -> None:
 async def publish_design(service: "RunService", run_id: UUID) -> None:
     try:
         run = await service.store.get_run(run_id)
-        state = _state(run) if run is not None else None
+        if run is None:
+            return
+        session = await service.store.get_session(run.session_id)
+        if session is None or not session.project_id:
+            return
+        # The UI spec goes to Assets as soon as it exists — no approval needed first.
+        if run.specification is not None:
+            _publish_spec(session, run, _spec_state(run))
+        state = _state(run)
         if state is None or not run.mcp_profile:
             return
         artifact = await service.store.get_artifact(run.id, run.revision, "openpencil_artifact") or {}
         path = str(artifact.get("output_file") or "")
         if not path:
             return  # chat-only turn, nothing was drawn
-        session = await service.store.get_session(run.session_id)
-        if session is None or not session.project_id:
-            return
 
         from platform_core import artifacts
         from platform_core.storage import get_storage, project_key
@@ -101,8 +113,6 @@ async def publish_design(service: "RunService", run_id: UUID) -> None:
         filename = path.replace("\\", "/").rsplit("/", 1)[-1] or "design.fig"
         key = project_key(session.project_id, "designer", "outputs", str(run.id), f"r{run.revision}-{filename}")
         meta = {"session_id": str(session.id), "file": filename, "output_file": path, "state": state}
-
-        _publish_spec(session, run, state)
 
         if existing and existing["version"] == run.revision:
             old_meta = existing.get("meta") or {}

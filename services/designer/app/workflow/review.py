@@ -325,7 +325,9 @@ class HumanReviewFlow:
 
     async def _require_valid_layout(self, run: Any) -> None:
         layout = await self.store.get_artifact(run.id, run.revision, "layout_review")
-        if not layout or layout.get("status") != "valid":
+        # "advisory" = measured findings shown to the reviewer, who may still approve.
+        # Only a missing review or no completed screen ("invalid") blocks approval.
+        if not layout or layout.get("status") not in ("valid", "advisory"):
             raise AppError(
                 "LAYOUT_NOT_VALID",
                 "Layout cannot be approved yet",

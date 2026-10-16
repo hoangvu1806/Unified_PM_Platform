@@ -322,6 +322,25 @@ class Store:
         row = await self._fetchone("SELECT * FROM runs WHERE id = ?", (str(run_id),))
         return self._run_from_row(row) if row else None
 
+    async def interrupt_unfinished_runs(self) -> int:
+        """Runs live in process memory: after a restart, mark them failed (retryable) instead of "running" forever."""
+        rows = await self._fetchall("SELECT id, stage FROM runs WHERE status IN ('running', 'queued')")
+        for row in rows:
+            await self.update_run(
+                UUID(str(row["id"])),
+                stage=RunStage.FAILED,
+                status=RunStatus.FAILED,
+                error={
+                    "code": "RUN_INTERRUPTED",
+                    "title": "The run was interrupted by a service restart",
+                    "detail": f"It stopped during {row['stage']}.",
+                    "retryable": True,
+                    "action": "Retry to continue from the saved canvas.",
+                    "stage": row["stage"],
+                },
+            )
+        return len(rows)
+
     async def update_run(
         self,
         run_id: UUID,

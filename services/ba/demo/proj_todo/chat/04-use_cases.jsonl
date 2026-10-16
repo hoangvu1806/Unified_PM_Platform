@@ -1,0 +1,2 @@
+{"active_section": "use_cases", "user_message": "US-01: Là ACT-USER, tôi muốn tạo công việc có tiêu đề và hạn để không quên việc. AC: không lưu nếu thiếu tiêu đề (BR-01); hạn không được trước ngày tạo (BR-02); ACT-NOTIFY nhắc trước hạn khi bật nhắc (BR-04)."}
+{"active_section": "use_cases", "user_message": "US-01 xong. Mở US-02: Là ACT-USER, tôi muốn đánh dấu hoàn thành và khôi phục công việc. AC: việc hoàn thành chuyển sang danh sách Done và khôi phục được (BR-03); chỉ thấy việc của mình (BR-05). Xong 2 user story, chốt section."}

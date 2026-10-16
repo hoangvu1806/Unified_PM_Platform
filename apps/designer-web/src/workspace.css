@@ -3933,3 +3933,16 @@
 .ba-status-card .warn { color: var(--amber); }
 .ba-status-package { display: flex; align-items: center; gap: 6px; padding: 6px 6px 0; border-top: 1px solid var(--border-strong); font-size: 11.5px; color: var(--text-muted); }
 .ba-status-stale { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: var(--amber-soft); color: var(--amber); font: 600 11.5px var(--font-main); }
+
+.ba-status-select {
+    width: 100%;
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 650;
+}
+.ba-status-note { display: block; margin: 2px 0 6px; font-size: 11.5px; color: var(--text-muted); }

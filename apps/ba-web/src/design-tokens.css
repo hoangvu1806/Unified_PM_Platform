@@ -1671,3 +1671,20 @@ body.platform-embed .tb-standalone { display: none !important; }
 .tp-section.is-readonly .tp-row-label { padding-top: 7px; }
 
 .brand-logo { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
+
+/* Chat: streaming caret + richer markdown */
+.message-row.is-streaming .bubble-md > :last-child::after {
+  content: ""; display: inline-block; width: 7px; height: 1em; margin-left: 3px; vertical-align: -2px;
+  border-radius: 2px; background: var(--accent-cyan); animation: caretBlink 0.9s steps(2, start) infinite;
+}
+@keyframes caretBlink { to { visibility: hidden; } }
+.bubble-md .md-hr { border: 0; height: 1px; margin: 12px 0; background: var(--bg-surface-hover); }
+.bubble-md .md-quote { margin: 6px 0; padding: 6px 12px; border-radius: 10px; background: var(--bg-surface-hover); color: var(--text-muted); }
+.bubble-md .md-pre { margin: 8px 0; padding: 10px 12px; border-radius: 10px; background: var(--bg-base); overflow-x: auto; font: 12.5px/1.5 'JetBrains Mono', monospace; }
+.bubble-md .md-table { margin: 8px 0; overflow-x: auto; border-radius: 10px; background: var(--bg-base); }
+.bubble-md table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bubble-md th, .bubble-md td { padding: 7px 10px; text-align: left; vertical-align: top; }
+.bubble-md th { font-weight: 700; color: var(--text-muted); background: var(--bg-surface-hover); }
+.bubble-md tr + tr td { box-shadow: inset 0 1px 0 var(--bg-surface-hover); }
+.bubble-md a { color: var(--accent-cyan); }
+.bubble-md em { font-style: italic; }

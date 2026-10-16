@@ -822,6 +822,13 @@ async def handle_workspace_message(
                         "document_id": workspace.document_id,
                     },
                 )
+                # Platform Assets: the saved .fig is published when the run completes.
+                await owner.store.set_artifact(
+                    run.id,
+                    run.revision,
+                    "openpencil_artifact",
+                    {"document_id": workspace.document_id, "page_id": page_id, "output_file": workspace.document_path},
+                )
             updated_workspace = SessionWorkspace(
                 document_id=workspace.document_id,
                 document_path=workspace.document_path,

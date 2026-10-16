@@ -43,3 +43,12 @@ when coordinates are deliberate. A fill child needs a resolved parent size;
 flexible text next to a fixed control needs space to wrap. Escape literal text
 where needed. All palette, typography, spacing, radii and decorative decisions
 belong to the brief and design system, not this renderer contract.
+
+Common mistakes the engine rejects (avoid them in the first call):
+- Expressions in props: write `w={390}`, never `w={390 - 32}`, `{...props}` or template strings.
+- Text without content or width: `<Text w="fill" size={14} color="#111827">Hôm nay</Text>`.
+- Children of a component slot: a `slot::<node_id>` Frame stays empty; size it, nothing inside.
+- Every resolved binding needs its slot in the render; a missing slot fails the page.
+- Native edit operations take the exact argument names from `inspect_canvas_tools`
+  (e.g. `node_resize` needs the live node ID and numeric width/height); read the
+  schema once, then batch several operations in one `edit_canvas` call.

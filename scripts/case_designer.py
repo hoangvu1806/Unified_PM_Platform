@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import http.cookiejar
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -65,7 +66,21 @@ status, _ = call("POST", f"{BASE}/api/core/auth/login", {"username": USER, "pass
 assert status == 200, f"login failed: {status}"
 print(f"logged in as {USER}")
 
-if len(sys.argv) > 6:  # resume: ... USER SESSION RUN
+answers_env = json.loads(os.environ["CASE_ANSWERS"]) if os.environ.get("CASE_ANSWERS") else None
+first_turn = 0
+if FEATURE == "-":  # no BA handoff: a Designer session started from the project page
+    status, created = call("POST", f"{API}/sessions", {"title": os.environ.get("CASE_TITLE", "Designer session"), "project_id": PROJECT})
+    assert status == 201, f"session create failed: {status} {created}"
+    session = created["id"]
+    say(USER, answers_env[0])
+    status, run = call("POST", f"{API}/sessions/{session}/messages", {
+        "content": answers_env[0], "screen_name_hint": os.environ.get("CASE_SCREEN", ""),
+        "platform_hint": os.environ.get("CASE_PLATFORM", "desktop"), "mcp_profile": PROFILE,
+    })
+    assert status == 202, f"message failed: {status} {run}"
+    run_id, first_turn = run["id"], 1
+    print(f"new designer session {session} (no BA handoff)")
+elif len(sys.argv) > 6:  # resume: ... USER SESSION RUN
     session, run_id = sys.argv[5], sys.argv[6]
     print(f"resume designer session {session} run {run_id}")
 else:
@@ -74,14 +89,15 @@ else:
     session, run_id = handoff["designer_session_id"], handoff["designer_run_id"]
     print(f"handoff -> designer session {session} ({handoff['designer_url']})")
 
-answers = [
+# CASE_ANSWERS (JSON list), CASE_SCREEN, CASE_PLATFORM override the warehouse script.
+answers = json.loads(os.environ["CASE_ANSWERS"]) if os.environ.get("CASE_ANSWERS") else [
     "Đồng ý thiết kế. Phạm vi: 1 màn hình desktop 'Tạo yêu cầu vật tư' cho nhân viên kho "
     "(form chọn vật tư, số lượng, kho xuất, lý do; danh sách dòng yêu cầu; nút Gửi phê duyệt). "
     "File đầu ra: warehouse-request.fig. Dùng thư viện shadcn-ui. Xác nhận phạm vi, bắt đầu thiết kế.",
     "Xác nhận phạm vi như trên, chỉ 1 màn hình desktop. Bắt đầu thiết kế ngay.",
     "Đúng rồi, tiếp tục thiết kế.",
 ]
-turn = 0
+turn = first_turn
 while time.time() < DEADLINE:
     run = wait_run(run_id)
     if run.get("assistant_message"):
@@ -127,8 +143,8 @@ while time.time() < DEADLINE:
         raise SystemExit("agent still has not started the design after all scripted answers")
     say(USER, answers[turn])
     status, run = call("POST", f"{API}/sessions/{session}/messages", {
-        "content": answers[turn], "screen_name_hint": "Tạo yêu cầu vật tư",
-        "platform_hint": "desktop", "mcp_profile": PROFILE,
+        "content": answers[turn], "screen_name_hint": os.environ.get("CASE_SCREEN", "Tạo yêu cầu vật tư"),
+        "platform_hint": os.environ.get("CASE_PLATFORM", "desktop"), "mcp_profile": PROFILE,
     })
     assert status == 202, f"message failed: {status} {run}"
     run_id = run["id"]

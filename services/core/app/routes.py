@@ -190,7 +190,9 @@ def list_projects() -> list[dict[str, Any]]:
 @private.post("/projects", status_code=201)
 def create_project(body: ProjectIn) -> dict[str, Any]:
     user = get_current_user()
-    slug = re.sub(r"[^A-Z0-9]+", "-", body.name.upper()).strip("-")[:16] or "PROJECT"
+    ascii_name = unicodedata.normalize("NFKD", body.name.replace("Đ", "D").replace("đ", "d"))
+    ascii_name = "".join(c for c in ascii_name if not unicodedata.combining(c))
+    slug = re.sub(r"[^A-Z0-9]+", "-", ascii_name.upper()).strip("-")[:16].strip("-") or "PROJECT"
     project_id = f"PRJ-{slug}-{uuid.uuid4().hex[:4].upper()}"
     # Default: the creator runs the whole journey (PM = BA + Designer) and administers it.
     roles = ["ADMIN", "PM"]

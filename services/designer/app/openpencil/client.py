@@ -1,5 +1,6 @@
 import asyncio
 import json
+from pathlib import Path
 import re
 import asyncio
 from collections.abc import AsyncIterator
@@ -156,6 +157,11 @@ class OpenPencilClient:
         clean = path.replace("\\", "/").lstrip("/")
         if not clean or ".." in clean.split("/"):
             raise AppError("INVALID_OUTPUT_FILE", "Invalid output file", path, 422)
+        local_root = (self.settings.openpencil_data_dir or "").strip()
+        if local_root:
+            local = Path(local_root) / clean
+            if local.is_file():
+                return await asyncio.to_thread(local.read_bytes), "application/octet-stream"
         parsed = urlsplit(endpoint.strip())
         if not parsed.scheme or not parsed.netloc:
             raise AppError("MCP_PROFILE_REQUIRED", "OpenPencil endpoint is required", endpoint, 409)

@@ -1249,6 +1249,7 @@ function AssetsTab({ projectId }: { projectId: string }) {
                   <span className="pill">v{a.version}</span>
                   {a.version < a.latest_version && <span className="pill dim">mới nhất v{a.latest_version}</span>}
                   {a.meta?.state === "review" && <span className="pill warn">Chờ duyệt</span>}
+                  {a.meta?.state === "draft" && <span className="pill">Bản nháp</span>}
                   {a.meta?.state === "approved" && <span className="pill ok">Đã duyệt</span>}
                   {a.stale && <span className="pill warn">Cần xem lại · BA v{a.derived_latest_version}</span>}
                 </div>

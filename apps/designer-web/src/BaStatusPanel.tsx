@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { isEmbedded, projectId } from "./platform";
 import type { Session } from "./types";
 
+type Feature = { session_id: string; title: string; updated_at: string };
 type Step = { key: string; label: string; role: string; status: string; reason: string | null };
 type Journey = {
     feature: { id: string; title: string; status: string };
@@ -19,10 +20,44 @@ const STATUS_LABEL: Record<string, string> = {
     EXPORTED: "Đã bàn giao",
 };
 
-/** Left-rail panel: where the BA side of this design stands (read from the journey API). */
+const pickKey = (sessionId: string) => `designer.ba-feature.${sessionId}`;
+
+/** Left-rail panel: where the BA side of this design stands (read from the journey API).
+ *  A handed-off session follows its feature; any other session in the project shows the
+ *  project's BA features (latest first, choice remembered per session). */
 export function BaStatusPanel({ session }: { session?: Session }) {
-    const featureId = session?.source === "ba-handoff" ? session.source_ref : null;
+    const handoffFeature = session?.source === "ba-handoff" ? session.source_ref ?? null : null;
+    const [features, setFeatures] = useState<Feature[] | null>(null);
+    const [picked, setPicked] = useState<string | null>(null);
     const [journey, setJourney] = useState<Journey | null>(null);
+
+    useEffect(() => {
+        setFeatures(null);
+        if (handoffFeature || !projectId || !session) return;
+        try {
+            setPicked(localStorage.getItem(pickKey(session.id)));
+        } catch {
+            setPicked(null);
+        }
+        fetch(`/ba/api/features?project_id=${encodeURIComponent(projectId)}`, { credentials: "same-origin" })
+            .then((r) => (r.ok ? r.json() : []))
+            .then((items: Feature[]) =>
+                setFeatures([...items].sort((a, b) => b.updated_at.localeCompare(a.updated_at))),
+            )
+            .catch(() => setFeatures([]));
+    }, [handoffFeature, session?.id]);
+
+    const featureId =
+        handoffFeature ??
+        (features?.find((f) => f.session_id === picked)?.session_id || features?.[0]?.session_id || null);
+    const choose = (id: string) => {
+        setPicked(id);
+        try {
+            if (session) localStorage.setItem(pickKey(session.id), id);
+        } catch {
+            /* private mode */
+        }
+    };
 
     useEffect(() => {
         setJourney(null);
@@ -49,7 +84,9 @@ export function BaStatusPanel({ session }: { session?: Session }) {
         return (
             <section className="ba-status">
                 <div className="rail-label">Trạng thái BA</div>
-                <p className="ba-status-empty">Phiên này không gắn với feature BA nào.</p>
+                <p className="ba-status-empty">
+                    {features === null ? "Đang tải…" : "Dự án chưa có feature BA nào. Thiết kế tự do hoặc tạo feature ở portal."}
+                </p>
             </section>
         );
     }
@@ -76,9 +113,25 @@ export function BaStatusPanel({ session }: { session?: Session }) {
         <section className="ba-status">
             <div className="rail-label">Trạng thái BA</div>
             <div className="ba-status-card">
-                <div className="ba-status-title" title={journey.feature.title}>
-                    {journey.feature.title}
-                </div>
+                {!handoffFeature && features && features.length > 1 ? (
+                    <select
+                        className="ba-status-select"
+                        value={featureId}
+                        onChange={(e) => choose(e.target.value)}
+                        title="Feature BA của dự án"
+                    >
+                        {features.map((f) => (
+                            <option key={f.session_id} value={f.session_id}>
+                                {f.title}
+                            </option>
+                        ))}
+                    </select>
+                ) : (
+                    <div className="ba-status-title" title={journey.feature.title}>
+                        {journey.feature.title}
+                    </div>
+                )}
+                {!handoffFeature && <span className="ba-status-note">Cùng dự án · chưa bàn giao cho phiên này</span>}
                 <span className="ba-status-state">{STATUS_LABEL[journey.feature.status] ?? journey.feature.status}</span>
                 <ul>
                     {baSteps.map((s) => (

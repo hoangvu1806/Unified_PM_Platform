@@ -1,0 +1,2 @@
+{"active_section": "business_rules", "user_message": "BR theo wiki todo RULE:\nBR-01: A task must have a title before it can be saved.\nBR-02: A due date cannot be earlier than the creation date.\nBR-03: A completed task moves to the Done list and can be restored.\nBR-04: A reminder is sent before the due time when reminders are enabled.\nBR-05: A user only sees and edits their own tasks."}
+{"active_section": "business_rules", "user_message": "Xác nhận 5 BR như trên, chuyển sang Workflow."}

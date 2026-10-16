@@ -42,6 +42,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     startup_report("designer-api")
     store = Store(settings.postgres_dsn)
     await store.initialize()
+    interrupted = await store.interrupt_unfinished_runs()
+    if interrupted:
+        logging.getLogger("designer_agent.runs").warning("Marked %s interrupted run(s) as retryable", interrupted)
     events = EventStream(store)
     openpencil = OpenPencilGateway(settings)
     llm = AdkProvider(settings)

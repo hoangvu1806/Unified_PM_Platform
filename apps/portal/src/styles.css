@@ -459,7 +459,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--v
   .agent-cards { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
-  .app-shell, .app-shell.rail-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+  .app-shell, .app-shell.rail-collapsed { grid-template-columns: minmax(0, 1fr); }
   .rail { display: none; }
   .page-inner { padding: 20px 16px 56px; }
   .topbar { padding: 0 16px; }

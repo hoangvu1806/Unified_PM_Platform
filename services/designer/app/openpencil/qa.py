@@ -136,7 +136,8 @@ def clipped_instance_text(root: dict[str, Any]) -> list[dict[str, Any]]:
             if node.get("type") == "TEXT" and node.get("visible", True):
                 text_width = float(node.get("width") or 0)
                 text_height = float(node.get("height") or 0)
-                if x < 0 or y < 0 or x + text_width > width or y + text_height > height:
+                tol = 2.0  # text boxes round line-height; only real clipping blocks
+                if x < -tol or y < -tol or x + text_width > width + tol or y + text_height > height + tol:
                     findings.append(
                         {
                             "instance": instance.get("name"),
@@ -261,6 +262,63 @@ def component_styles(root: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
+def _rgb(fill_owner: dict[str, Any]) -> tuple[float, float, float] | None:
+    for fill in fill_owner.get("fills") or []:
+        color = fill.get("color") if isinstance(fill, dict) else None
+        if isinstance(color, dict) and fill.get("visible", True) and float(fill.get("opacity", 1) or 0) > 0.5:
+            return tuple(float(color.get(c, 0)) for c in ("r", "g", "b"))  # type: ignore[return-value]
+    return None
+
+
+def _luminance(rgb: tuple[float, float, float]) -> float:
+    lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def design_lint(root: dict[str, Any], platform: str) -> dict[str, Any]:
+    """Objective quality signals for the designer (advisory, never a hard gate):
+    type scale, tiny text, palette size and text contrast against its background."""
+    sizes: set[int] = set()
+    colors: set[tuple[float, float, float]] = set()
+    tiny: list[str] = []
+    low_contrast: list[dict[str, Any]] = []
+
+    def walk(node: dict[str, Any], background: tuple[float, float, float] | None) -> None:
+        if node.get("visible", True) is False:
+            return
+        fill = _rgb(node)
+        if node.get("type") == "TEXT":
+            text = " ".join(str(node.get("characters") or "").split())[:40]
+            size = node.get("fontSize") or (node.get("style") or {}).get("fontSize")
+            if isinstance(size, int | float):
+                sizes.add(round(size))
+                if platform == "mobile" and size < 12 and text:
+                    tiny.append(text)
+            if fill and background and text:
+                hi, lo = sorted((_luminance(fill), _luminance(background)), reverse=True)
+                ratio = (hi + 0.05) / (lo + 0.05)
+                if ratio < 4.5:
+                    low_contrast.append({"text": text, "ratio": round(ratio, 2), "id": node.get("id")})
+            return
+        if fill and node.get("type") != "INSTANCE":
+            colors.add(tuple(round(c, 2) for c in fill))  # type: ignore[arg-type]
+        for child in node.get("children", []) or []:
+            if isinstance(child, dict):
+                walk(child, fill or background)
+
+    walk(root, _rgb(root) or (1.0, 1.0, 1.0))
+    notes = []
+    if len(sizes) > 6:
+        notes.append(f"{len(sizes)} font sizes {sorted(sizes)}: tighten to a 3-5 step type scale.")
+    if tiny:
+        notes.append(f"{len(tiny)} text layers below 12px on mobile: {tiny[:4]}")
+    if len(colors) > 10:
+        notes.append(f"{len(colors)} surface colors: reduce to neutrals + one accent + semantic states.")
+    if low_contrast:
+        notes.append(f"{len(low_contrast)} text layers below 4.5:1 contrast: {low_contrast[:4]}")
+    return {"font_sizes": sorted(sizes), "surface_colors": len(colors), "notes": notes}
+
+
 async def measure_screen(
     client: Any,
     session: ClientSession,
@@ -322,4 +380,5 @@ async def measure_screen(
         "clipped_instance_text": clipped_instance_text(root),
         "visible_text": visible_text(root),
         "component_styles": component_styles(root),
+        "design_lint": design_lint(root, "mobile" if float(root.get("width") or 0) <= 480 else "desktop"),
     }

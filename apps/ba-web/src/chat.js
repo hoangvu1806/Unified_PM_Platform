@@ -1389,7 +1389,7 @@ function renderChatMessages() {
 
   messages.forEach(msg => {
     const row = document.createElement('div');
-    row.className = `message-row ${msg.sender === 'user' ? 'user' : ''} animate-fadeIn`;
+    row.className = `message-row ${msg.sender === 'user' ? 'user' : ''} ${msg === streamingMsg ? 'is-streaming' : ''} animate-fadeIn`;
     const body =
       msg.sender === 'agent'
         ? `<div class="bubble bubble-md">${formatChatMarkdown(msg.text)}</div>`
@@ -1403,7 +1403,107 @@ function renderChatMessages() {
     chatStream.appendChild(row);
   });
 
+  // Waiting for the agent (this tab or another sender): keep the typing dots after any re-render.
+  if ((isSending || remotePending) && !streamingMsg) {
+    showTypingIndicator();
+  }
   chatStream.scrollTop = chatStream.scrollHeight;
+}
+
+// ── Remote turns: a turn sent from another tab / user / script ─
+// The server history is the truth: last message from the user = the agent is working.
+let remotePending = false;
+const seenServerCount = {};
+
+async function watchServerTurn() {
+  if (isSending || document.hidden || !sessionId) return;
+  const sec = SECTIONS[activeSectionIndex];
+  let res;
+  try {
+    res = await getChatHistory(sessionId, sec.id);
+  } catch {
+    return;
+  }
+  const server = (res && res.messages) || [];
+  // The conversation already moved on (this section is done, the next one has messages): follow it.
+  const nextId = TIER1_IDS[TIER1_IDS.indexOf(sec.id) + 1];
+  if (sectionStates[sec.id].status === 'completed' && nextId && sectionStates[nextId]?.status !== 'locked') {
+    try {
+      const nextRes = await getChatHistory(sessionId, nextId);
+      if (nextRes?.messages?.length) {
+        const idx = SECTIONS.findIndex((x) => x.id === nextId);
+        if (idx >= 0) await selectSection(idx);
+        return;
+      }
+    } catch {
+      /* stay on this section */
+    }
+  }
+  const last = server[server.length - 1];
+  const pending = Boolean(last && last.sender === 'user');
+  if (seenServerCount[sec.id] === undefined) seenServerCount[sec.id] = server.length;
+  if (server.length !== seenServerCount[sec.id]) {
+    seenServerCount[sec.id] = server.length;
+    const wasCompleted = sectionStates[sec.id].status === 'completed';
+    chatHistories[sec.id] = server.map((m) => ({ sender: m.sender, text: m.text }));
+    const reply = chatHistories[sec.id][chatHistories[sec.id].length - 1];
+    remotePending = pending;
+    if (reply && reply.sender === 'agent') {
+      reply.full = reply.text;
+      reply.text = '';
+      streamingMsg = reply;
+      renderChatMessages();
+      typeTick();
+      await waitTyping();
+      finishTyping();
+    } else {
+      renderChatMessages();
+    }
+    try {
+      await refreshFeatureState();
+    } catch {
+      /* next poll retries */
+    }
+    followAgentToNextSection(sec.id, wasCompleted);
+    return;
+  }
+  if (pending !== remotePending) {
+    remotePending = pending;
+    if (pending) showTypingIndicator();
+    else removeTypingIndicator();
+  }
+}
+
+// ── Typewriter: reveal streamed text progressively ───────────
+let streamingMsg = null;
+let typeTimer = null;
+
+function updateStreamingBubble() {
+  const bubble = chatStream.querySelector('.message-row.is-streaming .bubble');
+  if (!bubble || !streamingMsg) return renderChatMessages();
+  bubble.innerHTML = formatChatMarkdown(streamingMsg.text);
+  chatStream.scrollTop = chatStream.scrollHeight;
+}
+
+function typeTick() {
+  const msg = streamingMsg;
+  if (!msg) return;
+  const remaining = msg.full.length - msg.text.length;
+  if (remaining <= 0) {
+    typeTimer = null;
+    return;
+  }
+  msg.text = msg.full.slice(0, msg.text.length + Math.max(4, Math.ceil(remaining / 25)));
+  updateStreamingBubble();
+  typeTimer = setTimeout(typeTick, 18);
+}
+
+function finishTyping() {
+  if (typeTimer) clearTimeout(typeTimer);
+  typeTimer = null;
+  if (streamingMsg) streamingMsg.text = streamingMsg.full;
+  streamingMsg = null;
+  renderChatMessages();
 }
 
 function renderWorkspace() {
@@ -1899,12 +1999,13 @@ async function handleSendWithAction(action = null) {
       onMessage: (data) => {
         removeTypingIndicator();
         if (!currentAgentMsg) {
-          currentAgentMsg = { sender: 'agent', text: data.text || '' };
+          currentAgentMsg = { sender: 'agent', text: '', full: '' };
           chatHistories[sec.id].push(currentAgentMsg);
-        } else {
-          currentAgentMsg.text += data.text || '';
+          streamingMsg = currentAgentMsg;
+          renderChatMessages();
         }
-        renderChatMessages();
+        currentAgentMsg.full += data.text || '';
+        if (!typeTimer) typeTick();
       },
       onStateUpdate: (stateData) => {
         applyStateUpdate(stateData, sec.id);
@@ -1914,13 +2015,17 @@ async function handleSendWithAction(action = null) {
       },
       onDone: async () => {
         removeTypingIndicator();
-        if (!receivedStateUpdate) {
-          try {
-            await refreshFeatureState();
-          } catch (err) {
-            console.warn('Fallback getFeature after chat failed:', err);
-          }
+        seenServerCount[sec.id] = undefined;
+        await waitTyping();
+        finishTyping();
+        const wasCompleted = sectionStates[sec.id].status === 'completed';
+        try {
+          // Always reload: the agent may have completed this section and opened the next one.
+          await refreshFeatureState();
+        } catch (err) {
+          console.warn('getFeature after chat failed:', err);
         }
+        followAgentToNextSection(sec.id, wasCompleted);
         if (action === 'validate') {
           try {
             if (!lastValidation || !lastValidation.agent_response) {
@@ -1935,6 +2040,7 @@ async function handleSendWithAction(action = null) {
       },
       onError: async (err) => {
         removeTypingIndicator();
+        finishTyping();
         // Snapshot before any refresh so a failed getFeature/wiki call cannot blank the thread.
         const preserved = (chatHistories[sec.id] || []).map((m) => ({ ...m }));
         chatHistories[sec.id] = preserved;
@@ -1974,6 +2080,25 @@ async function handleSend() {
   await handleSendWithAction(null);
 }
 
+/** Let the typewriter finish the streamed answer (bounded wait). */
+function waitTyping() {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const check = () => (!typeTimer || Date.now() - started > 4000 ? resolve() : setTimeout(check, 60));
+    check();
+  });
+}
+
+/** When a Group 1 section just became complete, open the next one like the agent says. */
+function followAgentToNextSection(sectionId, wasCompleted) {
+  if (wasCompleted || sectionStates[sectionId]?.status !== 'completed') return;
+  const next = TIER1_IDS[TIER1_IDS.indexOf(sectionId) + 1];
+  const idx = SECTIONS.findIndex((s) => s.id === next);
+  if (idx >= 0 && sectionStates[next]?.status !== 'locked' && idx !== activeSectionIndex) {
+    void selectSection(idx);
+  }
+}
+
 // ── Typing Indicator ─────────────────────────────────────────
 
 function showTypingIndicator() {
@@ -2011,3 +2136,4 @@ window.addEventListener('message', (event) => {
 });
 
 init();
+setInterval(() => void watchServerTurn(), 3000);
