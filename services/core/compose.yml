@@ -39,6 +39,7 @@ services:
         required: true
     environment:
       POSTGRES_HOST: postgres
+      POSTGRES_DB: platform_test     # never the live "platform" database
       POSTGRES_PORT: "5432"
       MOCK_SEED: full           # every role + sample projects for the access tests
       STORAGE_BACKEND: local    # tests never write to the real bucket

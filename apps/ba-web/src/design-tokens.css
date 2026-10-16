@@ -1669,3 +1669,5 @@ body.platform-embed .tb-standalone { display: none !important; }
 .tp-value { flex: 1; min-width: 0; padding: 6px 0; font-size: 13px; line-height: 1.45; color: var(--text-main); overflow-wrap: anywhere; }
 .tp-section.is-readonly .tp-row { align-items: flex-start; }
 .tp-section.is-readonly .tp-row-label { padding-top: 7px; }
+
+.brand-logo { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }

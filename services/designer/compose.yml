@@ -49,6 +49,7 @@ services:
         required: true
     environment:
       POSTGRES_HOST: postgres
+      POSTGRES_DB: platform_test     # never the live "platform" database
       POSTGRES_PORT: "5432"
       AUTH_MODE: "off"          # legacy suites run without login; access rules have their own tests
       STORAGE_BACKEND: local    # tests never write to the real bucket

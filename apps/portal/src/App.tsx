@@ -239,7 +239,7 @@ export function App() {
 }
 
 function BrandMark() {
-  return <span className="brand-mark" aria-hidden="true">UW</span>;
+  return <img className="brand-mark" src="/unified-logo.png" alt="" aria-hidden="true" />;
 }
 
 function Brand() {
