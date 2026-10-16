@@ -17,7 +17,7 @@ import logging
 from platform_core.db import database_url
 from psycopg import Connection
 
-from .seed import USERS
+from .seed import seed_users
 
 LEGACY_ID = "PRJ-LEGACY"
 log = logging.getLogger("legacy")
@@ -50,7 +50,7 @@ def run() -> dict[str, int]:
             "INSERT INTO core.projects (id, name, description) VALUES (%s, %s, %s) ON CONFLICT (id) DO NOTHING",
             (LEGACY_ID, "Legacy", "Data created before projects existed"),
         )
-        for uid, *_rest in USERS:
+        for uid, *_rest in seed_users():
             conn.execute(
                 "INSERT INTO core.project_members (project_id, user_id, project_role) "
                 "SELECT %s, id, 'ADMIN' FROM core.users WHERE id=%s ON CONFLICT DO NOTHING",

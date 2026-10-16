@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from .db import connection
 from .passwords import verify_password
-from .seed import DEMO_PASSWORD, USERS
+from .seed import DEMO_PASSWORD, seed_users
 
 public = APIRouter(prefix="/api/core")
 
@@ -123,7 +123,7 @@ def mock_users() -> list[dict[str, Any]]:
     _require_mock()
     return [
         {"username": username, "name": name, "roles": roles, "password": DEMO_PASSWORD}
-        for _uid, username, name, roles in USERS
+        for _uid, username, name, roles in seed_users()
     ]
 
 

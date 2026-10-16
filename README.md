@@ -55,8 +55,10 @@ docker builder prune -af                          # optional: drop the build cac
 | http://localhost:8080/projects/&lt;id&gt;/designer | Designer agent of a project (also before any BA handoff) |
 | http://localhost:1420 | OpenPencil editor — keep **one** tab open while the Designer builds screens |
 
-Demo accounts (`AUTH_MODE=mock`, password `demo123`): `pm.hoa` (PM = BA + Designer), `ba.an`, `ba.chi` (BA),
-`designer.binh` (Designer), `lead.dung` (PM). Seeded projects: `PRJ-AURORA`, `PRJ-DEMO`.
+Accounts (`AUTH_MODE=mock`, password `demo123`): `pm.hoa` and `lead.dung`, both PM (BA + Designer). No project is
+seeded; create one after login. `MOCK_SEED=full` adds the single-role accounts (`ba.an`, `ba.chi`, `designer.binh`)
+and the sample projects `PRJ-AURORA`, `PRJ-DEMO` — the test containers use it, and `scripts/e2e_access.py` needs it.
+The login page also shows "Đăng nhập với Keycloak", enabled once `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID` are set.
 
 ## Configuration
 
