@@ -502,14 +502,9 @@ function ScreensCanvas() {
             <aside className="canvas-rail">
                 <div className="canvas-rail-top">
                     <Brand subtitle="Trang thiết kế" />
-                    <div className="canvas-rail-actions">
-                        <a className="canvas-icon" href={backUrl} title="Về khung chat" aria-label="Về khung chat">
-                            <ArrowLeft size={15} />
-                        </a>
-                        <button className="canvas-icon" onClick={toggleTheme} title="Đổi giao diện sáng/tối" type="button">
-                            {resolvedTheme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
-                        </button>
-                    </div>
+                    <a className="canvas-icon canvas-rail-back" href={backUrl} title="Về khung chat" aria-label="Về khung chat">
+                        <ArrowLeft size={15} />
+                    </a>
                 </div>
                 <div className="canvas-rail-label">
                     <span>Màn hình</span>
@@ -596,6 +591,9 @@ function ScreensCanvas() {
                                 <Code2 size={15} /> Code
                             </button>
                         </>}
+                        <button className="canvas-icon" onClick={toggleTheme} title="Đổi giao diện sáng/tối" type="button">
+                            {resolvedTheme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+                        </button>
                         <ExportMenu screen={screen} state={state} />
                     </div>
                 </header>
