@@ -40,12 +40,18 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
 .canvas-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .canvas-divider { width: 1px; height: 20px; margin: 0 4px; background: var(--border-strong); }
 
-.canvas-select { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 4px 0 10px;
+.canvas-select { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px 0 10px;
   border-radius: 10px; background: var(--bg-surface-raised); color: var(--text-muted); transition: background 0.15s ease; }
 .canvas-select:hover { background: var(--bg-surface-hover); }
-.canvas-select select { height: 100%; max-width: 220px; padding: 0 6px 0 0; border: 0; background: transparent;
-  color: var(--text-secondary); font: inherit; font-weight: 600; cursor: pointer; outline: none; }
+.canvas-select select { height: 100%; max-width: 220px; padding: 0; border: 0; background: transparent;
+  color: var(--text-secondary); font: inherit; font-weight: 600; cursor: pointer; outline: none;
+  appearance: none; -webkit-appearance: none; }
 .canvas-select select option { background: var(--bg-surface); color: var(--text-primary); }
+.canvas-select::after { content: ""; display: block; width: 14px; height: 14px; flex-shrink: 0;
+  background-color: var(--text-muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center/contain no-repeat;
+  pointer-events: none; }
 
 .canvas-tool, .canvas-export, .canvas-icon, .canvas-toolbar form button {
   display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 0; border-radius: 10px;
