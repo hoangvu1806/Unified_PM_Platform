@@ -289,14 +289,16 @@ function MultiView({ screens, onSelect }: { screens: Screen[]; onSelect: (id: st
         <div className="canvas-multi">
             {screens.map((s) => {
                 const p = PLATFORMS[s.platform] ?? PLATFORMS.desktop;
-                const scale = Math.min(1, 320 / (s.width ?? 1440));
-                const h = 600;
+                const w = s.width ?? 1440;
+                const scale = Math.min(1, 320 / w);
+                // height: mobile ~844, tablet ~1024, desktop ~900; scale with the frame
+                const h = s.platform === "mobile" ? 844 : s.platform === "tablet" ? 1024 : 900;
                 return (
                     <div key={s.id} className="canvas-multi-frame" onClick={() => onSelect(s.id)}>
-                        <div className="canvas-multi-viewport" style={{ width: (s.width ?? 1440) * scale, height: h * scale }}>
+                        <div className="canvas-multi-viewport" style={{ width: w * scale, height: h * scale }}>
                             {docs[s.id]
                                 ? <iframe title={s.name} sandbox="allow-scripts allow-forms" srcDoc={docs[s.id]}
-                                    style={{ width: s.width ?? 1440, height: h, transform: `scale(${scale})`, pointerEvents: "none" }} />
+                                    style={{ width: w, height: h, transform: `scale(${scale})`, pointerEvents: "none" }} />
                                 : <div className="canvas-multi-loading" />}
                         </div>
                         <div className="canvas-multi-label">

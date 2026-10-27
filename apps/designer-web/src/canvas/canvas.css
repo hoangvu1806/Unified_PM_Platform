@@ -101,7 +101,7 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
 .export-item.primary > svg { color: var(--violet); }
 
 /* ── Stage ────────────────────────────────────────── */
-.canvas-body { flex: 1; display: flex; min-height: 0; }
+.canvas-body { flex: 1; display: flex; min-height: 0; overflow: hidden; }
 .canvas-stage { flex: 1; overflow: auto; padding: 32px 24px;
   background-color: var(--bg-canvas);
   background-image: radial-gradient(color-mix(in srgb, var(--text-muted) 22%, transparent) 1px, transparent 1px);
@@ -111,8 +111,8 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
 .canvas-frame-box iframe { border: 0; display: block; transform-origin: 0 0; background: #fff; }
 
 /* ── Multi-frame overview ─────────────────────────── */
-.canvas-multi { display: flex; flex-direction: row; align-items: flex-start; gap: 32px;
-  padding: 40px 32px; overflow-x: auto; min-height: 100%;
+.canvas-multi { flex: 1; align-self: stretch; display: flex; flex-direction: row; align-items: flex-start;
+  gap: 32px; padding: 40px 32px; overflow: auto;
   background-color: var(--bg-canvas);
   background-image: radial-gradient(color-mix(in srgb, var(--text-muted) 22%, transparent) 1px, transparent 1px);
   background-size: 20px 20px; }
