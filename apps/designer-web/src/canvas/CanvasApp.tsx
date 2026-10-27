@@ -2,6 +2,7 @@ import {
     Check,
     ChevronDown,
     Code2,
+    Columns2,
     Download,
     FileArchive,
     Files,
@@ -14,6 +15,7 @@ import {
     Save,
     Search,
     Smartphone,
+    Square,
     Tablet,
     X,
 } from "lucide-react";
@@ -272,6 +274,43 @@ function ExportMenu({ screen, state }: { screen?: Screen; state: string }) {
     );
 }
 
+/** Horizontal all-frames overview — one iframe per screen, scrollable. */
+function MultiView({ screens, onSelect }: { screens: Screen[]; onSelect: (id: string) => void }) {
+    const [docs, setDocs] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        screens.forEach((s) => {
+            if (docs[s.id]) return;
+            api.screenDocument(SESSION, s.id).then((d) => setDocs((prev) => ({ ...prev, [s.id]: d }))).catch(() => undefined);
+        });
+    }, [screens]);
+
+    return (
+        <div className="canvas-multi">
+            {screens.map((s) => {
+                const p = PLATFORMS[s.platform] ?? PLATFORMS.desktop;
+                const scale = Math.min(1, 320 / (s.width ?? 1440));
+                const h = 600;
+                return (
+                    <div key={s.id} className="canvas-multi-frame" onClick={() => onSelect(s.id)}>
+                        <div className="canvas-multi-viewport" style={{ width: (s.width ?? 1440) * scale, height: h * scale }}>
+                            {docs[s.id]
+                                ? <iframe title={s.name} sandbox="allow-scripts allow-forms" srcDoc={docs[s.id]}
+                                    style={{ width: s.width ?? 1440, height: h, transform: `scale(${scale})`, pointerEvents: "none" }} />
+                                : <div className="canvas-multi-loading" />}
+                        </div>
+                        <div className="canvas-multi-label">
+                            <p.icon size={13} />
+                            <strong>{s.name}</strong>
+                            <small>v{s.version}</small>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 function ScreensCanvas() {
     const [screens, setScreens] = useState<Screen[]>([]);
     const [current, setCurrent] = useState(params.get("screen") || "");
@@ -284,6 +323,7 @@ function ScreensCanvas() {
     const [versions, setVersions] = useState<ScreenVersion[]>([]);
     const [version, setVersion] = useState<number>();
     const [toast, setToast] = useState("");
+    const [viewMode, setViewMode] = useState<"single" | "multi">("single");
     const frameRef = useRef<HTMLIFrameElement>(null);
     const channel = useMemo(
         () => (typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(`designer-canvas-${SESSION}`) : null),
@@ -385,6 +425,14 @@ function ScreensCanvas() {
                 <div className="canvas-rail-label">
                     <span>Màn hình</span>
                     <span className="canvas-count">{screens.length}</span>
+                    <button
+                        className={`canvas-icon canvas-view-toggle ${viewMode === "multi" ? "active" : ""}`}
+                        onClick={() => setViewMode((m) => m === "single" ? "multi" : "single")}
+                        title={viewMode === "single" ? "Xem tất cả frames ngang" : "Xem từng màn"}
+                        type="button"
+                    >
+                        {viewMode === "single" ? <Columns2 size={15} /> : <Square size={15} />}
+                    </button>
                 </div>
                 <nav className="canvas-screens" aria-label="Màn hình">
                     {screens.map((s) => {
@@ -415,53 +463,58 @@ function ScreensCanvas() {
             <main className="canvas-main">
                 <header className="canvas-toolbar">
                     <div className="canvas-title">
-                        <h2>{screen?.name}</h2>
-                        <span className="canvas-chip">
-                            <platform.icon size={13} /> {platform.label} · {width}px
-                        </span>
+                        {viewMode === "multi"
+                            ? <><h2>Tất cả màn hình</h2><span className="canvas-chip"><Columns2 size={13} /> {screens.length} frames</span></>
+                            : <><h2>{screen?.name}</h2><span className="canvas-chip"><platform.icon size={13} /> {platform.label} · {width}px</span></>
+                        }
                     </div>
                     <div className="canvas-tools">
-                        {states.length > 0 && (
+                        {viewMode === "single" && <>
+                            {states.length > 0 && (
+                                <CanvasPicker
+                                    icon={Layers}
+                                    title="Trạng thái của màn hình"
+                                    value={state}
+                                    options={[{ value: "", label: "Mặc định" }, ...states.map((s) => ({ value: s, label: s }))]}
+                                    onChange={setState}
+                                />
+                            )}
                             <CanvasPicker
-                                icon={Layers}
-                                title="Trạng thái của màn hình"
-                                value={state}
-                                options={[{ value: "", label: "Mặc định" }, ...states.map((s) => ({ value: s, label: s }))]}
-                                onChange={setState}
+                                icon={History}
+                                title="Lịch sử phiên bản"
+                                value={version ?? ""}
+                                options={[
+                                    { value: "", label: `v${screen?.version} · mới nhất` },
+                                    ...versions.slice(1).map((v) => ({ value: v.version, label: `v${v.version} · ${v.note || v.updated_by || ""}` })),
+                                ]}
+                                onChange={(v) => setVersion(v ? Number(v) : undefined)}
                             />
-                        )}
-                        <CanvasPicker
-                            icon={History}
-                            title="Lịch sử phiên bản"
-                            value={version ?? ""}
-                            options={[
-                                { value: "", label: `v${screen?.version} · mới nhất` },
-                                ...versions.slice(1).map((v) => ({ value: v.version, label: `v${v.version} · ${v.note || v.updated_by || ""}` })),
-                            ]}
-                            onChange={(v) => setVersion(v ? Number(v) : undefined)}
-                        />
-                        <span className="canvas-divider" aria-hidden />
-                        <button
-                            className={`canvas-tool ${selecting ? "active" : ""}`}
-                            onClick={() => setSelecting(!selecting)}
-                            type="button"
-                            title="Chọn một phần tử để góp ý ở khung chat"
-                        >
-                            <MousePointerClick size={15} /> Chọn phần tử
-                        </button>
-                        <button
-                            className={`canvas-tool ${codeOpen ? "active" : ""}`}
-                            onClick={() => setCodeOpen(!codeOpen)}
-                            type="button"
-                            title="Sửa HTML của màn hình"
-                        >
-                            <Code2 size={15} /> Code
-                        </button>
+                            <span className="canvas-divider" aria-hidden />
+                            <button
+                                className={`canvas-tool ${selecting ? "active" : ""}`}
+                                onClick={() => setSelecting(!selecting)}
+                                type="button"
+                                title="Chọn một phần tử để góp ý ở khung chat"
+                            >
+                                <MousePointerClick size={15} /> Chọn phần tử
+                            </button>
+                            <button
+                                className={`canvas-tool ${codeOpen ? "active" : ""}`}
+                                onClick={() => setCodeOpen(!codeOpen)}
+                                type="button"
+                                title="Sửa HTML của màn hình"
+                            >
+                                <Code2 size={15} /> Code
+                            </button>
+                        </>}
                         <ExportMenu screen={screen} state={state} />
                     </div>
                 </header>
-                <div className={`canvas-body ${codeOpen ? "with-code" : ""}`}>
-                    {doc && <Frame doc={doc} width={width} onMessage={onMessage} frameRef={frameRef} />}
+                <div className={`canvas-body ${codeOpen && viewMode === "single" ? "with-code" : ""}`}>
+                    {viewMode === "multi"
+                        ? <MultiView screens={screens} onSelect={(id) => { setCurrent(id); setViewMode("single"); }} />
+                        : doc && <Frame doc={doc} width={width} onMessage={onMessage} frameRef={frameRef} />
+                    }
                     {codeOpen && (
                         <section className="canvas-code" aria-label="HTML của màn hình">
                             <header>
