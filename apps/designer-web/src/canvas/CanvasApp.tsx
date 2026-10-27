@@ -1,4 +1,5 @@
 import {
+    ArrowLeft,
     Check,
     ChevronDown,
     Code2,
@@ -10,12 +11,14 @@ import {
     Image,
     Layers,
     Monitor,
+    Moon,
     MousePointerClick,
     Rows3,
     Save,
     Search,
     Smartphone,
     Square,
+    Sun,
     Tablet,
     X,
 } from "lucide-react";
@@ -274,8 +277,38 @@ function ExportMenu({ screen, state }: { screen?: Screen; state: string }) {
     );
 }
 
-/** Horizontal all-frames overview — one iframe per screen, scrollable. */
-function MultiView({ screens, onSelect }: { screens: Screen[]; onSelect: (id: string) => void }) {
+/** Parse state names out of screen HTML — same attribute used by runtime.js. */
+function parseStates(html: string): string[] {
+    const found = new Set<string>();
+    for (const m of html.matchAll(/data-state(?:-hide)?="([^"]+)"/g))
+        for (const s of m[1].split(/\s+/)) found.add(s.trim());
+    return Array.from(found).sort();
+}
+
+/** One iframe card that activates a specific state after load. */
+function StateFrame({
+    doc, w, h, state, screenName, onClick,
+}: { doc: string; w: number; h: number; state: string; screenName: string; onClick: () => void }) {
+    const ref = useRef<HTMLIFrameElement>(null);
+    const scale = Math.min(1, 300 / w);
+    const handleLoad = () => ref.current?.contentWindow?.postMessage({ type: "designer:state", state }, "*");
+    return (
+        <div className="canvas-multi-frame" onClick={onClick}>
+            <div className="canvas-multi-viewport" style={{ width: w * scale, height: h * scale }}>
+                <iframe ref={ref} title={state || screenName} sandbox="allow-scripts allow-forms"
+                    srcDoc={doc} onLoad={handleLoad}
+                    style={{ width: w, height: h, transform: `scale(${scale})`, pointerEvents: "none", border: 0 }} />
+            </div>
+            <div className="canvas-multi-label">
+                <strong>{screenName}</strong>
+                <small>{state || "Mặc định"}</small>
+            </div>
+        </div>
+    );
+}
+
+/** Horizontal overview — one card per screen × state. */
+function MultiView({ screens, onSelect }: { screens: Screen[]; onSelect: (id: string, state: string) => void }) {
     const [docs, setDocs] = useState<Record<string, string>>({});
 
     useEffect(() => {
@@ -285,35 +318,35 @@ function MultiView({ screens, onSelect }: { screens: Screen[]; onSelect: (id: st
         });
     }, [screens]);
 
+    type Card = { s: Screen; doc: string | null; state: string };
+    const cards: Card[] = screens.flatMap((s): Card[] => {
+        const doc = docs[s.id] ?? null;
+        if (!doc) return [{ s, doc: null, state: "" }];
+        return ["", ...parseStates(doc)].map((st) => ({ s, doc, state: st }));
+    });
+
     return (
         <div className="canvas-multi">
-            {screens.map((s) => {
-                const p = PLATFORMS[s.platform] ?? PLATFORMS.desktop;
+            {cards.map(({ s, doc, state }) => {
                 const w = s.width ?? 1440;
-                const scale = Math.min(1, 320 / w);
-                // height: mobile ~844, tablet ~1024, desktop ~900; scale with the frame
                 const h = s.platform === "mobile" ? 844 : s.platform === "tablet" ? 1024 : 900;
-                return (
-                    <div key={s.id} className="canvas-multi-frame" onClick={() => onSelect(s.id)}>
+                const scale = Math.min(1, 300 / w);
+                return doc
+                    ? <StateFrame key={`${s.id}-${state}`} doc={doc} w={w} h={h} state={state}
+                        screenName={s.name} onClick={() => onSelect(s.id, state)} />
+                    : <div key={s.id} className="canvas-multi-frame">
                         <div className="canvas-multi-viewport" style={{ width: w * scale, height: h * scale }}>
-                            {docs[s.id]
-                                ? <iframe title={s.name} sandbox="allow-scripts allow-forms" srcDoc={docs[s.id]}
-                                    style={{ width: w, height: h, transform: `scale(${scale})`, pointerEvents: "none" }} />
-                                : <div className="canvas-multi-loading" />}
+                            <div className="canvas-multi-loading" />
                         </div>
-                        <div className="canvas-multi-label">
-                            <p.icon size={13} />
-                            <strong>{s.name}</strong>
-                            <small>v{s.version}</small>
-                        </div>
-                    </div>
-                );
+                        <div className="canvas-multi-label"><strong>{s.name}</strong><small>Đang tải…</small></div>
+                      </div>;
             })}
         </div>
     );
 }
 
 function ScreensCanvas() {
+    const { resolvedTheme, toggleTheme } = useTheme();
     const [screens, setScreens] = useState<Screen[]>([]);
     const [current, setCurrent] = useState(params.get("screen") || "");
     const [doc, setDoc] = useState("");
@@ -327,6 +360,13 @@ function ScreensCanvas() {
     const [toast, setToast] = useState("");
     const [viewMode, setViewMode] = useState<"single" | "multi">("single");
     const frameRef = useRef<HTMLIFrameElement>(null);
+
+    // Build the back-to-chat URL from the current page's query params.
+    const backUrl = (() => {
+        const project = params.get("project");
+        const base = window.location.pathname.replace("canvas.html", "");
+        return project ? `${base}?session=${SESSION}&project=${project}` : `${base}?session=${SESSION}`;
+    })();
     const channel = useMemo(
         () => (typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(`designer-canvas-${SESSION}`) : null),
         [],
@@ -423,7 +463,17 @@ function ScreensCanvas() {
     return (
         <div className="canvas-shell">
             <aside className="canvas-rail">
-                <Brand subtitle="Trang thiết kế" />
+                <div className="canvas-rail-top">
+                    <Brand subtitle="Trang thiết kế" />
+                    <div className="canvas-rail-actions">
+                        <a className="canvas-icon" href={backUrl} title="Về khung chat" aria-label="Về khung chat">
+                            <ArrowLeft size={15} />
+                        </a>
+                        <button className="canvas-icon" onClick={toggleTheme} title="Đổi giao diện sáng/tối" type="button">
+                            {resolvedTheme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+                        </button>
+                    </div>
+                </div>
                 <div className="canvas-rail-label">
                     <span>Màn hình</span>
                     <span className="canvas-count">{screens.length}</span>
@@ -514,7 +564,7 @@ function ScreensCanvas() {
                 </header>
                 <div className={`canvas-body ${codeOpen && viewMode === "single" ? "with-code" : ""}`}>
                     {viewMode === "multi"
-                        ? <MultiView screens={screens} onSelect={(id) => { setCurrent(id); setViewMode("single"); }} />
+                        ? <MultiView screens={screens} onSelect={(id, st) => { setCurrent(id); setState(st); setViewMode("single"); }} />
                         : doc && <Frame doc={doc} width={width} onMessage={onMessage} frameRef={frameRef} />
                     }
                     {codeOpen && (

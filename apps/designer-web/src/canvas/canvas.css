@@ -8,7 +8,11 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
 /* ── Rail ─────────────────────────────────────────── */
 .canvas-rail { width: 248px; flex-shrink: 0; display: flex; flex-direction: column; padding: 16px 12px;
   background: var(--bg-surface); box-shadow: var(--shadow-sm); overflow-y: auto; z-index: 1; }
-.canvas-brand { margin-bottom: 20px; }
+.canvas-rail-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 20px; }
+.canvas-rail-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; padding-top: 2px; }
+.canvas-rail-actions .canvas-icon { color: var(--text-muted); }
+.canvas-rail-actions .canvas-icon:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+.canvas-brand { margin-bottom: 0; }
 .canvas-brand .brand-mark, .canvas-brand .brand-logo-img { width: 36px; height: 36px; flex-basis: 36px; }
 .canvas-brand strong { font-size: 15px; }
 .canvas-rail-label { display: flex; align-items: center; justify-content: space-between; margin: 0 8px 8px;
