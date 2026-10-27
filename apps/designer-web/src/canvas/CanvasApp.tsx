@@ -10,9 +10,11 @@ import {
     History,
     Image,
     Layers,
+    Minus,
     Monitor,
     Moon,
     MousePointerClick,
+    Plus,
     Rows3,
     Save,
     Search,
@@ -285,19 +287,26 @@ function parseStates(html: string): string[] {
     return Array.from(found).sort();
 }
 
+/** Inject overflow:hidden so frames never show scrollbars in overview. */
+function noScrollDoc(doc: string): string {
+    const tag = "<style>html,body{overflow:hidden!important;scrollbar-width:none!important}</style>";
+    return doc.includes("</head>") ? doc.replace("</head>", `${tag}</head>`) : tag + doc;
+}
+
 /** One iframe card that activates a specific state after load. */
 function StateFrame({
-    doc, w, h, state, screenName, onClick,
-}: { doc: string; w: number; h: number; state: string; screenName: string; onClick: () => void }) {
+    doc, w, h, state, screenName, zoom, onClick,
+}: { doc: string; w: number; h: number; state: string; screenName: string; zoom: number; onClick: () => void }) {
     const ref = useRef<HTMLIFrameElement>(null);
-    const scale = Math.min(1, 300 / w);
+    const baseScale = Math.min(1, 300 / w);
+    const scale = baseScale * zoom;
     const handleLoad = () => ref.current?.contentWindow?.postMessage({ type: "designer:state", state }, "*");
     return (
         <div className="canvas-multi-frame" onClick={onClick}>
             <div className="canvas-multi-viewport" style={{ width: w * scale, height: h * scale }}>
                 <iframe ref={ref} title={state || screenName} sandbox="allow-scripts allow-forms"
-                    srcDoc={doc} onLoad={handleLoad}
-                    style={{ width: w, height: h, transform: `scale(${scale})`, pointerEvents: "none", border: 0 }} />
+                    srcDoc={noScrollDoc(doc)} onLoad={handleLoad}
+                    style={{ width: w, height: h, transform: `scale(${scale})`, transformOrigin: "0 0", pointerEvents: "none", border: 0 }} />
             </div>
             <div className="canvas-multi-label">
                 <strong>{screenName}</strong>
@@ -307,9 +316,13 @@ function StateFrame({
     );
 }
 
+const ZOOM_MIN = 0.3, ZOOM_MAX = 2.0, ZOOM_STEP = 0.15;
+
 /** Horizontal overview — one card per screen × state. */
 function MultiView({ screens, onSelect }: { screens: Screen[]; onSelect: (id: string, state: string) => void }) {
     const [docs, setDocs] = useState<Record<string, string>>({});
+    const [zoom, setZoom] = useState(1.0);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         screens.forEach((s) => {
@@ -317,6 +330,22 @@ function MultiView({ screens, onSelect }: { screens: Screen[]; onSelect: (id: st
             api.screenDocument(SESSION, s.id).then((d) => setDocs((prev) => ({ ...prev, [s.id]: d }))).catch(() => undefined);
         });
     }, [screens]);
+
+    // Ctrl+wheel zoom
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const onWheel = (e: WheelEvent) => {
+            if (!e.ctrlKey && !e.metaKey) return;
+            e.preventDefault();
+            setZoom((z) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z - e.deltaY * 0.001)));
+        };
+        el.addEventListener("wheel", onWheel, { passive: false });
+        return () => el.removeEventListener("wheel", onWheel);
+    }, []);
+
+    const changeZoom = (delta: number) =>
+        setZoom((z) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((z + delta) * 100) / 100)));
 
     type Card = { s: Screen; doc: string | null; state: string };
     const cards: Card[] = screens.flatMap((s): Card[] => {
@@ -326,21 +355,29 @@ function MultiView({ screens, onSelect }: { screens: Screen[]; onSelect: (id: st
     });
 
     return (
-        <div className="canvas-multi">
-            {cards.map(({ s, doc, state }) => {
-                const w = s.width ?? 1440;
-                const h = s.platform === "mobile" ? 844 : s.platform === "tablet" ? 1024 : 900;
-                const scale = Math.min(1, 300 / w);
-                return doc
-                    ? <StateFrame key={`${s.id}-${state}`} doc={doc} w={w} h={h} state={state}
-                        screenName={s.name} onClick={() => onSelect(s.id, state)} />
-                    : <div key={s.id} className="canvas-multi-frame">
-                        <div className="canvas-multi-viewport" style={{ width: w * scale, height: h * scale }}>
-                            <div className="canvas-multi-loading" />
-                        </div>
-                        <div className="canvas-multi-label"><strong>{s.name}</strong><small>Đang tải…</small></div>
-                      </div>;
-            })}
+        <div className="canvas-multi-wrap" ref={containerRef}>
+            <div className="canvas-zoom-bar">
+                <button className="canvas-icon" onClick={() => changeZoom(-ZOOM_STEP)} disabled={zoom <= ZOOM_MIN} type="button" title="Thu nhỏ (Ctrl+scroll)"><Minus size={14} /></button>
+                <span className="canvas-zoom-label">{Math.round(zoom * 100)}%</span>
+                <button className="canvas-icon" onClick={() => changeZoom(ZOOM_STEP)} disabled={zoom >= ZOOM_MAX} type="button" title="Phóng to (Ctrl+scroll)"><Plus size={14} /></button>
+            </div>
+            <div className="canvas-multi">
+                {cards.map(({ s, doc, state }) => {
+                    const w = s.width ?? 1440;
+                    const h = s.platform === "mobile" ? 844 : s.platform === "tablet" ? 1024 : 900;
+                    const baseScale = Math.min(1, 300 / w);
+                    const scale = baseScale * zoom;
+                    return doc
+                        ? <StateFrame key={`${s.id}-${state}`} doc={doc} w={w} h={h} state={state}
+                            screenName={s.name} zoom={zoom} onClick={() => onSelect(s.id, state)} />
+                        : <div key={s.id} className="canvas-multi-frame">
+                            <div className="canvas-multi-viewport" style={{ width: w * scale, height: h * scale }}>
+                                <div className="canvas-multi-loading" />
+                            </div>
+                            <div className="canvas-multi-label"><strong>{s.name}</strong><small>Đang tải…</small></div>
+                          </div>;
+                })}
+            </div>
         </div>
     );
 }

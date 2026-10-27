@@ -115,11 +115,21 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
 .canvas-frame-box iframe { border: 0; display: block; transform-origin: 0 0; background: #fff; }
 
 /* ── Multi-frame overview ─────────────────────────── */
-.canvas-multi { flex: 1; align-self: stretch; display: flex; flex-direction: row; align-items: flex-start;
-  gap: 32px; padding: 40px 32px; overflow: auto;
+.canvas-multi-wrap { flex: 1; align-self: stretch; display: flex; flex-direction: column; overflow: hidden;
   background-color: var(--bg-canvas);
   background-image: radial-gradient(color-mix(in srgb, var(--text-muted) 22%, transparent) 1px, transparent 1px);
   background-size: 20px 20px; }
+.canvas-zoom-bar { display: flex; align-items: center; gap: 4px; position: absolute; bottom: 20px; left: 50%;
+  transform: translateX(-50%); z-index: 10; padding: 4px 6px; border-radius: 10px;
+  background: var(--bg-surface); box-shadow: var(--shadow-md); }
+.canvas-zoom-label { font-size: 12px; font-weight: 650; color: var(--text-secondary); min-width: 38px; text-align: center; }
+.canvas-zoom-bar .canvas-icon { width: 28px; height: 28px; color: var(--text-muted); }
+.canvas-zoom-bar .canvas-icon:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+.canvas-zoom-bar .canvas-icon:disabled { opacity: 0.35; pointer-events: none; }
+/* position the wrap relative so the zoom-bar can use position:absolute */
+.canvas-multi-wrap { position: relative; }
+.canvas-multi { flex: 1; display: flex; flex-direction: row; align-items: flex-start;
+  gap: 32px; padding: 40px 32px; overflow: auto; }
 .canvas-multi-frame { display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer;
   transition: transform 0.15s ease; flex-shrink: 0; }
 .canvas-multi-frame:hover { transform: translateY(-3px); }
