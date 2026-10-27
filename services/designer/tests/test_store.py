@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 
-from app.models import DesignBrief, RunCreate, RunStage, RunStatus, ScreenBrief
+from app.models import DesignBrief, RunCreate, RunStage, RunStatus, ScreenBrief, ScreenWrite
 from tests.pg import make_test_store
 
 
@@ -89,5 +89,37 @@ def test_latest_session_artifact_survives_clarification_runs(tmp_path: Path) -> 
         )
 
         assert await store.get_latest_session_artifact(session.id, "exact_assets") == assets
+
+    asyncio.run(scenario())
+
+
+def test_screens_keep_every_version(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        store = make_test_store()
+        await store.initialize()
+        session = await store.create_session("Kho")
+        first = await store.save_screen(
+            session.id, "danh-sach", ScreenWrite(name="Danh sách", platform="desktop", html="<main>v1</main>")
+        )
+        assert (first.version, first.width, first.position) == (1, 1440, 0)
+        second = await store.save_screen(
+            session.id, "danh-sach", ScreenWrite(name="Danh sách", html="<main>v2</main>", note="sửa"), updated_by="pm.hoa"
+        )
+        assert second.version == 2 and second.html == "<main>v2</main>" and second.updated_by == "pm.hoa"
+        mobile = await store.save_screen(
+            session.id, "tao-moi", ScreenWrite(name="Tạo mới", platform="mobile", html="<form></form>")
+        )
+        assert (mobile.width, mobile.position) == (390, 1)
+
+        listed = await store.list_screens(session.id)
+        assert [s.id for s in listed] == ["danh-sach", "tao-moi"] and listed[0].html is None
+        old = await store.get_screen(session.id, "danh-sach", version=1)
+        assert old and old.html == "<main>v1</main>" and old.version == 1
+        assert [v.version for v in await store.list_screen_versions(session.id, "danh-sach")] == [2, 1]
+
+        assert await store.delete_screen(session.id, "tao-moi") is True
+        assert await store.get_screen(session.id, "tao-moi") is None
+        await store.delete_session(session.id)
+        assert await store.list_screens(session.id) == []
 
     asyncio.run(scenario())

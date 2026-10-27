@@ -148,6 +148,38 @@ class SessionView(BaseModel):
     source_artifact_id: str | None = None
 
 
+SCREEN_WIDTHS: dict[str, int] = {"mobile": 390, "tablet": 834, "desktop": 1440, "responsive": 1440}
+
+
+class ScreenWrite(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    platform: Platform = "desktop"
+    width: int | None = Field(default=None, ge=320, le=2560)
+    html: str = Field(min_length=1, max_length=400_000)
+    note: str = Field(default="", max_length=400)
+
+
+class ScreenView(BaseModel):
+    id: str
+    name: str
+    platform: Platform
+    width: int
+    position: int
+    version: int
+    updated_at: datetime
+    updated_by: str | None = None
+    run_id: str | None = None
+    html: str | None = None
+
+
+class ScreenVersionView(BaseModel):
+    version: int
+    created_at: datetime
+    updated_by: str | None = None
+    run_id: str | None = None
+    note: str | None = None
+
+
 class RunCreate(BaseModel):
     prompt: str = Field(min_length=3, max_length=50_000)
     screen_name: str = Field(default="Screen", max_length=120)

@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir /opt/platform/packages/platform_core
 
 COPY services/designer/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+# Headless Chromium for rendering screens (shell build only, no full browser UI).
+RUN playwright install --with-deps --only-shell chromium && rm -rf /var/lib/apt/lists/*
 
 COPY services/designer/ ./
 

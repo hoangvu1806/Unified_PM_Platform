@@ -12,7 +12,20 @@ from psycopg_pool import ConnectionPool
 
 from pydantic import BaseModel
 
-from ..models import DesignBrief, RunCreate, RunStage, RunStatus, RunView, SessionView, WorkflowEvent, utc_now
+from ..models import (
+    SCREEN_WIDTHS,
+    DesignBrief,
+    RunCreate,
+    RunStage,
+    RunStatus,
+    RunView,
+    ScreenVersionView,
+    ScreenView,
+    ScreenWrite,
+    SessionView,
+    WorkflowEvent,
+    utc_now,
+)
 from .schema import initialize_schema
 
 T = TypeVar("T")
@@ -387,6 +400,112 @@ class Store:
             (str(run_id), revision),
         )
         return {row["artifact_key"]: json.loads(row["value"]) for row in rows}
+
+    # ── Screens (HTML designer) ─────────────────────────
+    async def list_screens(self, session_id: UUID, *, with_html: bool = False) -> list[ScreenView]:
+        rows = await self._fetchall(
+            "SELECT * FROM screens WHERE session_id=? ORDER BY position, created_at", (str(session_id),)
+        )
+        return [self._screen_from_row(row, with_html) for row in rows]
+
+    async def get_screen(self, session_id: UUID, screen_id: str, version: int | None = None) -> ScreenView | None:
+        row = await self._fetchone(
+            "SELECT * FROM screens WHERE session_id=? AND screen_id=?", (str(session_id), screen_id)
+        )
+        if row is None:
+            return None
+        if version is not None and version != row["version"]:
+            old = await self._fetchone(
+                "SELECT html FROM screen_versions WHERE session_id=? AND screen_id=? AND version=?",
+                (str(session_id), screen_id, version),
+            )
+            if old is None:
+                return None
+            row = {**row, "version": version, "html": old["html"]}
+        return self._screen_from_row(row, True)
+
+    async def save_screen(
+        self,
+        session_id: UUID,
+        screen_id: str,
+        body: ScreenWrite,
+        *,
+        run_id: UUID | str | None = None,
+        updated_by: str | None = None,
+    ) -> ScreenView:
+        """Create or update a screen; every save is a new version (kept in screen_versions)."""
+        return await self._call(lambda: self._save_screen(session_id, screen_id, body, run_id, updated_by))
+
+    def _save_screen(self, session_id, screen_id: str, body: ScreenWrite, run_id, updated_by) -> ScreenView:
+        now = utc_now().isoformat()
+        sid, rid = str(session_id), (str(run_id) if run_id else None)
+        width = body.width or SCREEN_WIDTHS[body.platform]
+        with self._pool.connection() as db, db.transaction():
+            current = db.execute(
+                self._sql("SELECT version FROM screens WHERE session_id=? AND screen_id=? FOR UPDATE"), (sid, screen_id)
+            ).fetchone()
+            if current is None:
+                position = db.execute(
+                    self._sql("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM screens WHERE session_id=?"), (sid,)
+                ).fetchone()["p"]
+                version = 1
+                db.execute(
+                    self._sql(
+                        "INSERT INTO screens (session_id, screen_id, name, platform, width, position, version, html, "
+                        "run_id, updated_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    ),
+                    (sid, screen_id, body.name, body.platform, width, position, version, body.html, rid, updated_by, now, now),
+                )
+            else:
+                version = current["version"] + 1
+                db.execute(
+                    self._sql(
+                        "UPDATE screens SET name=?, platform=?, width=?, version=?, html=?, run_id=?, updated_by=?, "
+                        "updated_at=? WHERE session_id=? AND screen_id=?"
+                    ),
+                    (body.name, body.platform, width, version, body.html, rid, updated_by, now, sid, screen_id),
+                )
+            db.execute(
+                self._sql(
+                    "INSERT INTO screen_versions (session_id, screen_id, version, html, run_id, updated_by, note, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                ),
+                (sid, screen_id, version, body.html, rid, updated_by, body.note or None, now),
+            )
+            row = db.execute(
+                self._sql("SELECT * FROM screens WHERE session_id=? AND screen_id=?"), (sid, screen_id)
+            ).fetchone()
+        return self._screen_from_row(row, True)
+
+    async def list_screen_versions(self, session_id: UUID, screen_id: str) -> list[ScreenVersionView]:
+        rows = await self._fetchall(
+            "SELECT version, created_at, updated_by, run_id, note FROM screen_versions "
+            "WHERE session_id=? AND screen_id=? ORDER BY version DESC",
+            (str(session_id), screen_id),
+        )
+        return [ScreenVersionView.model_validate(dict(row)) for row in rows]
+
+    async def delete_screen(self, session_id: UUID, screen_id: str) -> bool:
+        def delete() -> bool:
+            with self._pool.connection() as db, db.transaction():
+                db.execute(
+                    self._sql("DELETE FROM screen_versions WHERE session_id=? AND screen_id=?"),
+                    (str(session_id), screen_id),
+                )
+                cursor = db.execute(
+                    self._sql("DELETE FROM screens WHERE session_id=? AND screen_id=?"), (str(session_id), screen_id)
+                )
+                return cursor.rowcount > 0
+
+        return await self._call(delete)
+
+    @staticmethod
+    def _screen_from_row(row: Row, with_html: bool) -> ScreenView:
+        value = dict(row)
+        value["id"] = value.pop("screen_id")
+        if not with_html:
+            value["html"] = None
+        return ScreenView.model_validate(value)
 
     def _run_from_row(self, row: Row) -> RunView:
         value = dict(row)

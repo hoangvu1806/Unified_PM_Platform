@@ -19,11 +19,13 @@ DESIGNER_ROLE = "DESIGNER"
 
 
 PUBLIC_PATHS = frozenset({"/api/v1/health"})
+# Scripts loaded by the sandboxed design iframe, which sends no cookies.
+PUBLIC_PREFIXES = ("/api/v1/render/vendor/",)
 
 
 async def designer_access(request: Request) -> None:
-    if request.url.path in PUBLIC_PATHS:
-        return  # container healthcheck
+    if request.url.path in PUBLIC_PATHS or request.url.path.startswith(PUBLIC_PREFIXES):
+        return  # container healthcheck, iframe vendor scripts
     await authenticate(request)
     if auth_disabled():
         return

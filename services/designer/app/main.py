@@ -10,12 +10,14 @@ from fastapi.responses import JSONResponse
 from .api.access import designer_access, handoff_secret
 from .api.routes import router
 from .api.handoff_routes import router as handoff_router
+from .api.screens import router as screens_router
 from .api.stream import EventStream
 from .core.config import get_settings
 from .core.errors import AppError
 from .core.llm import AdkProvider
 from .core.prompts import PromptLibrary
 from .models import Problem
+from .render import Renderer
 from .storage.store import Store
 from .workflow.service import RunService
 
@@ -51,12 +53,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.events = events
     app.state.runs = runs
     app.state.llm = llm
+    # Chromium starts on the first render, so the API is up even before a browser is needed.
+    app.state.renderer = Renderer()
 
     # Pre-warm LLM connection in background so the first message is fast
     asyncio.create_task(llm.prewarm())
 
     yield
     await runs.shutdown()
+    await app.state.renderer.close()
     await store.close()
 
 
@@ -81,6 +86,7 @@ def create_app() -> FastAPI:
     # Platform: users must log in and are checked against the session's
     # project; BA -> Designer handoffs authenticate with X-Agent-Secret.
     app.include_router(router, dependencies=[Depends(designer_access)])
+    app.include_router(screens_router, dependencies=[Depends(designer_access)])
     app.include_router(handoff_router, dependencies=[Depends(handoff_secret)])
 
     @app.exception_handler(AppError)

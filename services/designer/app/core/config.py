@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     shared_llm_base_url: str = Field("", validation_alias="LLM_BASE_URL")
 
     platform_env: str = "dev"
+    # Browser origin of the gateway: the design iframe loads vendor scripts from here.
+    platform_public_url: str = "http://localhost:8080"
     designer_shared_secret: str = ""
     # One screen = a bounded write → check → edit loop (no endless polishing).
     designer_page_max_steps: int = Field(45, validation_alias="DESIGNER_PAGE_MAX_STEPS")

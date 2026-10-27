@@ -58,6 +58,33 @@ MIGRATIONS = (
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS triggered_by TEXT",
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS source_artifact_id TEXT",
     "CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)",
+    # HTML designer: one row per screen of a session (current HTML), every save kept as a version.
+    """CREATE TABLE IF NOT EXISTS screens (
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      screen_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      platform TEXT NOT NULL,
+      width INTEGER NOT NULL,
+      position INTEGER NOT NULL,
+      version INTEGER NOT NULL,
+      html TEXT NOT NULL,
+      run_id TEXT,
+      updated_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (session_id, screen_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS screen_versions (
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      screen_id TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      html TEXT NOT NULL,
+      run_id TEXT,
+      updated_by TEXT,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (session_id, screen_id, version)
+    )""",
 )
 
 
