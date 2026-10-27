@@ -1,2 +1,0 @@
-#!/bin/sh
-exec /usr/local/bin/bun /opt/openpencil/packages/cli/bin/openpencil.js "$@"
