@@ -132,14 +132,27 @@ class _Writer:
         frame = self.b.frame(parent, layer["name"][:80], x, y, w, h, clip=bool(box.get("clip")),
                              layout=self._layout(box),
                              **{**extra, **self._paint(box, w, h, shots.get(layer.get("bgShot") or ""))})
-        # CSS paints positioned (absolute/fixed) children above in-flow ones; Figma paints later children on top.
-        def paint_order(c: dict[str, Any]) -> tuple[int, int]:
+        for child in self._paint_order(children, auto_layout=bool(box.get("flex"))):
+            self.layer(frame, child, (layer["x"], layer["y"]), layer, shots)
+
+    @staticmethod
+    def _paint_order(children: list[dict[str, Any]], *, auto_layout: bool) -> list[dict[str, Any]]:
+        """Figma paints later children on top; CSS paints in-flow boxes, then positioned ones by z-index.
+
+        In an auto-layout frame the child order is also the flow order (Figma re-runs the layout when
+        the frame is edited), so flow children keep DOM order and only absolute children move.
+        """
+        def css(c: dict[str, Any]) -> tuple[int, int]:
             if c.get("positioned"):
                 return (2 if c.get("z", 0) >= 0 else 0, c.get("z", 0))
             return (1, 0)
 
-        for child in sorted(children, key=paint_order):  # stable: DOM order within a layer
-            self.layer(frame, child, (layer["x"], layer["y"]), layer, shots)
+        if not auto_layout:
+            return sorted(children, key=css)  # stable: DOM order within a layer
+        below = [c for c in children if c.get("absolute") and c.get("z", 0) < 0]
+        above = sorted((c for c in children if c.get("absolute") and c.get("z", 0) > 0), key=lambda c: c.get("z", 0))
+        middle = [c for c in children if c not in below and c not in above]
+        return below + middle + above
 
     @staticmethod
     def _transparent(box: dict[str, Any]) -> bool:
@@ -216,24 +229,17 @@ class _Writer:
         )
 
 
-def build_fig(screens: list[CapturedScreen], file_name: str, columns: list[int] | None = None) -> bytes:
-    """``columns``: column index per screen (states of one screen share a column, stacked)."""
+def build_fig(screens: list[CapturedScreen], file_name: str) -> bytes:
+    """All frames side by side, GAP apart, top-aligned: each screen followed by its states."""
     b = FigBuilder(file_name)
     page = b.page("Screens")
     writer = _Writer(b)
-    column_x: dict[int, float] = {}
-    column_y: dict[int, float] = {}
-    next_x = 0.0
-    for i, screen in enumerate(screens):
-        col = columns[i] if columns else i
-        if col not in column_x:
-            column_x[col], column_y[col] = next_x, 0.0
-            next_x += screen.tree["w"] + GAP
+    x = 0.0
+    for screen in screens:
         tree = {**screen.tree, "name": screen.name, "root": True}
         tree.setdefault("box", {})
         if not tree["box"].get("bg"):
             tree["box"]["bg"] = [255, 255, 255, 1]
-        origin = (tree["x"] - column_x[col], tree["y"] - column_y[col])
-        writer.layer(page, tree, origin, None, screen.shots)
-        column_y[col] += tree["h"] + GAP
+        writer.layer(page, tree, (tree["x"] - x, tree["y"]), None, screen.shots)
+        x += tree["w"] + GAP
     return b.to_bytes()
