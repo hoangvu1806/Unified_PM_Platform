@@ -149,8 +149,9 @@ export const api = {
         ),
     screenshotUrl: (sessionId: string, screenId: string, state?: string) =>
         `${API_BASE}/sessions/${sessionId}/screens/${screenId}/screenshot?format=png${state ? `&state=${encodeURIComponent(state)}` : ""}`,
-    exportUrl: (sessionId: string, format: "fig" | "zip") =>
-        `${API_BASE}/sessions/${sessionId}/export?format=${format}`,
+    /** ``layout`` arranges the .fig: one page with a row per screen, or a page per screen. */
+    exportUrl: (sessionId: string, format: "fig" | "zip", layout: "rows" | "pages" = "rows") =>
+        `${API_BASE}/sessions/${sessionId}/export?format=${format}&layout=${layout}`,
 
     // Design systems
     listDesignSystems: () =>

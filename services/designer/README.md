@@ -20,7 +20,9 @@ UI at `/designer/`, API at `/designer/api/v1/` behind the gateway; data in Postg
   see `knowledge/README.md`). Nothing domain- or platform-specific is hard-coded in the prompts.
 - `app/designsystem/`: `.fig` → tokens (Tailwind `@theme`) + component HTML snippets; gallery.
 - `app/export/`: DOM → Figma nodes (`extract.js` + `figma.py`), bundle zip (HTML prototype, PNG, `design.fig`),
-  published to Assets as `designer_output`.
+  published to Assets as `designer_output`. In the `.fig` each screen is a row (the screen, then its states);
+  `/export?layout=rows` puts every row on one page, `layout=pages` gives each screen its own page (chosen in
+  the design page's "Xuất" menu).
 - `app/figio/`: pure-Python reader/writer for Figma `.fig` files (Kiwi codec, zip container,
   `FigBuilder`). Reads real Figma exports byte-exactly; files it writes open in Figma.
 - `app/render/`: a screen is an HTML body fragment. `build_document` wraps it with theme tokens

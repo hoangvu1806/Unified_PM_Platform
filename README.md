@@ -111,7 +111,8 @@ and checks it in headless Chromium inside `designer-api` (DOM lint + axe-core + 
 tools until it passes. The studio (`/designer/`) keeps chat, review and BA panels; "Trang thiết kế" opens the
 design page (`/designer/canvas.html`) in a new tab: clickable prototype, viewports, states, element picking
 (sent to the chat), code edits with versions, exports. Design systems are imported from a Figma `.fig`
-(Settings → Design system); exports are `.fig` (opens in Figma), PNG per screen/state and an offline HTML zip.
+(Settings → Design system); exports are `.fig` (opens in Figma; one page with a row per screen, or a page per
+screen), PNG per screen/state and an offline HTML zip.
 
 **Logs.** Local: `logs/<service>/<service>.log` (JSON lines, daily rotation, 14 days), each request with `user`,
 `project_id`, `request_id`. Per project: `projects/<project_id>/logs/<service>/<date>/*.jsonl` in storage.

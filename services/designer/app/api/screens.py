@@ -134,8 +134,16 @@ async def screen_screenshot(
 
 
 @router.get("/sessions/{session_id}/export")
-async def export_session(request: Request, session_id: UUID, format: Literal["fig", "zip"] = "zip") -> Response:
-    """All screens of the session: ``fig`` (open in Figma) or ``zip`` (HTML prototype + PNG + design.fig)."""
+async def export_session(
+    request: Request,
+    session_id: UUID,
+    format: Literal["fig", "zip"] = "zip",
+    layout: Literal["rows", "pages"] = "rows",
+) -> Response:
+    """All screens of the session: ``fig`` (open in Figma) or ``zip`` (HTML prototype + PNG + design.fig).
+
+    ``layout`` arranges the .fig: ``rows`` = one page, a row per screen; ``pages`` = a page per screen.
+    """
     from ..export.bundle import export_screens
 
     store = request.app.state.store
@@ -146,7 +154,7 @@ async def export_session(request: Request, session_id: UUID, format: Literal["fi
     if not screens:
         raise AppError("NO_SCREENS", "Nothing to export", "The session has no screens yet.", 409)
     ds = await design_context(store, session)
-    out = await export_screens(request.app.state.renderer, screens, ds, session.title, session.project_id)
+    out = await export_screens(request.app.state.renderer, screens, ds, session.title, session.project_id, layout)
     data, media = (out.fig, "application/octet-stream") if format == "fig" else (out.zip, "application/zip")
     name = re.sub(r"[^A-Za-z0-9._-]+", "-", session.title).strip("-") or "design"
     return Response(data, media_type=media, headers={

@@ -1,16 +1,21 @@
 import {
+    Check,
+    ChevronDown,
     Code2,
     Download,
     FileArchive,
+    Files,
     History,
     Image,
+    Layers,
     Monitor,
     MousePointerClick,
-    RefreshCw,
+    Rows3,
     Save,
     Search,
     Smartphone,
     Tablet,
+    X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
@@ -20,13 +25,41 @@ import type { Screen, ScreenVersion } from "../types";
 const params = new URLSearchParams(window.location.search);
 const SESSION = params.get("session") || "";
 const DESIGN_SYSTEM = params.get("ds") || "";
-const VIEWPORTS = [
-    { id: "auto", label: "Gốc", icon: Monitor, width: 0 },
-    { id: "desktop", label: "Desktop", icon: Monitor, width: 1440 },
-    { id: "tablet", label: "Tablet", icon: Tablet, width: 834 },
-    { id: "mobile", label: "Mobile", icon: Smartphone, width: 390 },
-] as const;
+const PLATFORMS: Record<string, { label: string; icon: typeof Monitor }> = {
+    mobile: { label: "Mobile", icon: Smartphone },
+    tablet: { label: "Tablet", icon: Tablet },
+    desktop: { label: "Desktop", icon: Monitor },
+};
 const POLL_MS = 3000;
+
+type FigLayout = "rows" | "pages";
+const LAYOUT_KEY = "designer.figLayout";
+const FIG_LAYOUTS: { id: FigLayout; label: string; hint: string; icon: typeof Rows3 }[] = [
+    { id: "rows", label: "Một page", hint: "Mỗi màn một hàng", icon: Rows3 },
+    { id: "pages", label: "Nhiều page", hint: "Mỗi màn một page", icon: Files },
+];
+
+function readLayout(): FigLayout {
+    try {
+        return localStorage.getItem(LAYOUT_KEY) === "pages" ? "pages" : "rows";
+    } catch {
+        return "rows";
+    }
+}
+
+function Brand({ subtitle }: { subtitle: string }) {
+    return (
+        <div className="brand-lockup canvas-brand">
+            <span className="brand-mark">
+                <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Designer Studio" className="brand-logo-img" />
+            </span>
+            <div>
+                <strong>Designer Studio</strong>
+                <small>{subtitle}</small>
+            </div>
+        </div>
+    );
+}
 
 /** Messages posted by app/render/runtime.js inside the screen iframe. */
 type ScreenMessage =
@@ -92,11 +125,107 @@ function Frame({
     );
 }
 
+/** Export popover: the .fig layout choice applies to the .fig and to the design.fig inside the zip. */
+function ExportMenu({ screen, state }: { screen?: Screen; state: string }) {
+    const [open, setOpen] = useState(false);
+    const [layout, setLayout] = useState<FigLayout>(readLayout);
+    const box = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const close = (event: MouseEvent | KeyboardEvent) => {
+            if (event instanceof KeyboardEvent ? event.key === "Escape" : !box.current?.contains(event.target as Node)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", close);
+        document.addEventListener("keydown", close);
+        return () => {
+            document.removeEventListener("mousedown", close);
+            document.removeEventListener("keydown", close);
+        };
+    }, [open]);
+
+    const choose = (value: FigLayout) => {
+        setLayout(value);
+        try {
+            localStorage.setItem(LAYOUT_KEY, value);
+        } catch {
+            /* preference only */
+        }
+    };
+
+    return (
+        <div className="export-menu" ref={box}>
+            <button className="canvas-export" onClick={() => setOpen(!open)} type="button" aria-expanded={open} aria-haspopup="menu">
+                <Download size={15} /> Xuất <ChevronDown size={14} className={open ? "flip" : ""} />
+            </button>
+            {open && (
+                <div className="export-pop" role="menu">
+                    <p className="export-label">Bố cục file Figma</p>
+                    <div className="export-layouts" role="radiogroup" aria-label="Bố cục file Figma">
+                        {FIG_LAYOUTS.map((l) => (
+                            <button
+                                key={l.id}
+                                className={layout === l.id ? "active" : ""}
+                                onClick={() => choose(l.id)}
+                                role="radio"
+                                aria-checked={layout === l.id}
+                                type="button"
+                            >
+                                <l.icon size={18} />
+                                <span>
+                                    <strong>{l.label}</strong>
+                                    <small>{l.hint}</small>
+                                </span>
+                                {layout === l.id && <Check size={14} className="export-check" />}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="export-items">
+                        <a className="export-item primary" href={api.exportUrl(SESSION, "fig", layout)} onClick={() => setOpen(false)}>
+                            <Download size={16} />
+                            <span>
+                                <strong>File Figma (.fig)</strong>
+                                <small>Kéo thả vào Figma để chỉnh sửa</small>
+                            </span>
+                        </a>
+                        <a className="export-item" href={api.exportUrl(SESSION, "zip", layout)} onClick={() => setOpen(false)}>
+                            <FileArchive size={16} />
+                            <span>
+                                <strong>HTML + PNG (.zip)</strong>
+                                <small>Prototype offline, ảnh từng màn và trạng thái</small>
+                            </span>
+                        </a>
+                        {screen && (
+                            <a
+                                className="export-item"
+                                href={api.screenshotUrl(SESSION, screen.id, state)}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={() => setOpen(false)}
+                            >
+                                <Image size={16} />
+                                <span>
+                                    <strong>PNG màn này</strong>
+                                    <small>
+                                        {screen.name}
+                                        {state ? ` · ${state}` : ""}
+                                    </small>
+                                </span>
+                            </a>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 function ScreensCanvas() {
     const [screens, setScreens] = useState<Screen[]>([]);
     const [current, setCurrent] = useState(params.get("screen") || "");
     const [doc, setDoc] = useState("");
-    const [viewport, setViewport] = useState<(typeof VIEWPORTS)[number]["id"]>("auto");
     const [states, setStates] = useState<string[]>([]);
     const [state, setState] = useState("");
     const [selecting, setSelecting] = useState(false);
@@ -112,7 +241,7 @@ function ScreensCanvas() {
     );
 
     const screen = screens.find((s) => s.id === current) ?? screens[0];
-    const width = viewport === "auto" ? (screen?.width ?? 1440) : VIEWPORTS.find((v) => v.id === viewport)!.width;
+    const width = screen?.width ?? 1440;
 
     const loadScreens = useCallback(async () => {
         const items = await api.listScreens(SESSION);
@@ -189,88 +318,115 @@ function ScreensCanvas() {
     if (!screens.length) {
         return (
             <div className="canvas-shell">
-                <p className="canvas-empty">
-                    Chưa có màn hình nào. Agent sẽ dựng màn hình sau khi bạn duyệt spec; trang này tự cập nhật.
-                </p>
+                <div className="canvas-empty">
+                    <Brand subtitle="Trang thiết kế" />
+                    <p>Chưa có màn hình nào. Agent sẽ dựng màn hình sau khi bạn duyệt spec; trang này tự cập nhật.</p>
+                </div>
             </div>
         );
     }
 
+    const platform = PLATFORMS[screen?.platform ?? ""] ?? PLATFORMS.desktop;
+
     return (
         <div className="canvas-shell">
             <aside className="canvas-rail">
-                <h1>Màn hình</h1>
-                {screens.map((s) => (
-                    <button
-                        key={s.id}
-                        className={`canvas-screen ${s.id === screen?.id ? "active" : ""}`}
-                        onClick={() => setCurrent(s.id)}
-                        type="button"
-                    >
-                        <strong>{s.name}</strong>
-                        <small>
-                            {s.platform} · v{s.version}
-                        </small>
-                    </button>
-                ))}
-                <div className="canvas-rail-footer">
-                    <a className="secondary-button compact" href={api.exportUrl(SESSION, "fig")}>
-                        <Download size={14} /> .fig
-                    </a>
-                    <a className="secondary-button compact" href={api.exportUrl(SESSION, "zip")}>
-                        <FileArchive size={14} /> HTML + PNG
-                    </a>
+                <Brand subtitle="Trang thiết kế" />
+                <div className="canvas-rail-label">
+                    <span>Màn hình</span>
+                    <span className="canvas-count">{screens.length}</span>
                 </div>
+                <nav className="canvas-screens" aria-label="Màn hình">
+                    {screens.map((s) => {
+                        const p = PLATFORMS[s.platform] ?? PLATFORMS.desktop;
+                        return (
+                            <button
+                                key={s.id}
+                                className={`canvas-screen ${s.id === screen?.id ? "active" : ""}`}
+                                onClick={() => setCurrent(s.id)}
+                                aria-current={s.id === screen?.id ? "page" : undefined}
+                                type="button"
+                            >
+                                <span className="canvas-screen-icon">
+                                    <p.icon size={16} />
+                                </span>
+                                <span className="canvas-screen-text">
+                                    <strong>{s.name}</strong>
+                                    <small>
+                                        {p.label} · v{s.version}
+                                    </small>
+                                </span>
+                            </button>
+                        );
+                    })}
+                </nav>
             </aside>
 
             <main className="canvas-main">
                 <header className="canvas-toolbar">
-                    <div className="canvas-group">
-                        {VIEWPORTS.map((v) => (
-                            <button key={v.id} className={viewport === v.id ? "active" : ""} onClick={() => setViewport(v.id)} type="button" title={v.label}>
-                                <v.icon size={15} /> {v.label}
-                            </button>
-                        ))}
+                    <div className="canvas-title">
+                        <h2>{screen?.name}</h2>
+                        <span className="canvas-chip">
+                            <platform.icon size={13} /> {platform.label} · {width}px
+                        </span>
                     </div>
-                    {states.length > 0 && (
-                        <select value={state} onChange={(e) => setState(e.target.value)} title="Trạng thái">
-                            <option value="">Mặc định</option>
-                            {states.map((s) => (
-                                <option key={s} value={s}>{s}</option>
-                            ))}
-                        </select>
-                    )}
-                    <button className={selecting ? "active" : ""} onClick={() => setSelecting(!selecting)} type="button"
-                        title="Chọn một phần tử để góp ý ở khung chat">
-                        <MousePointerClick size={15} /> Chọn phần tử
-                    </button>
-                    <button className={codeOpen ? "active" : ""} onClick={() => setCodeOpen(!codeOpen)} type="button">
-                        <Code2 size={15} /> Code
-                    </button>
-                    <label className="canvas-versions" title="Lịch sử phiên bản">
-                        <History size={15} />
-                        <select value={version ?? ""} onChange={(e) => setVersion(e.target.value ? Number(e.target.value) : undefined)}>
-                            <option value="">Mới nhất (v{screen?.version})</option>
-                            {versions.slice(1).map((v) => (
-                                <option key={v.version} value={v.version}>
-                                    v{v.version} · {v.note || v.updated_by || ""}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    {screen && (
-                        <a className="canvas-link" href={api.screenshotUrl(SESSION, screen.id, state)} target="_blank" rel="noreferrer">
-                            <Image size={15} /> PNG
-                        </a>
-                    )}
-                    <button onClick={() => void loadScreens()} type="button" title="Làm mới">
-                        <RefreshCw size={15} />
-                    </button>
+                    <div className="canvas-tools">
+                        {states.length > 0 && (
+                            <label className="canvas-select" title="Trạng thái của màn hình">
+                                <Layers size={15} />
+                                <select value={state} onChange={(e) => setState(e.target.value)}>
+                                    <option value="">Mặc định</option>
+                                    {states.map((s) => (
+                                        <option key={s} value={s}>
+                                            {s}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        )}
+                        <label className="canvas-select" title="Lịch sử phiên bản">
+                            <History size={15} />
+                            <select value={version ?? ""} onChange={(e) => setVersion(e.target.value ? Number(e.target.value) : undefined)}>
+                                <option value="">v{screen?.version} · mới nhất</option>
+                                {versions.slice(1).map((v) => (
+                                    <option key={v.version} value={v.version}>
+                                        v{v.version} · {v.note || v.updated_by || ""}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <span className="canvas-divider" aria-hidden />
+                        <button
+                            className={`canvas-tool ${selecting ? "active" : ""}`}
+                            onClick={() => setSelecting(!selecting)}
+                            type="button"
+                            title="Chọn một phần tử để góp ý ở khung chat"
+                        >
+                            <MousePointerClick size={15} /> Chọn phần tử
+                        </button>
+                        <button
+                            className={`canvas-tool ${codeOpen ? "active" : ""}`}
+                            onClick={() => setCodeOpen(!codeOpen)}
+                            type="button"
+                            title="Sửa HTML của màn hình"
+                        >
+                            <Code2 size={15} /> Code
+                        </button>
+                        <ExportMenu screen={screen} state={state} />
+                    </div>
                 </header>
                 <div className={`canvas-body ${codeOpen ? "with-code" : ""}`}>
                     {doc && <Frame doc={doc} width={width} onMessage={onMessage} frameRef={frameRef} />}
                     {codeOpen && (
-                        <section className="canvas-code">
+                        <section className="canvas-code" aria-label="HTML của màn hình">
+                            <header>
+                                <span>
+                                    <Code2 size={15} /> HTML · v{version ?? screen?.version}
+                                </span>
+                                <button className="canvas-icon" onClick={() => setCodeOpen(false)} type="button" title="Đóng">
+                                    <X size={16} />
+                                </button>
+                            </header>
                             <textarea value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false} />
                             <button className="primary-button" onClick={() => void saveCode()} type="button">
                                 <Save size={15} /> Lưu thành phiên bản mới

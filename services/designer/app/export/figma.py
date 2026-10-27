@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ..figio.writer import FigBuilder, drop_shadow, solid
 
@@ -54,11 +54,15 @@ JUSTIFY = {"center": "CENTER", "flex-end": "MAX", "end": "MAX", "right": "MAX", 
 ALIGN = {"center": "CENTER", "flex-end": "MAX", "end": "MAX", "baseline": "BASELINE"}
 
 
+FigLayout = Literal["rows", "pages"]
+
+
 @dataclass
 class CapturedScreen:
     name: str
     tree: dict[str, Any]
     shots: dict[str, bytes]
+    group: str = ""  # the screen a state frame belongs to (rows / pages); defaults to ``name``
 
 
 def hexa(rgba: list[float] | None) -> str | None:
@@ -69,7 +73,7 @@ def hexa(rgba: list[float] | None) -> str | None:
 
 
 async def capture(renderer, fragment: str, *, name: str, width: int, theme_css: str | None, fonts: list[str] | None,
-                  state: str | None = None) -> CapturedScreen:
+                  state: str | None = None, group: str = "") -> CapturedScreen:
     async with renderer.page(fragment, width=width, theme_css=theme_css, fonts=fonts, state=state,
                              scale=SHOT_SCALE) as page:
         tree = await page.evaluate(EXTRACT_JS)
@@ -89,7 +93,7 @@ async def capture(renderer, fragment: str, *, name: str, width: int, theme_css: 
                 finally:
                     if isolate:
                         await page.evaluate(ISOLATE_JS, [element, None])
-    return CapturedScreen(name, tree, shots)
+    return CapturedScreen(name, tree, shots, group)
 
 
 class _Writer:
@@ -229,17 +233,35 @@ class _Writer:
         )
 
 
-def build_fig(screens: list[CapturedScreen], file_name: str) -> bytes:
-    """All frames side by side, GAP apart, top-aligned: each screen followed by its states."""
+def build_fig(screens: list[CapturedScreen], file_name: str, layout: FigLayout = "rows") -> bytes:
+    """One row per screen (the screen, then its states), GAP apart and top-aligned.
+
+    ``rows``: every row on one page, stacked GAP apart. ``pages``: one page per screen.
+    """
     b = FigBuilder(file_name)
-    page = b.page("Screens")
     writer = _Writer(b)
-    x = 0.0
+    groups: dict[str, list[CapturedScreen]] = {}
     for screen in screens:
-        tree = {**screen.tree, "name": screen.name, "root": True}
-        tree.setdefault("box", {})
-        if not tree["box"].get("bg"):
-            tree["box"]["bg"] = [255, 255, 255, 1]
-        writer.layer(page, tree, (tree["x"] - x, tree["y"]), None, screen.shots)
-        x += tree["w"] + GAP
+        groups.setdefault(screen.group or screen.name, []).append(screen)
+    page = b.page("Screens") if layout == "rows" else None
+    names: set[str] = set()
+    y = 0.0
+    for row in groups.values():
+        if layout == "pages":
+            base = row[0].name  # the screen itself comes before its states
+            name, n = base, 2
+            while name in names:  # Figma allows duplicates, but pages are told apart by name
+                name, n = f"{base} ({n})", n + 1
+            names.add(name)
+            page, y = b.page(name), 0.0
+        x = height = 0.0
+        for screen in row:
+            tree = {**screen.tree, "name": screen.name, "root": True}
+            tree.setdefault("box", {})
+            if not tree["box"].get("bg"):
+                tree["box"]["bg"] = [255, 255, 255, 1]
+            writer.layer(page, tree, (tree["x"] - x, tree["y"] - y), None, screen.shots)
+            x += tree["w"] + GAP
+            height = max(height, tree["h"])
+        y += height + GAP
     return b.to_bytes()

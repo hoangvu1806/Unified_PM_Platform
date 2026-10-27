@@ -12,7 +12,7 @@ from ..designsystem.service import DesignContext
 from ..models import ScreenView
 from ..render.document import RUNTIME_JS, VENDOR_DIR, fragment_of
 from ..render.assets import inline_assets
-from .figma import CapturedScreen, build_fig, capture
+from .figma import CapturedScreen, FigLayout, build_fig, capture
 
 MAX_STATES = 4
 NAV_JS = """document.addEventListener("click", (e) => {
@@ -67,7 +67,7 @@ a{{color:#18181b;text-decoration:none}}.state{{font-size:12px;color:#6366f1;marg
 
 
 async def export_screens(renderer, screens: list[ScreenView], design: DesignContext, title: str,
-                         project_id: str | None = None) -> Export:
+                         project_id: str | None = None, layout: FigLayout = "rows") -> Export:
     out = Export()
     captured: list[CapturedScreen] = []
     states: dict[str, list[str]] = {}
@@ -80,14 +80,15 @@ async def export_screens(renderer, screens: list[ScreenView], design: DesignCont
         states[screen.id] = base.states[:MAX_STATES]
         files[f"screens/{screen.id}.html"] = _standalone(screen, body, base.css, design.fonts).encode("utf-8")
         captured.append(await capture(renderer, body, name=screen.name, width=screen.width,
-                                      theme_css=design.theme_css, fonts=design.fonts))
+                                      theme_css=design.theme_css, fonts=design.fonts, group=screen.id))
         for state in states[screen.id]:
             shot = await renderer.render(body, width=screen.width, theme_css=design.theme_css, fonts=design.fonts,
                                          state=state, screenshot="png", lint=False, max_height=16000)
             out.pngs[f"{screen.id}--{state}.png"] = shot.image
             captured.append(await capture(renderer, body, name=f"{screen.name} · {state}", width=screen.width,
-                                          theme_css=design.theme_css, fonts=design.fonts, state=state))
-    out.fig = build_fig(captured, title)
+                                          theme_css=design.theme_css, fonts=design.fonts, state=state,
+                                          group=screen.id))
+    out.fig = build_fig(captured, title, layout)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("index.html", _index(title, screens, states))
