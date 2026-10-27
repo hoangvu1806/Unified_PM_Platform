@@ -19,3 +19,18 @@ def _drop_test_schemas():
                 conn.execute(f'DROP SCHEMA "{name}" CASCADE')
     except Exception:
         pass
+
+
+@pytest.fixture(autouse=True)
+def _local_storage(tmp_path, monkeypatch):
+    """Every test writes files to its own local storage root, never the real bucket."""
+    from platform_core.settings import get_common_settings
+    from platform_core.storage import get_storage
+
+    monkeypatch.setenv("STORAGE_BACKEND", "local")
+    monkeypatch.setenv("STORAGE_LOCAL_ROOT", str(tmp_path / "storage"))
+    get_common_settings.cache_clear()
+    get_storage.cache_clear()
+    yield tmp_path / "storage"
+    get_common_settings.cache_clear()
+    get_storage.cache_clear()

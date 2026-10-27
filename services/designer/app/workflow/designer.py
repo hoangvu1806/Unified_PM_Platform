@@ -69,11 +69,11 @@ class HtmlDesigner:
         return run
 
     async def _usage(self, run: RunView, usage: dict[str, int], step: str) -> None:
-        total = await self.store.get_artifact(run.id, run.revision, "token_usage") or {"steps": []}
+        total = await self.store.get_run_data(run.id, run.revision, "token_usage") or {"steps": []}
         total["steps"].append({"step": step, **usage})
         for k in ("calls", "prompt_tokens", "output_tokens"):
             total[k] = total.get(k, 0) + usage.get(k, 0)
-        await self.store.set_artifact(run.id, run.revision, "token_usage", total)
+        await self.store.set_run_data(run.id, run.revision, "token_usage", total)
         await self._emit(run, "llm.usage", {"step": step, **usage,
                                             "run_total": {k: total[k] for k in ("calls", "prompt_tokens", "output_tokens")}})
 
@@ -252,9 +252,10 @@ class HtmlDesigner:
                  for need, imgs in zip(screen.imagery, found) if imgs]
         return "\n".join(lines) or "(none — use no photography)"
 
-    async def _check(self, html: str, screen: ScreenSpec, width: int, design: DesignContext):
+    async def _check(self, html: str, screen: ScreenSpec, width: int, design: DesignContext,
+                     project_id: str | None):
         result = await self.service.renderer.render(
-            await inline_assets(html), width=width, theme_css=design.theme_css, fonts=design.fonts,
+            await inline_assets(html, project_id), width=width, theme_css=design.theme_css, fonts=design.fonts,
             screenshot="jpeg", max_height=2400)
         text = _norm(result.text)
         missing = [m for m in screen.must_show if _norm(m) not in text]
@@ -310,7 +311,7 @@ class HtmlDesigner:
             )
             html = await save(extract_html(draft), "draft")
             task = "Review this screen you built and finish it."
-        result, checks, blocking, score = await self._check(html, screen, width, design)
+        result, checks, blocking, score = await self._check(html, screen, width, design, session.project_id)
         for round_no in range(max(1, settings.designer_review_rounds)):
             if round_no and not blocking:
                 break  # one visual review always happens; later rounds only to clear errors
@@ -324,7 +325,7 @@ class HtmlDesigner:
             notes = [f"These edit blocks did not apply: {'; '.join(edit.failed)}."] if edit.failed else []
             if edit.applied:
                 # Keep an edit only if it does not make the screen worse (lost texts, new blocking errors).
-                candidate = await self._check(edit.html, screen, width, design)
+                candidate = await self._check(edit.html, screen, width, design, session.project_id)
                 if candidate[3] <= score:
                     html = await save(edit.html, "rework" if edit.rewrite else f"review {round_no + 1}")
                     result, checks, blocking, score = candidate

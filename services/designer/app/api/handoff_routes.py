@@ -9,7 +9,7 @@ from fastapi import APIRouter, Request, status
 
 from ..models import DesignerHandoffRequest, DesignerHandoffResponse, RunCreate
 from ..attachments.parser import parse_json_document
-from ..core.config import save_designer_asset
+from ..storage.assets import save_asset
 from .routes import MAX_ATTACHMENT_BYTES
 
 router = APIRouter(prefix="/api/v1/handoffs", tags=["Handoffs"])
@@ -35,7 +35,7 @@ def _ingest_asset_data_urls(body: DesignerHandoffRequest) -> None:
             raise ValueError(f"Invalid asset data for {asset_id}") from error
         if len(raw) > MAX_ATTACHMENT_BYTES:
             raise ValueError(f"Asset {asset_id} exceeds the 8 MB limit")
-        save_designer_asset(asset_id, raw)
+        save_asset((body.project_id or "").strip() or None, asset_id, raw)
 
 
 def _latest_ba_package(feature_id: str) -> str | None:

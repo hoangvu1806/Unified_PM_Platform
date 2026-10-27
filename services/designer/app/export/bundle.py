@@ -66,13 +66,14 @@ a{{color:#18181b;text-decoration:none}}.state{{font-size:12px;color:#6366f1;marg
 <body><h1>{html.escape(title)}</h1><p>design.fig: kéo vào Figma · png/: ảnh từng màn hình và trạng thái</p><ul>{items}</ul></body></html>"""
 
 
-async def export_screens(renderer, screens: list[ScreenView], design: DesignContext, title: str) -> Export:
+async def export_screens(renderer, screens: list[ScreenView], design: DesignContext, title: str,
+                         project_id: str | None = None) -> Export:
     out = Export()
     captured: list[CapturedScreen] = []
     states: dict[str, list[str]] = {}
     files: dict[str, bytes] = {}
     for screen in screens:
-        body = await inline_assets(fragment_of(screen.html or ""))
+        body = await inline_assets(fragment_of(screen.html or ""), project_id)
         base = await renderer.render(body, width=screen.width, theme_css=design.theme_css, fonts=design.fonts,
                                      screenshot="png", lint=False, max_height=16000)
         out.pngs[f"{screen.id}.png"] = base.image

@@ -1,6 +1,5 @@
 import hashlib
 from functools import lru_cache
-from pathlib import Path
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -79,35 +78,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-
-
-ASSET_PREFIX = ("designer", "assets")
-
-
-def _asset_key(asset_id: str) -> str:
-    from platform_core.storage import project_key
-
-    return project_key(None, *ASSET_PREFIX, asset_id)
-
-
-def designer_asset_dir() -> Path:
-    """Local folder of uploaded/handoff assets (the S3 cache when STORAGE_BACKEND=s3)."""
-    from platform_core.storage import get_storage, project_key
-
-    path = get_storage().local_path(project_key(None, *ASSET_PREFIX))
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def designer_asset_file(asset_id: str) -> Path:
-    """Path of one asset; downloads it from S3 on a cache miss."""
-    from platform_core.storage import get_storage
-
-    return get_storage().local_path(_asset_key(asset_id))
-
-
-def save_designer_asset(asset_id: str, data: bytes) -> None:
-    """Store asset bytes in platform storage (S3 + cache, or local)."""
-    from platform_core.storage import get_storage
-
-    get_storage().put(_asset_key(asset_id), data)

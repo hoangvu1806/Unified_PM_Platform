@@ -68,7 +68,7 @@ Everything is in `.env` (see `.env.example`, grouped by section):
 | Auth | `AUTH_MODE=mock` (Keycloak later), `AUTH_JWT_SECRET`, `AUTH_JWT_TTL_MINUTES` |
 | LLM | `LLM_*` shared; `BA_LLM_MODEL`, `WIKI_LLM_MODEL`, `DESIGNER_LLM_*` override per agent |
 | Storage | `STORAGE_BACKEND=s3\|local`, `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `STORAGE_LOCAL_ROOT` |
-| Logs | `LOG_DIR`, `LOG_PROJECT_TO_STORAGE`, `LOG_PROJECT_FLUSH_SECONDS` |
+| Logs | `LOG_DIR`, `LOG_PROJECT_TO_STORAGE`, `LOG_PROJECT_FLUSH_SECONDS`, `LOG_PROJECT_RETENTION_DAYS` |
 
 `.env` is never committed.
 
@@ -84,9 +84,24 @@ one; after the BA package is handed off, the user is guided to switch to the Des
 rail shows the BA state of the feature, and the project page always shows both agents with their state
 ("Chờ BA" until a BA package exists).
 
-**Assets.** Files use S3-style keys: `projects/<id>/ba/packages/…`, `projects/<id>/designer/outputs/…`,
-`projects/<id>/wiki/blobs/…`, `projects/<id>/logs/…`, `shared/…`. S3 is the source of truth, `STORAGE_LOCAL_ROOT`
-is a write-through cache. Every BA export publishes a versioned BA package and its BPMN. When a design waits
+**Storage.** Postgres holds metadata and small JSON; file content lives in S3 (the source of truth;
+`STORAGE_LOCAL_ROOT` is a write-through cache), one tree per project and module:
+
+```text
+projects/<project>/
+  ba/packages/…                                      BA packages + BPMN (versioned Assets)
+  designer/sessions/<session>/screens/<screen>/v0001.html   screen HTML, one immutable object per version
+  designer/assets/<asset>                            images users upload (chat, BA handoff)
+  designer/design-systems/<id>/source.fig            imported Figma file
+  designer/outputs/<run>/…                           published designs (Assets)
+  wiki/blobs/…
+  logs/<service>/<date>/*.jsonl                      per-project logs (LOG_PROJECT_RETENTION_DAYS)
+shared/…                                             the same tree without a project (auth off, tools)
+```
+
+Deleting a session, screen or design system deletes its files; published Assets stay.
+
+**Assets.** Every BA export publishes a versioned BA package and its BPMN. When a design waits
 for the final review, its UI specification and the design files are published as "Chờ duyệt"; the approval
 marks them "Đã duyệt". Designs link to the BA package version they came from, so a newer BA version marks them
 "cần xem lại".

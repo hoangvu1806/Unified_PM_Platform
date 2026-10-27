@@ -17,6 +17,7 @@ from ..designsystem.gallery import gallery_fragment
 from ..designsystem.service import DEFAULT_CONTEXT, run_import
 from ..models import DEFAULT_DESIGN_SYSTEM, DesignSystemDetail, DesignSystemView, SessionDesignSystem, SessionView
 from ..render import build_document
+from ..storage import layout
 from .access import DESIGNER_ROLE, current_username
 from .screens import vendor_base
 
@@ -72,9 +73,9 @@ async def import_design_system(
     ds_id = f"ds-{uuid4().hex[:12]}"
     source_key = None
     try:
-        from platform_core.storage import get_storage, project_key
+        from platform_core.storage import get_storage
 
-        source_key = project_key(project_id, "designer", "design-systems", ds_id, "source.fig")
+        source_key = layout.design_system_source_key(project_id, ds_id)
         get_storage().put(source_key, data, content_type="application/octet-stream")
     except Exception:  # noqa: BLE001 — the source copy is a convenience; the import works from memory
         source_key = None

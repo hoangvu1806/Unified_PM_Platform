@@ -5,7 +5,9 @@
   rotation, 14 days). ``LOG_DIR`` is bind-mounted to ``platform/logs``.
 * Per project: records that carry a ``project_id`` are buffered and written to
   platform storage (S3) under ``projects/<project_id>/logs/<service>/<YYYY-MM-DD>/``
-  as ``.jsonl`` chunks, flushed every ``LOG_PROJECT_FLUSH_SECONDS``.
+  as ``.jsonl`` chunks, flushed every ``LOG_PROJECT_FLUSH_SECONDS``. Day folders older
+  than ``LOG_PROJECT_RETENTION_DAYS`` are deleted once a day for the projects each
+  process has logged for (0 keeps everything).
 
 Every record gets ``service``, ``request_id``, ``user`` and ``project_id``
 from the request context (:func:`request_context`); background tasks started
@@ -23,7 +25,7 @@ import threading
 import time
 import uuid
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any
@@ -104,12 +106,17 @@ class ConsoleFormatter(logging.Formatter):
 class ProjectStorageHandler(logging.Handler):
     """Buffers records per project and writes .jsonl chunks to platform storage."""
 
-    def __init__(self, service: str, flush_seconds: float = 30.0, max_lines: int = 500) -> None:
+    def __init__(
+        self, service: str, flush_seconds: float = 30.0, max_lines: int = 500, retention_days: int = 30
+    ) -> None:
         super().__init__(level=logging.INFO)
         self.service = service
         self.flush_seconds = flush_seconds
         self.max_lines = max_lines
+        self.retention_days = retention_days
         self._buffers: dict[str, list[str]] = {}
+        self._seen: set[str] = set()
+        self._last_sweep = 0.0
         self._buf_lock = threading.Lock()
         self._host = socket.gethostname()[:12]
         self._stop = threading.Event()
@@ -135,6 +142,32 @@ class ProjectStorageHandler(logging.Handler):
     def _loop(self) -> None:
         while not self._stop.wait(self.flush_seconds):
             self.flush()
+            if self.retention_days > 0 and time.monotonic() - self._last_sweep > 86400:
+                self._last_sweep = time.monotonic()
+                self.sweep()
+
+    def sweep(self, today: datetime | None = None) -> int:
+        """Delete this service's day folders older than the retention, for the projects seen."""
+        try:
+            from platform_core.storage import get_storage, project_key
+
+            storage = get_storage()
+        except Exception:  # noqa: BLE001
+            return 0
+        cutoff = ((today or datetime.now(timezone.utc)) - timedelta(days=self.retention_days)).strftime("%Y-%m-%d")
+        deleted = 0
+        for project_id in list(self._seen):
+            prefix = project_key(project_id, "logs", self.service) + "/"
+            try:
+                for key in list(storage.keys(prefix)):
+                    day = key[len(prefix):].split("/", 1)[0]
+                    if len(day) == 10 and day < cutoff:
+                        storage.delete(key)
+                        deleted += 1
+            except Exception as exc:  # noqa: BLE001 — never let logging break the service
+                logging.getLogger("platform.logs").warning("project log sweep failed: %s", exc,
+                                                           extra={"project_id": None})
+        return deleted
 
     def flush(self) -> None:
         with self._buf_lock:
@@ -148,6 +181,7 @@ class ProjectStorageHandler(logging.Handler):
         except Exception:  # noqa: BLE001
             return
         now = datetime.now(timezone.utc)
+        self._seen.update(pending)
         for project_id, lines in pending.items():
             key = project_key(
                 project_id,
@@ -204,7 +238,11 @@ def setup_logging(service: str) -> None:
         logging.getLogger("platform.logs").warning("local log dir unavailable (%s): %s", log_dir, exc)
 
     if os.environ.get("LOG_PROJECT_TO_STORAGE", "true").lower() in {"1", "true", "yes"}:
-        project = ProjectStorageHandler(service, float(os.environ.get("LOG_PROJECT_FLUSH_SECONDS", "30")))
+        project = ProjectStorageHandler(
+            service,
+            float(os.environ.get("LOG_PROJECT_FLUSH_SECONDS", "30")),
+            retention_days=int(os.environ.get("LOG_PROJECT_RETENTION_DAYS", "30")),
+        )
         project.addFilter(context_filter)
         root.addHandler(project)
 

@@ -32,6 +32,12 @@ UI at `/designer/`, API at `/designer/api/v1/` behind the gateway; data in Postg
 - Screens are stored per session (`screens`, every save in `screen_versions`) and served by
   `app/api/screens.py`: list/read/save/delete, versions, `/document` (iframe `srcdoc`) and
   `/screenshot`.
+- Storage (`app/storage/`): Postgres keeps metadata only; every file key comes from `layout.py`
+  (`projects/<project>/designer/sessions/<session>/screens/<screen>/v0001.html`, `assets/<id>`,
+  `design-systems/<id>/source.fig`, `outputs/<run>/…`). Each screen save writes a new immutable object
+  (sha256 + size in the row). Uploaded images are per project (`storage/assets.py`; screens reference
+  `asset:<id>`, inlined when rendered). On start the store moves HTML still stored inline by older versions
+  to storage, then drops those columns. Deleting a session/screen/design system deletes its files.
 
 Screen conventions for the agent and the design page:
 

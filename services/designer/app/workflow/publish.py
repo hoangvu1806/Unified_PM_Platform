@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from ..models import RunStage, RunStatus
+from ..storage import layout
 
 if TYPE_CHECKING:
     from .service import RunService
@@ -44,7 +45,7 @@ def _spec_state(run) -> str:
 def _publish_spec(session, run, state: str) -> None:
     """The approved UI specification next to the design file (same revision, same BA link)."""
     from platform_core import artifacts
-    from platform_core.storage import get_storage, project_key
+    from platform_core.storage import get_storage
 
     spec = run.specification
     if spec is None:
@@ -55,7 +56,7 @@ def _publish_spec(session, run, state: str) -> None:
             ensure_ascii=False, indent=2,
         ).encode("utf-8")
         digest = hashlib.sha256(body).hexdigest()
-        key = project_key(session.project_id, "designer", "outputs", str(run.id), f"r{run.revision}-ui-spec.json")
+        key = layout.output_key(session.project_id, str(run.id), f"r{run.revision}-ui-spec.json")
         meta = {"session_id": str(session.id), "state": state}
         existing = artifacts.latest("ui_spec", str(run.id))
         if existing and existing["version"] == run.revision:
@@ -103,7 +104,7 @@ async def publish_design(service: "RunService", run_id: UUID) -> None:
 
 async def _publish_bundle(service: "RunService", session, run, state: str) -> None:
     from platform_core import artifacts
-    from platform_core.storage import get_storage, project_key
+    from platform_core.storage import get_storage
 
     from ..designsystem.service import design_context
     from ..export.bundle import export_screens
@@ -114,10 +115,11 @@ async def _publish_bundle(service: "RunService", session, run, state: str) -> No
     existing = artifacts.latest("designer_output", str(run.id))
     if existing and existing["version"] > run.revision:
         return
-    out = await export_screens(service.renderer, screens, await design_context(service.store, session), session.title)
+    out = await export_screens(service.renderer, screens, await design_context(service.store, session), session.title,
+                               session.project_id)
     # The zip embeds a timestamped .fig; hash the screens instead so unchanged designs are not re-uploaded.
     digest = hashlib.sha256(json.dumps([[s.id, s.version] for s in screens]).encode()).hexdigest()
-    key = project_key(session.project_id, "designer", "outputs", str(run.id), f"r{run.revision}-design.zip")
+    key = layout.output_key(session.project_id, str(run.id), f"r{run.revision}-design.zip")
     meta = {"session_id": str(session.id), "state": state, "format": "html", "file": "design.zip",
             "screens": [{"id": s.id, "name": s.name, "version": s.version} for s in screens]}
     if existing and existing["version"] == run.revision:

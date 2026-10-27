@@ -12,7 +12,6 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
     volumes:
-      - designer-data:/app/data          # assets until Sprint 2 storage move, logs
       - platform-storage:/data/storage
       - ../../logs:/logs                    # platform/logs/designer-api/
     depends_on:
@@ -51,6 +50,3 @@ services:
       postgres:
         condition: service_healthy
     command: ["sh", "-c", "pip install -q -r requirements-dev.txt && pytest -q --tb=short -p no:cacheprovider"]
-
-volumes:
-  designer-data:

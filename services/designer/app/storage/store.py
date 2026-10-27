@@ -1,5 +1,7 @@
 import asyncio
+import hashlib
 import json
+import logging
 import re
 from collections.abc import Callable
 from enum import Enum
@@ -28,7 +30,24 @@ from ..models import (
     WorkflowEvent,
     utc_now,
 )
-from .schema import initialize_schema
+from . import layout
+from .schema import drop_inline_html, has_inline_html, initialize_schema
+
+logger = logging.getLogger("designer_agent.store")
+
+
+def _storage():
+    from platform_core.storage import get_storage
+
+    return get_storage()
+
+
+def _delete_prefix(prefix: str) -> int:
+    storage, count = _storage(), 0
+    for key in list(storage.keys(prefix)):
+        storage.delete(key)
+        count += 1
+    return count
 
 T = TypeVar("T")
 
@@ -46,10 +65,9 @@ def _param(value: Any) -> Any:
 
 
 class Store:
-    """Designer persistence on the shared platform Postgres (schema ``designer``).
-
-    Public methods are unchanged from the SQLite store; only the connection
-    layer differs. Every connection pins ``search_path`` to ``schema``.
+    """Designer persistence: metadata in Postgres (schema ``designer``), file content in platform
+    storage under the keys of ``storage.layout`` (screen HTML is one immutable object per version).
+    Every connection pins ``search_path`` to ``schema``.
     """
 
     def __init__(self, dsn: str, schema: str = "designer", max_size: int = 10) -> None:
@@ -80,6 +98,40 @@ class Store:
         self._pool.open(wait=True)
         with self._pool.connection() as db:
             initialize_schema(db)
+            if has_inline_html(db):
+                self._migrate_screen_html(db)
+                drop_inline_html(db)
+
+    def _migrate_screen_html(self, db: Connection) -> None:
+        """Move screen HTML stored inline by older versions into storage (one object per version)."""
+        rows = db.execute(
+            "SELECT v.session_id, v.screen_id, v.version, v.html, s.project_id FROM screen_versions v "
+            "JOIN sessions s ON s.id = v.session_id WHERE v.storage_key IS NULL AND v.html IS NOT NULL"
+        ).fetchall()
+        for row in rows:
+            key, digest, size = self._put_html(row["project_id"], row["session_id"], row["screen_id"], row["version"], row["html"])
+            db.execute(
+                "UPDATE screen_versions SET storage_key=%s, content_hash=%s, size=%s "
+                "WHERE session_id=%s AND screen_id=%s AND version=%s",
+                (key, digest, size, row["session_id"], row["screen_id"], row["version"]),
+            )
+        db.execute(
+            "UPDATE screens c SET storage_key=v.storage_key, content_hash=v.content_hash, size=v.size "
+            "FROM screen_versions v WHERE v.session_id=c.session_id AND v.screen_id=c.screen_id "
+            "AND v.version=c.version AND c.storage_key IS NULL"
+        )
+        left = db.execute("SELECT count(*) AS n FROM screen_versions WHERE storage_key IS NULL").fetchone()["n"]
+        if left:
+            raise RuntimeError(f"{left} screen version(s) could not be moved to storage")
+        if rows:
+            logger.info("Moved %d screen version(s) from the database to storage", len(rows))
+
+    @staticmethod
+    def _put_html(project_id, session_id, screen_id: str, version: int, html: str) -> tuple[str, str, int]:
+        data = html.encode("utf-8")
+        key = layout.screen_version_key(project_id, str(session_id), screen_id, version)
+        _storage().put(key, data, content_type="text/html; charset=utf-8")
+        return key, hashlib.sha256(data).hexdigest(), len(data)
 
     async def close(self) -> None:
         await self._call(self._pool.close)
@@ -143,15 +195,21 @@ class Store:
         return self._session_from_row(row) if row else None
 
     async def delete_session(self, session_id: UUID) -> bool:
-        """Delete a session and its runs, events, reviews, and artifacts via FK cascades."""
+        """Delete a session (runs, events, reviews, run data, screens via FK cascades) and its files."""
         return await self._call(lambda: self._delete_session(session_id))
 
     def _delete_session(self, session_id: UUID) -> bool:
         with self._pool.connection() as db:
-            cursor = db.execute(
-                self._sql("DELETE FROM sessions WHERE id = ?"), (str(session_id),)
-            )
-            return cursor.rowcount > 0
+            row = db.execute(self._sql("SELECT project_id FROM sessions WHERE id = ?"), (str(session_id),)).fetchone()
+            if row is None:
+                return False
+            db.execute(self._sql("DELETE FROM sessions WHERE id = ?"), (str(session_id),))
+        # Files after the rows: a failure here leaves unreferenced objects, never dangling rows.
+        try:
+            _delete_prefix(layout.session_prefix(row["project_id"], str(session_id)))
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not delete the files of session %s", session_id)
+        return True
 
     async def get_design_brief(self, session_id: UUID) -> DesignBrief:
         session = await self.get_session(session_id)
@@ -184,9 +242,9 @@ class Store:
         )
         await self._execute(
             "INSERT INTO runs (id, session_id, revision, prompt, screen_name, platform, "
-            "stage, status, library_ids, mcp_profile, specification, error, intent, assistant_message, style_name, created_at, updated_at, "
+            "stage, status, library_ids, specification, error, intent, assistant_message, style_name, created_at, updated_at, "
             "triggered_by) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(run.id),
                 str(run.session_id),
@@ -201,7 +259,6 @@ class Store:
                 None,
                 None,
                 None,
-                None,
                 run.style_name,
                 now.isoformat(),
                 now.isoformat(),
@@ -209,7 +266,7 @@ class Store:
             ),
         )
         if request.assets:
-            await self.set_artifact(
+            await self.set_run_data(
                 run.id,
                 run.revision,
                 "exact_assets",
@@ -366,29 +423,30 @@ class Store:
             ),
         )
 
-    async def set_artifact(self, run_id: UUID, revision: int, key: str, value: dict[str, Any] | list[Any]) -> None:
+    # ── Run data: per-run JSON values (token usage, attached assets …) ──
+    async def set_run_data(self, run_id: UUID, revision: int, key: str, value: dict[str, Any] | list[Any]) -> None:
         await self._execute(
-            "INSERT INTO artifacts (run_id, revision, artifact_key, value, created_at) VALUES (?, ?, ?, ?, ?) "
+            "INSERT INTO run_data (run_id, revision, artifact_key, value, created_at) VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT(run_id, revision, artifact_key) DO UPDATE SET value=excluded.value",
             (str(run_id), revision, key, json.dumps(value), utc_now().isoformat()),
         )
 
-    async def get_artifact(self, run_id: UUID, revision: int, key: str) -> Any | None:
+    async def get_run_data(self, run_id: UUID, revision: int, key: str) -> Any | None:
         row = await self._fetchone(
-            "SELECT value FROM artifacts WHERE run_id=? AND revision=? AND artifact_key=?",
+            "SELECT value FROM run_data WHERE run_id=? AND revision=? AND artifact_key=?",
             (str(run_id), revision, key),
         )
         return json.loads(row["value"]) if row else None
 
-    async def get_latest_session_artifact(self, session_id: UUID, key: str) -> Any | None:
-        """Return the newest artifact of a kind from any run in the session.
+    async def get_latest_session_run_data(self, session_id: UUID, key: str) -> Any | None:
+        """Return the newest value of a kind from any run in the session.
 
         Clarification turns create a new run, while uploaded assets belong to
         the original message. Session fallback keeps those exact bytes attached
         when the user later answers a question such as "mobile nhé".
         """
         row = await self._fetchone(
-            "SELECT a.value FROM artifacts a "
+            "SELECT a.value FROM run_data a "
             "JOIN runs r ON r.id=a.run_id "
             "WHERE r.session_id=? AND a.artifact_key=? "
             "ORDER BY a.created_at DESC LIMIT 1",
@@ -396,19 +454,24 @@ class Store:
         )
         return json.loads(row["value"]) if row else None
 
-    async def list_artifacts(self, run_id: UUID, revision: int) -> dict[str, Any]:
+    async def list_run_data(self, run_id: UUID, revision: int) -> dict[str, Any]:
         rows = await self._fetchall(
-            "SELECT artifact_key, value FROM artifacts WHERE run_id=? AND revision=?",
+            "SELECT artifact_key, value FROM run_data WHERE run_id=? AND revision=?",
             (str(run_id), revision),
         )
         return {row["artifact_key"]: json.loads(row["value"]) for row in rows}
 
-    # ── Screens (HTML designer) ─────────────────────────
+    # ── Screens: metadata here, HTML in storage (layout.screen_version_key) ──
     async def list_screens(self, session_id: UUID, *, with_html: bool = False) -> list[ScreenView]:
         rows = await self._fetchall(
             "SELECT * FROM screens WHERE session_id=? ORDER BY position, created_at", (str(session_id),)
         )
-        return [self._screen_from_row(row, with_html) for row in rows]
+        screens = [self._screen_from_row(row) for row in rows]
+        if with_html:
+            htmls = await asyncio.gather(*(self._read_html(row["storage_key"]) for row in rows))
+            for screen, html in zip(screens, htmls):
+                screen.html = html
+        return screens
 
     async def get_screen(self, session_id: UUID, screen_id: str, version: int | None = None) -> ScreenView | None:
         row = await self._fetchone(
@@ -418,13 +481,20 @@ class Store:
             return None
         if version is not None and version != row["version"]:
             old = await self._fetchone(
-                "SELECT html FROM screen_versions WHERE session_id=? AND screen_id=? AND version=?",
+                "SELECT storage_key FROM screen_versions WHERE session_id=? AND screen_id=? AND version=?",
                 (str(session_id), screen_id, version),
             )
             if old is None:
                 return None
-            row = {**row, "version": version, "html": old["html"]}
-        return self._screen_from_row(row, True)
+            row = {**row, "version": version, "storage_key": old["storage_key"]}
+        screen = self._screen_from_row(row)
+        screen.html = await self._read_html(row["storage_key"])
+        return screen
+
+    async def _read_html(self, key: str | None) -> str:
+        if not key:
+            return ""
+        return (await asyncio.to_thread(lambda: _storage().get(key))).decode("utf-8")
 
     async def save_screen(
         self,
@@ -435,7 +505,7 @@ class Store:
         run_id: UUID | str | None = None,
         updated_by: str | None = None,
     ) -> ScreenView:
-        """Create or update a screen; every save is a new version (kept in screen_versions)."""
+        """Create or update a screen. Every save writes a new immutable HTML object and a version row."""
         return await self._call(lambda: self._save_screen(session_id, screen_id, body, run_id, updated_by))
 
     def _save_screen(self, session_id, screen_id: str, body: ScreenWrite, run_id, updated_by) -> ScreenView:
@@ -443,41 +513,50 @@ class Store:
         sid, rid = str(session_id), (str(run_id) if run_id else None)
         width = body.width or SCREEN_WIDTHS[body.platform]
         with self._pool.connection() as db, db.transaction():
+            session = db.execute(self._sql("SELECT project_id FROM sessions WHERE id=?"), (sid,)).fetchone()
+            if session is None:
+                raise LookupError(sid)
             current = db.execute(
                 self._sql("SELECT version FROM screens WHERE session_id=? AND screen_id=? FOR UPDATE"), (sid, screen_id)
             ).fetchone()
+            version = current["version"] + 1 if current else 1
+            # The object is written before the rows commit; a failed commit leaves an object no row
+            # points to (rewritten by the next save of that version), never a row without its HTML.
+            key, digest, size = self._put_html(session["project_id"], sid, screen_id, version, body.html)
             if current is None:
                 position = db.execute(
                     self._sql("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM screens WHERE session_id=?"), (sid,)
                 ).fetchone()["p"]
-                version = 1
                 db.execute(
                     self._sql(
-                        "INSERT INTO screens (session_id, screen_id, name, platform, width, position, version, html, "
-                        "run_id, updated_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                        "INSERT INTO screens (session_id, screen_id, name, platform, width, position, version, "
+                        "storage_key, content_hash, size, run_id, updated_by, created_at, updated_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                     ),
-                    (sid, screen_id, body.name, body.platform, width, position, version, body.html, rid, updated_by, now, now),
+                    (sid, screen_id, body.name, body.platform, width, position, version, key, digest, size,
+                     rid, updated_by, now, now),
                 )
             else:
-                version = current["version"] + 1
                 db.execute(
                     self._sql(
-                        "UPDATE screens SET name=?, platform=?, width=?, version=?, html=?, run_id=?, updated_by=?, "
-                        "updated_at=? WHERE session_id=? AND screen_id=?"
+                        "UPDATE screens SET name=?, platform=?, width=?, version=?, storage_key=?, content_hash=?, size=?, "
+                        "run_id=?, updated_by=?, updated_at=? WHERE session_id=? AND screen_id=?"
                     ),
-                    (body.name, body.platform, width, version, body.html, rid, updated_by, now, sid, screen_id),
+                    (body.name, body.platform, width, version, key, digest, size, rid, updated_by, now, sid, screen_id),
                 )
             db.execute(
                 self._sql(
-                    "INSERT INTO screen_versions (session_id, screen_id, version, html, run_id, updated_by, note, created_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    "INSERT INTO screen_versions (session_id, screen_id, version, storage_key, content_hash, size, "
+                    "run_id, updated_by, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 ),
-                (sid, screen_id, version, body.html, rid, updated_by, body.note or None, now),
+                (sid, screen_id, version, key, digest, size, rid, updated_by, body.note or None, now),
             )
             row = db.execute(
                 self._sql("SELECT * FROM screens WHERE session_id=? AND screen_id=?"), (sid, screen_id)
             ).fetchone()
-        return self._screen_from_row(row, True)
+        screen = self._screen_from_row(row)
+        screen.html = body.html
+        return screen
 
     async def list_screen_versions(self, session_id: UUID, screen_id: str) -> list[ScreenVersionView]:
         rows = await self._fetchall(
@@ -490,6 +569,7 @@ class Store:
     async def delete_screen(self, session_id: UUID, screen_id: str) -> bool:
         def delete() -> bool:
             with self._pool.connection() as db, db.transaction():
+                session = db.execute(self._sql("SELECT project_id FROM sessions WHERE id=?"), (str(session_id),)).fetchone()
                 db.execute(
                     self._sql("DELETE FROM screen_versions WHERE session_id=? AND screen_id=?"),
                     (str(session_id), screen_id),
@@ -497,7 +577,14 @@ class Store:
                 cursor = db.execute(
                     self._sql("DELETE FROM screens WHERE session_id=? AND screen_id=?"), (str(session_id), screen_id)
                 )
-                return cursor.rowcount > 0
+                deleted = cursor.rowcount > 0
+            if deleted and session is not None:
+                prefix = layout.session_prefix(session["project_id"], str(session_id)) + f"screens/{screen_id}/"
+                try:
+                    _delete_prefix(prefix)
+                except Exception:  # noqa: BLE001
+                    logger.exception("Could not delete the files of screen %s", screen_id)
+            return deleted
 
         return await self._call(delete)
 
@@ -584,8 +671,15 @@ class Store:
     async def delete_design_system(self, ds_id: str) -> bool:
         def delete() -> bool:
             with self._pool.connection() as db, db.transaction():
+                row = db.execute(self._sql("SELECT project_id FROM design_systems WHERE id=?"), (ds_id,)).fetchone()
                 db.execute(self._sql("UPDATE sessions SET design_system_id=NULL WHERE design_system_id=?"), (ds_id,))
-                return db.execute(self._sql("DELETE FROM design_systems WHERE id=?"), (ds_id,)).rowcount > 0
+                deleted = db.execute(self._sql("DELETE FROM design_systems WHERE id=?"), (ds_id,)).rowcount > 0
+            if deleted and row is not None:
+                try:
+                    _delete_prefix(layout.design_system_prefix(row["project_id"], ds_id))
+                except Exception:  # noqa: BLE001
+                    logger.exception("Could not delete the files of design system %s", ds_id)
+            return deleted
 
         return await self._call(delete)
 
@@ -602,11 +696,9 @@ class Store:
         )
 
     @staticmethod
-    def _screen_from_row(row: Row, with_html: bool) -> ScreenView:
-        value = dict(row)
+    def _screen_from_row(row: Row) -> ScreenView:
+        value = {k: v for k, v in row.items() if k not in {"storage_key", "content_hash", "size", "html"}}
         value["id"] = value.pop("screen_id")
-        if not with_html:
-            value["html"] = None
         return ScreenView.model_validate(value)
 
     def _run_from_row(self, row: Row) -> RunView:

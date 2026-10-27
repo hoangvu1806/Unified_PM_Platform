@@ -17,6 +17,7 @@ from ..core.errors import AppError, not_found
 from ..designsystem.service import design_context
 from ..models import ScreenVersionView, ScreenView, ScreenWrite
 from ..render import build_document
+from ..render.assets import inline_assets
 from ..render.document import VENDOR_DIR
 from .access import current_username
 
@@ -98,9 +99,10 @@ async def screen_versions(request: Request, session_id: UUID, screen_id: str) ->
 async def screen_document(request: Request, session_id: UUID, screen_id: str, version: int | None = None) -> Response:
     """The full HTML document for the design iframe (``srcdoc``)."""
     screen = await _screen(request, session_id, screen_id, version)
-    ds = await design_context(request.app.state.store, await request.app.state.store.get_session(session_id))
+    session = await request.app.state.store.get_session(session_id)
+    ds = await design_context(request.app.state.store, session)
     document = build_document(
-        screen.html or "", vendor_base=vendor_base(request), title=screen.name, theme_css=ds.theme_css, fonts=ds.fonts
+        await inline_assets(screen.html or "", session.project_id), vendor_base=vendor_base(request), title=screen.name, theme_css=ds.theme_css, fonts=ds.fonts
     )
     return Response(document, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-store"})
 
@@ -117,9 +119,10 @@ async def screen_screenshot(
     scale: float = Query(1, ge=1, le=3),
 ) -> Response:
     screen = await _screen(request, session_id, screen_id, version)
-    ds = await design_context(request.app.state.store, await request.app.state.store.get_session(session_id))
+    session = await request.app.state.store.get_session(session_id)
+    ds = await design_context(request.app.state.store, session)
     result = await request.app.state.renderer.render(
-        screen.html or "", width=width or screen.width, state=state, screenshot=format, scale=scale, lint=False,
+        await inline_assets(screen.html or "", session.project_id), width=width or screen.width, state=state, screenshot=format, scale=scale, lint=False,
         theme_css=ds.theme_css, fonts=ds.fonts,
     )
     name = f"{screen.id}-v{screen.version}{'-' + state if state else ''}.{'jpg' if format == 'jpeg' else 'png'}"
@@ -143,7 +146,7 @@ async def export_session(request: Request, session_id: UUID, format: Literal["fi
     if not screens:
         raise AppError("NO_SCREENS", "Nothing to export", "The session has no screens yet.", 409)
     ds = await design_context(store, session)
-    out = await export_screens(request.app.state.renderer, screens, ds, session.title)
+    out = await export_screens(request.app.state.renderer, screens, ds, session.title, session.project_id)
     data, media = (out.fig, "application/octet-stream") if format == "fig" else (out.zip, "application/zip")
     name = re.sub(r"[^A-Za-z0-9._-]+", "-", session.title).strip("-") or "design"
     return Response(data, media_type=media, headers={

@@ -68,7 +68,7 @@ const projectQuery = () => (projectId ? `?project_id=${encodeURIComponent(projec
 
 export const api = {
     parseAttachment: async (file: File) =>
-        request<ParsedAttachment>("/attachments/parse", {
+        request<ParsedAttachment>(`/attachments/parse${projectQuery()}`, {
             method: "POST",
             body: JSON.stringify({
                 name: file.name,

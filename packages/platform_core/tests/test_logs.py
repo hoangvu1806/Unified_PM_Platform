@@ -60,3 +60,22 @@ def test_project_records_are_written_under_the_project_prefix(platform_logging):
     assert keys and all(k.startswith("projects/PRJ-A/logs/test-svc/") and k.endswith(".jsonl") for k in keys)
     body = (tmp_path / "storage" / keys[0]).read_text(encoding="utf-8")
     assert "run finished" in body and "/health" not in body
+
+
+def test_sweep_deletes_project_log_days_past_retention(platform_logging):
+    from datetime import datetime, timezone
+
+    tmp_path, root = platform_logging
+    handler = _project_handler(root)
+    storage = get_storage()
+    for day in ("2026-01-01", "2026-01-30", "2026-01-31"):
+        storage.put(f"projects/PRJ-A/logs/test-svc/{day}/x.jsonl", b"{}\n")
+    storage.put("projects/PRJ-A/logs/other-svc/2026-01-01/x.jsonl", b"{}\n")  # another service: untouched
+    handler._seen.add("PRJ-A")
+    handler.retention_days = 1
+
+    assert handler.sweep(today=datetime(2026, 2, 1, tzinfo=timezone.utc)) == 2
+    assert sorted(storage.keys("projects/PRJ-A/logs/")) == [
+        "projects/PRJ-A/logs/other-svc/2026-01-01/x.jsonl",
+        "projects/PRJ-A/logs/test-svc/2026-01-31/x.jsonl",
+    ]

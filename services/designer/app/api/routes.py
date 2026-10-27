@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..attachments.parser import parse_bpmn_document, parse_json_document, parse_text_document
-from ..core.config import save_designer_asset
+from ..storage.assets import save_asset
 from ..core.errors import AppError, not_found
 from ..core.llm import STRUCTURED_PARSER_VERSION
 from ..models import ExactAsset, Platform, ReviewCreate, RunCreate, RunView, SessionCreate, SessionView
@@ -116,8 +116,13 @@ async def health(request: Request) -> dict[str, object]:
 
 @router.post("/attachments/parse", response_model=AttachmentParseResult)
 async def parse_attachment(
-    request: Request, body: AttachmentParseRequest
+    request: Request,
+    body: AttachmentParseRequest,
+    project_id: str | None = Query(None, description="Project that owns uploaded images"),
 ) -> AttachmentParseResult:
+    project_id = (project_id or "").strip() or None
+    if not auth_disabled() or project_id:
+        require_project(project_id, DESIGNER_ROLE)
     try:
         raw = base64.b64decode(body.data_base64, validate=True)
     except (binascii.Error, ValueError) as error:
@@ -159,7 +164,7 @@ async def parse_attachment(
         if suffix in IMAGE_SUFFIXES:
             mime_type = IMAGE_SUFFIXES[suffix]
             asset_id = _standard_asset_id(safe_name, suffix)
-            save_designer_asset(asset_id, raw)
+            save_asset(project_id, asset_id, raw)
             analysis = await request.app.state.llm.structured(
                 prompt=(
                     "Inspect this attached image as input to a UI design agent. "
@@ -338,7 +343,7 @@ async def get_run_artifacts(request: Request, run_id: UUID) -> dict[str, Any]:
     run = await request.app.state.store.get_run(run_id)
     if run is None:
         raise not_found("Run")
-    return await request.app.state.store.list_artifacts(run.id, run.revision)
+    return await request.app.state.store.list_run_data(run.id, run.revision)
 
 
 @router.get("/runs/{run_id}/events")
