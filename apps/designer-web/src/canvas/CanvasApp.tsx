@@ -287,9 +287,9 @@ function parseStates(html: string): string[] {
     return Array.from(found).sort();
 }
 
-/** Inject overflow:hidden so frames never show scrollbars in overview. */
+/** Hide scrollbars without overflow:hidden so scrollHeight stays accurate. */
 function noScrollDoc(doc: string): string {
-    const tag = "<style>html,body{overflow:hidden!important;scrollbar-width:none!important}</style>";
+    const tag = "<style>html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important}html,body{scrollbar-width:none!important}</style>";
     return doc.includes("</head>") ? doc.replace("</head>", `${tag}</head>`) : tag + doc;
 }
 
@@ -305,18 +305,18 @@ function StateFrame({
     // Post state after load; runtime.js replies with a "ready" message that includes scrollHeight.
     const handleLoad = () => ref.current?.contentWindow?.postMessage({ type: "designer:state", state }, "*");
 
-    // Listen for the "ready" message from THIS iframe to learn the real content height.
+    // Listen for "ready" (initial load) and "resize" (after state switch) from THIS iframe.
     useEffect(() => {
         const onMsg = (e: MessageEvent) => {
             if (e.source !== ref.current?.contentWindow) return;
             const d = e.data as { source?: string; type?: string; height?: number };
-            if (d?.source === "designer-screen" && d.type === "ready" && d.height) {
-                setH(Math.max(defaultH, d.height));
+            if ((d?.type === "ready" || d?.type === "resize") && d.height) {
+                setH((prev) => Math.max(prev, d.height!));
             }
         };
         window.addEventListener("message", onMsg);
         return () => window.removeEventListener("message", onMsg);
-    }, [defaultH]);
+    }, []);
 
     return (
         <div className="canvas-multi-frame" onClick={onClick}>

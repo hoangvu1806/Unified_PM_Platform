@@ -91,6 +91,8 @@
     if (data.type === "designer:state") {
       if (data.state) document.documentElement.setAttribute("data-active-state", data.state);
       else document.documentElement.removeAttribute("data-active-state");
+      // Report updated height after the DOM re-renders for this state.
+      setTimeout(() => post({ type: "resize", height: document.documentElement.scrollHeight }), 60);
     } else if (data.type === "designer:select") {
       selecting = !!data.on;
       if (!selecting) outline(hovered, false);
