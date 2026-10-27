@@ -11,9 +11,10 @@ intent:
 
 Rules:
 - Screen ids are lowercase slugs (`tao-yeu-cau`); keep ids of existing screens.
-- Platforms: mobile, tablet, desktop. A back-office/ERP feature is desktop unless the user says otherwise.
+- Platforms: mobile, tablet, desktop — take them from the request or the source; when they are not stated and not evident from where the users work, ask (`clarify_design` / `propose_scope`).
 - Group touchpoints into real screens: one screen per place the user works in, not one per touchpoint.
 - Never invent business rules; keep BA ids (UIT-xx, BR-xx) in `source_ui_ids` / purposes.
+- Whenever you fill `brief`, set `brief.design_query`: 4-8 English keywords for the product type, industry, audience and platform (e.g. "university e-learning student mobile app"); it selects the design knowledge.
 
 Current brief: {{brief}}
 Existing screens: {{screens}}

@@ -110,6 +110,7 @@ MIGRATIONS = (
     )""",
     "CREATE INDEX IF NOT EXISTS idx_ds_snippets_component ON design_system_snippets(design_system_id, component_id)",
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS design_system_id TEXT",
+    "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS visual_theme TEXT",
 )
 
 

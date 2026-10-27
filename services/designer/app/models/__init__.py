@@ -66,6 +66,8 @@ class DesignBrief(BaseModel):
     style_name: str | None = None
     design_system_ids: list[str] = Field(default_factory=list)
     scope_confirmed: bool = False
+    # English keywords (product type, industry, audience, platform) to retrieve design knowledge.
+    design_query: str = ""
 
     def missing_fields(self) -> list[str]:
         missing: list[str] = []
@@ -147,6 +149,8 @@ class SessionView(BaseModel):
     source_ref: str | None = None
     source_artifact_id: str | None = None
     design_system_id: str | None = None
+    # Art direction of the spec as a theme ({"css", "fonts"}) when no design system is imported.
+    visual_theme: dict[str, Any] | None = None
 
 
 SCREEN_WIDTHS: dict[str, int] = {"mobile": 390, "tablet": 834, "desktop": 1440, "responsive": 1440}

@@ -1,16 +1,30 @@
-Write the UI specification for the confirmed screens. It is reviewed by the user before any screen is built, so it must be concrete and short.
+Write the UI specification and the art direction for the confirmed screens. The user reviews it before any screen is built.
 
+## Art direction (`design`)
+Follow the design skill below to decide a distinctive, subject-specific direction. Ground it in the product profile retrieved from the UI/UX knowledge base (a reference, not an order — adapt it to this brief).
+- `mood`: 2 sentences on personality, density and where the one bold move is.
+- `palette`: hex values for primary, primary_foreground, background, foreground, surface, muted, muted_foreground, border, accent, success, warning, destructive. Text on its background ≥ 4.5:1. {{palette_rule}}
+- `heading_font`, `body_font`: Google Fonts families (one family is fine); `radius`, `density`.
+- `do` / `dont`: up to 6 concrete rules each, specific to this product.
+
+Product profile:
+{{profile}}
+
+Design skill:
+{{skill}}
+
+## Screens
 For each screen:
-- `id`, `name`, `platform` as in the brief;
-- `purpose`: who uses it and to do what (one sentence);
-- `layout`: the overall composition in one or two sentences (e.g. "left sidebar navigation, header with breadcrumb and primary action, two-column body: form left, summary card right");
-- `sections`: ordered regions with their real content (fields with labels and types, table columns, KPIs, actions);
-- `states`: important non-default states to design (empty, loading, validation error, success, permission denied …), each as a short id like `error`;
-- `data`: realistic sample data to show (Vietnamese names, codes, amounts, dates in the product's domain);
-- `navigation`: ids of screens this one links to;
-- `source_ui_ids`: BA touchpoints covered.
-
-Also give `style_direction`: 2–3 sentences of visual direction fitting the product and audience (density, mood, emphasis), consistent with the design system below. Do not restate generic best practices.
+- `id`, `name`, `platform` as in the brief; `purpose` (who, to do what);
+- `layout`: the composition in 1-2 sentences;
+- `sections`: ordered regions with their real content (fields + types, columns, figures, actions);
+- `states`: non-default states worth designing, as short ids (`error`, `empty`, `loading` …);
+- `data`: realistic sample data in the product's language and domain;
+- `must_show`: the exact visible texts the screen must contain (labels, buttons, column headers, key messages) — taken from the source requirements, in the user's language;
+- `rules`: business rules from the source (keep their ids, e.g. `BR-02: …`) that the UI must reflect;
+- `imagery`: 1-4 real photos for the screen (slot + 2-4 English keywords about the subject + orientation) — every screen carries real imagery (background, hero, covers, avatars or empty-state art) unless the brief explicitly rules it out;
+- `navigation`: ids of screens it links to; `source_ui_ids`: source touchpoints covered;
+- `ux_query`: 3-6 English keywords describing the screen's UI concerns (e.g. "login form password validation"), used to retrieve UX guidelines.
 
 Design system: {{design_system}}
 
@@ -18,5 +32,5 @@ Brief: {{brief}}
 
 Feedback on the previous specification (apply it, keep the rest): {{feedback}}
 
-Source context (BA package, attachments, conversation):
+Source (BA package, attachments, conversation):
 {{context}}

@@ -42,6 +42,29 @@ async ({ mobile, axe }) => {
   });
   add("error", "clipped-text", "Text is cut off by its box.", clipped);
 
+  // Content cut off by an ancestor that clips (overflow hidden/clip), or pushed into a horizontal
+  // scroll inside a box: the user cannot see or reach it without scrolling.
+  const clipper = (el) => {
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      const s = getComputedStyle(p);
+      if (s.overflowX !== "visible" || s.overflowY !== "visible") return { el: p, s };
+    }
+    return null;
+  };
+  const leaves = all.filter((el) => el.matches("button,a,input,select,textarea,img,svg") ||
+    [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
+  const cut = [], scrolled = [];
+  for (const el of leaves) {
+    const c = clipper(el);
+    if (!c) continue;
+    const a = el.getBoundingClientRect(), b = c.el.getBoundingClientRect();
+    if (a.right > b.right + 2 || a.left < b.left - 2) {
+      (/(hidden|clip)/.test(c.s.overflowX) ? cut : scrolled).push(el);
+    }
+  }
+  add("error", "clipped-content", "Content is cut off by a container that hides overflow.", cut.filter((el) => !cut.includes(el.parentElement)));
+  add("warning", "horizontal-scroll", "Content only fits by scrolling horizontally inside its box.", scrolled.filter((el) => !scrolled.includes(el.parentElement)));
+
   // A child sticking out of a visible box (background or border) it belongs to.
   const boxed = (el) => {
     const s = getComputedStyle(el);

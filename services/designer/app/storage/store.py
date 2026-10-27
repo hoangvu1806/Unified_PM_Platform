@@ -589,6 +589,12 @@ class Store:
 
         return await self._call(delete)
 
+    async def set_session_visual_theme(self, session_id: UUID, theme: dict[str, Any] | None) -> None:
+        await self._execute(
+            "UPDATE sessions SET visual_theme=?, updated_at=? WHERE id=?",
+            (json.dumps(theme) if theme else None, utc_now().isoformat(), str(session_id)),
+        )
+
     async def set_session_design_system(self, session_id: UUID, ds_id: str | None) -> None:
         await self._execute(
             "UPDATE sessions SET design_system_id=?, updated_at=? WHERE id=?",
@@ -614,6 +620,7 @@ class Store:
     def _session_from_row(row: Row) -> SessionView:
         value = dict(row)
         value["design_brief"] = json.loads(value["design_brief"]) if value.get("design_brief") else None
+        value["visual_theme"] = json.loads(value["visual_theme"]) if value.get("visual_theme") else None
         return SessionView.model_validate(value)
 
     @staticmethod

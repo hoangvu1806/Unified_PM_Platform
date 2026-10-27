@@ -95,13 +95,10 @@ class AdkProvider:
         progress_token: Callable[[], str] | None = None,
         continuation_message: str = "",
         usage: dict[str, int] | None = None,
-        force_tools: bool = False,
     ) -> str:
         """One conversation: tool results (including errors) stay in model context.
 
-        ``usage`` (optional) accumulates prompt/output tokens and model calls across the run.
-        ``force_tools``: every model turn must call a tool (a tool ends the turn by setting
-        ``tool_context.actions.skip_summarization``)."""
+        ``usage`` (optional) accumulates prompt/output tokens and model calls across the run."""
         if not self.settings.api_key or not self.settings.base_url:
             raise AppError(
                 "LLM_NOT_CONFIGURED",
@@ -133,7 +130,6 @@ class AdkProvider:
                 max_tokens=self.settings.designer_max_output_tokens,
                 **({"reasoning_effort": self.settings.designer_reasoning_effort}
                    if self.settings.designer_reasoning_effort else {}),
-                **({"tool_choice": "required"} if force_tools and tools else {}),
             ),
             # Markdown/JSX is already rendered; bypass ADK's {state} expansion.
             instruction=lambda _context: prompt,
@@ -290,6 +286,39 @@ class AdkProvider:
         raise AppError(
             "LLM_OUTPUT_INVALID", "Model could not produce valid JSON", str(last_error), 502, True
         ) from last_error
+
+    async def generate(
+        self,
+        *,
+        system: str,
+        text: str,
+        images: list[bytes] | None = None,
+        usage: dict[str, int] | None = None,
+        model: str | None = None,
+        timeout_seconds: float | None = None,
+        max_attempts: int = 2,
+    ) -> str:
+        """One plain completion (system + user text + optional JPEG images), no tools."""
+        parts = [types.Part.from_text(text=text)]
+        parts += [types.Part.from_bytes(data=image, mime_type="image/jpeg") for image in images or []]
+        last_error: Exception | None = None
+        for attempt in range(max_attempts):
+            try:
+                content = await self.run_tools(
+                    prompt=system, tools=[], max_turns=1, message=types.Content(role="user", parts=parts),
+                    timeout_seconds=timeout_seconds, model=model, usage=usage,
+                )
+                if not content.strip():
+                    raise ValueError("Model returned no text")
+                return content
+            except Exception as error:
+                if isinstance(error, AppError) and error.code == "LLM_NOT_CONFIGURED":
+                    raise
+                last_error = error
+                log_agent_error("llm_generate", f"Attempt {attempt + 1}/{max_attempts}", error)
+                if attempt + 1 < max_attempts:
+                    await asyncio.sleep(1)
+        raise AppError("LLM_REQUEST_FAILED", "Model request failed", str(last_error), 502, True) from last_error
 
     async def text(self, *, prompt: str, max_attempts: int = 3) -> str:
         last_error: Exception | None = None

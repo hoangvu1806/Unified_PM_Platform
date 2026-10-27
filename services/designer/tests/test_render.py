@@ -20,6 +20,7 @@ DEFECTS = """
   <div class="w-32 overflow-hidden whitespace-nowrap border p-1">Kho trung tâm Hà Nội khu vực nhận hàng</div>
   <div class="mt-4 h-40 w-64 rounded-xl border border-border bg-card"></div>
   <div class="mt-4 w-[1200px] bg-muted p-2">rộng</div>
+  <div class="mt-4 w-64 overflow-hidden rounded border"><div class="flex w-[400px] gap-2"><span>Bệnh nhân</span><button class="ml-auto">Tiếp đón ngay</button></div></div>
 </div>
 """
 
@@ -78,5 +79,6 @@ def test_lint_reports_overflow_clipped_text_and_empty_region():
     assert rules["page-overflow"]["severity"] == "error"
     assert rules["clipped-text"]["elements"][0]["text"].startswith("Kho trung tâm")
     assert "empty-region" in rules
-    assert {f["rule"] for f in result.blocking} == {"page-overflow", "clipped-text"}
+    assert {f["rule"] for f in result.blocking} == {"page-overflow", "clipped-text", "clipped-content"}
+    assert any("Tiếp đón ngay" in e["text"] for e in rules["clipped-content"]["elements"])
     assert all("data-d" not in e["html"] for f in result.findings for e in f["elements"])

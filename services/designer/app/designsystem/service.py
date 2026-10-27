@@ -29,6 +29,11 @@ DEFAULT_CONTEXT = DesignContext(DEFAULT_DESIGN_SYSTEM, "Mặc định (Tailwind 
 async def design_context(store, session: SessionView | None) -> DesignContext:
     ds_id = (session.design_system_id if session else None) or DEFAULT_DESIGN_SYSTEM
     if ds_id == DEFAULT_DESIGN_SYSTEM:
+        # Without an imported design system the session's art direction (palette, fonts, radius) applies.
+        theme = (session.visual_theme if session else None) or {}
+        if theme.get("css"):
+            return DesignContext(DEFAULT_DESIGN_SYSTEM, DEFAULT_CONTEXT.name, DEFAULT_THEME + theme["css"],
+                                 theme.get("fonts") or list(DEFAULT_FONTS))
         return DEFAULT_CONTEXT
     ds = await store.get_design_system(ds_id)
     if ds is None or ds.status != "ready":

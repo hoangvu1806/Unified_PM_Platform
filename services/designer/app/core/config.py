@@ -28,9 +28,11 @@ class Settings(BaseSettings):
     # Browser origin of the gateway: the design iframe loads vendor scripts from here.
     platform_public_url: str = "http://localhost:8080"
     designer_shared_secret: str = ""
-    # One screen = a bounded write → check → edit loop (no endless polishing).
-    designer_page_max_steps: int = Field(45, validation_alias="DESIGNER_PAGE_MAX_STEPS")
-    designer_page_timeout_seconds: int = Field(720, validation_alias="DESIGNER_PAGE_TIMEOUT_SECONDS")
+    # One screen = a draft call + at most this many review calls (screenshot + lint → OK / edits).
+    designer_review_rounds: int = Field(2, validation_alias="DESIGNER_REVIEW_ROUNDS")
+    # Screens after the first (which sets the shell) are built concurrently.
+    designer_parallel_screens: int = Field(3, validation_alias="DESIGNER_PARALLEL_SCREENS")
+    designer_page_timeout_seconds: int = Field(300, validation_alias="DESIGNER_PAGE_TIMEOUT_SECONDS")
     unsplash_access_key: str = ""
     # A whole screen is one tool call: leave room for it, and keep "thinking" from eating the budget.
     designer_max_output_tokens: int = Field(32000, validation_alias="DESIGNER_MAX_OUTPUT_TOKENS")
