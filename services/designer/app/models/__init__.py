@@ -146,6 +146,7 @@ class SessionView(BaseModel):
     source: str | None = None
     source_ref: str | None = None
     source_artifact_id: str | None = None
+    design_system_id: str | None = None
 
 
 SCREEN_WIDTHS: dict[str, int] = {"mobile": 390, "tablet": 834, "desktop": 1440, "responsive": 1440}
@@ -170,6 +171,31 @@ class ScreenView(BaseModel):
     updated_by: str | None = None
     run_id: str | None = None
     html: str | None = None
+
+
+DEFAULT_DESIGN_SYSTEM = "default"
+
+
+class DesignSystemView(BaseModel):
+    id: str
+    name: str
+    project_id: str | None = None
+    status: Literal["importing", "ready", "failed"] = "ready"
+    error: str | None = None
+    source_name: str | None = None
+    created_by: str | None = None
+    created_at: datetime | None = None
+    summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class DesignSystemDetail(DesignSystemView):
+    theme_css: str = ""
+    fonts: list[str] = Field(default_factory=list)
+    components: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class SessionDesignSystem(BaseModel):
+    design_system_id: str = Field(min_length=1, max_length=80)
 
 
 class ScreenVersionView(BaseModel):

@@ -15,6 +15,8 @@ from pydantic import BaseModel
 from ..models import (
     SCREEN_WIDTHS,
     DesignBrief,
+    DesignSystemDetail,
+    DesignSystemView,
     RunCreate,
     RunStage,
     RunStatus,
@@ -498,6 +500,100 @@ class Store:
                 return cursor.rowcount > 0
 
         return await self._call(delete)
+
+    # ── Design systems ──────────────────────────────────
+    async def create_design_system(
+        self, ds_id: str, *, name: str, project_id: str | None, source_name: str | None,
+        source_key: str | None, created_by: str | None,
+    ) -> None:
+        now = utc_now().isoformat()
+        await self._execute(
+            "INSERT INTO design_systems (id, project_id, name, source_name, source_key, status, created_by, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'importing', ?, ?, ?)",
+            (ds_id, project_id, name, source_name, source_key, created_by, now, now),
+        )
+
+    async def finish_design_system(
+        self, ds_id: str, *, theme_css: str, fonts: list[str], index: dict[str, Any], snippets: list[tuple[str, str, str]]
+    ) -> None:
+        """``snippets``: (variant_id, component_id, html)."""
+
+        def finish() -> None:
+            with self._pool.connection() as db, db.transaction():
+                db.execute(self._sql("DELETE FROM design_system_snippets WHERE design_system_id=?"), (ds_id,))
+                with db.cursor() as cur:
+                    cur.executemany(
+                        self._sql(
+                            "INSERT INTO design_system_snippets (design_system_id, variant_id, component_id, html) "
+                            "VALUES (?, ?, ?, ?)"
+                        ),
+                        [(ds_id, v, c, h) for v, c, h in snippets],
+                    )
+                db.execute(
+                    self._sql(
+                        "UPDATE design_systems SET status='ready', error=NULL, theme_css=?, fonts=?, index_json=?, "
+                        "updated_at=? WHERE id=?"
+                    ),
+                    (theme_css, json.dumps(fonts), json.dumps(index, ensure_ascii=False), utc_now().isoformat(), ds_id),
+                )
+
+        await self._call(finish)
+
+    async def fail_design_system(self, ds_id: str, error: str) -> None:
+        await self._execute(
+            "UPDATE design_systems SET status='failed', error=?, updated_at=? WHERE id=?",
+            (error[:2000], utc_now().isoformat(), ds_id),
+        )
+
+    async def list_design_systems(self, project_id: str | None) -> list[DesignSystemView]:
+        rows = await self._fetchall(
+            "SELECT id, project_id, name, source_name, status, error, created_by, created_at, "
+            "CASE WHEN index_json IS NULL THEN NULL ELSE index_json::json->'tokens' END AS tokens, "
+            "CASE WHEN index_json IS NULL THEN 0 ELSE json_array_length(index_json::json->'components') END AS components "
+            "FROM design_systems WHERE project_id IS NULL OR project_id = ? ORDER BY created_at DESC",
+            (project_id,),
+        )
+        out = []
+        for row in rows:
+            value = dict(row)
+            value["summary"] = {"tokens": value.pop("tokens") or {}, "components": value.pop("components") or 0}
+            out.append(DesignSystemView.model_validate(value))
+        return out
+
+    async def get_design_system(self, ds_id: str) -> DesignSystemDetail | None:
+        row = await self._fetchone("SELECT * FROM design_systems WHERE id=?", (ds_id,))
+        if row is None:
+            return None
+        value = dict(row)
+        index = json.loads(value.pop("index_json") or "{}")
+        value["fonts"] = json.loads(value["fonts"] or "[]")
+        value["theme_css"] = value["theme_css"] or ""
+        value["components"] = index.get("components", [])
+        value["summary"] = {"tokens": index.get("tokens", {}), "components": len(value["components"])}
+        return DesignSystemDetail.model_validate(value)
+
+    async def get_snippets(self, ds_id: str, variant_ids: list[str]) -> dict[str, str]:
+        if not variant_ids:
+            return {}
+        rows = await self._fetchall(
+            "SELECT variant_id, html FROM design_system_snippets WHERE design_system_id=? AND variant_id = ANY(?)",
+            (ds_id, list(variant_ids)),
+        )
+        return {row["variant_id"]: row["html"] for row in rows}
+
+    async def delete_design_system(self, ds_id: str) -> bool:
+        def delete() -> bool:
+            with self._pool.connection() as db, db.transaction():
+                db.execute(self._sql("UPDATE sessions SET design_system_id=NULL WHERE design_system_id=?"), (ds_id,))
+                return db.execute(self._sql("DELETE FROM design_systems WHERE id=?"), (ds_id,)).rowcount > 0
+
+        return await self._call(delete)
+
+    async def set_session_design_system(self, session_id: UUID, ds_id: str | None) -> None:
+        await self._execute(
+            "UPDATE sessions SET design_system_id=?, updated_at=? WHERE id=?",
+            (ds_id, utc_now().isoformat(), str(session_id)),
+        )
 
     @staticmethod
     def _screen_from_row(row: Row, with_html: bool) -> ScreenView:

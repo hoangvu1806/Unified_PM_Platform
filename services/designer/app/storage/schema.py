@@ -85,6 +85,31 @@ MIGRATIONS = (
       created_at TEXT NOT NULL,
       PRIMARY KEY (session_id, screen_id, version)
     )""",
+    # Design systems imported from .fig (project_id NULL = shared by every project).
+    """CREATE TABLE IF NOT EXISTS design_systems (
+      id TEXT PRIMARY KEY,
+      project_id TEXT,
+      name TEXT NOT NULL,
+      source_name TEXT,
+      source_key TEXT,
+      status TEXT NOT NULL,
+      error TEXT,
+      theme_css TEXT,
+      fonts TEXT,
+      index_json TEXT,
+      created_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS design_system_snippets (
+      design_system_id TEXT NOT NULL REFERENCES design_systems(id) ON DELETE CASCADE,
+      variant_id TEXT NOT NULL,
+      component_id TEXT NOT NULL,
+      html TEXT NOT NULL,
+      PRIMARY KEY (design_system_id, variant_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_ds_snippets_component ON design_system_snippets(design_system_id, component_id)",
+    "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS design_system_id TEXT",
 )
 
 

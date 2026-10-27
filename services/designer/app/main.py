@@ -11,6 +11,7 @@ from .api.access import designer_access, handoff_secret
 from .api.routes import router
 from .api.handoff_routes import router as handoff_router
 from .api.screens import router as screens_router
+from .api.design_systems import router as design_systems_router
 from .api.stream import EventStream
 from .core.config import get_settings
 from .core.errors import AppError
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
     # project; BA -> Designer handoffs authenticate with X-Agent-Secret.
     app.include_router(router, dependencies=[Depends(designer_access)])
     app.include_router(screens_router, dependencies=[Depends(designer_access)])
+    app.include_router(design_systems_router, dependencies=[Depends(designer_access)])
     app.include_router(handoff_router, dependencies=[Depends(handoff_secret)])
 
     @app.exception_handler(AppError)

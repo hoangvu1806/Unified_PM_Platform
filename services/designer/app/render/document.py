@@ -16,6 +16,7 @@ VENDOR_DIR = HERE / "vendor"
 DEFAULT_THEME = (HERE / "default_theme.css").read_text(encoding="utf-8")
 RUNTIME_JS = (HERE / "runtime.js").read_text(encoding="utf-8")
 FONTS_URL = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+DEFAULT_FONTS = (FONTS_URL,)
 
 _BODY = re.compile(r"<body[^>]*>(.*?)</body>", re.S | re.I)
 _HEAD_STYLES = re.compile(r"<head[^>]*>.*?</head>", re.S | re.I)
@@ -38,10 +39,11 @@ def build_document(
     vendor_base: str,
     theme_css: str | None = None,
     title: str = "Screen",
-    fonts_url: str | None = FONTS_URL,
+    fonts: list[str] | tuple[str, ...] | None = DEFAULT_FONTS,
     axe: bool = False,
 ) -> str:
-    """``vendor_base``: absolute URL ending in ``/`` where ``vendor/*.js`` are served."""
+    """``vendor_base``: absolute URL ending in ``/`` where ``vendor/*.js`` are served;
+    ``fonts``: stylesheet URLs (one per family, so one unknown family cannot fail the rest)."""
     origin = "{0.scheme}://{0.netloc}".format(urlsplit(vendor_base))
     csp = "; ".join(
         [
@@ -57,7 +59,7 @@ def build_document(
     scripts = [f'<script src="{vendor_base}tailwindcss-browser.js"></script>']
     if axe:
         scripts.append(f'<script src="{vendor_base}axe.min.js"></script>')
-    fonts = f'<link rel="stylesheet" href="{html.escape(fonts_url)}">' if fonts_url else ""
+    links = "".join(f'<link rel="stylesheet" href="{html.escape(url)}">' for url in fonts or ())
     return f"""<!doctype html>
 <html lang="vi">
 <head>
@@ -65,7 +67,7 @@ def build_document(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="{csp}">
 <title>{html.escape(title)}</title>
-{fonts}
+{links}
 <style type="text/tailwindcss">
 {theme_css or DEFAULT_THEME}
 @layer base {{

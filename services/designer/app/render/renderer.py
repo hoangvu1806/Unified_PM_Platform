@@ -102,6 +102,7 @@ class Renderer:
         width: int,
         height: int = 900,
         theme_css: str | None = None,
+        fonts: list[str] | None = None,
         state: str | None = None,
         screenshot: Literal["jpeg", "png"] | None = "jpeg",
         scale: float = 1,
@@ -110,7 +111,8 @@ class Renderer:
         max_height: int = 6000,
     ) -> RenderResult:
         browser = await self._ensure()
-        document = build_document(fragment, vendor_base=VENDOR_BASE, theme_css=theme_css, axe=lint and axe)
+        extra = {"fonts": fonts} if fonts is not None else {}
+        document = build_document(fragment, vendor_base=VENDOR_BASE, theme_css=theme_css, axe=lint and axe, **extra)
         context = await browser.new_context(
             viewport={"width": width, "height": height}, device_scale_factor=scale, java_script_enabled=True
         )
