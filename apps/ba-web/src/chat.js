@@ -1364,7 +1364,7 @@ function renderChatHeader() {
 
   const stampEl = document.getElementById('activeSecStamp');
   if (stampEl) {
-    stampEl.innerHTML = getStatusStamp(state.status);
+    stampEl.innerHTML = REGISTER_IDS.has(sec.id) ? getRegisterStamp(sec.id) : getStatusStamp(state.status);
   }
 }
 
