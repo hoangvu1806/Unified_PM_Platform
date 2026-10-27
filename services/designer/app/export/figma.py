@@ -133,7 +133,12 @@ class _Writer:
                              layout=self._layout(box),
                              **{**extra, **self._paint(box, w, h, shots.get(layer.get("bgShot") or ""))})
         # CSS paints positioned (absolute/fixed) children above in-flow ones; Figma paints later children on top.
-        for child in sorted(children, key=lambda c: bool(c.get("absolute"))):
+        def paint_order(c: dict[str, Any]) -> tuple[int, int]:
+            if c.get("positioned"):
+                return (2 if c.get("z", 0) >= 0 else 0, c.get("z", 0))
+            return (1, 0)
+
+        for child in sorted(children, key=paint_order):  # stable: DOM order within a layer
             self.layer(frame, child, (layer["x"], layer["y"]), layer, shots)
 
     @staticmethod

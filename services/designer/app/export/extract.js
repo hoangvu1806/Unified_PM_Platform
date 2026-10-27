@@ -131,6 +131,9 @@
       ...rectOf(r),
       box: box(el, s),
       absolute: s.position === "absolute" || s.position === "fixed",
+      // CSS paint order: in-flow boxes, then positioned ones (relative too) by z-index, in DOM order.
+      positioned: s.position !== "static",
+      z: parseInt(s.zIndex, 10) || 0,
       // Photos, gradients and patterns: Python captures the background alone as an image fill.
       bgShot: s.backgroundImage !== "none" && r.width > 0 && r.height > 0 ? `b${shots++}` : null,
       grow: parseFloat(s.flexGrow) > 0,

@@ -33,7 +33,10 @@ def color(value: str, alpha: float = 1.0) -> dict[str, float]:
 
 
 def solid(value: str, opacity: float = 1.0) -> dict[str, Any]:
-    return {"type": "SOLID", "color": color(value), "opacity": opacity, "visible": True, "blendMode": "NORMAL"}
+    # Figma takes a fill's transparency from the paint opacity and ignores the color's alpha.
+    c = color(value)
+    alpha, c["a"] = c["a"], 1.0
+    return {"type": "SOLID", "color": c, "opacity": opacity * alpha, "visible": True, "blendMode": "NORMAL"}
 
 
 def drop_shadow(value: str, x: float, y: float, blur: float, spread: float = 0.0) -> dict[str, Any]:
