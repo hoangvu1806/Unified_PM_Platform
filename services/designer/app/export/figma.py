@@ -7,6 +7,7 @@ text keeps its font, and svg/img/canvas become image fills screenshotted from Ch
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,35 @@ from ..figio.writer import FigBuilder, drop_shadow, solid
 
 EXTRACT_JS = (Path(__file__).resolve().parent / "extract.js").read_text(encoding="utf-8")
 SHOT_SCALE = 2
+# element.screenshot() captures the page region, so anything painted over the element would be baked
+# into its image (and appear twice next to the real layers). While capturing, only the target paints:
+# a raster keeps its own content; a background capture hides the element's text and descendants.
+# Ancestors' opacity is reset (Figma applies it to the frames), and so is the target's for backgrounds.
+ISOLATE_CSS = """
+html.fig-iso, html.fig-iso body { background: transparent !important; }
+html.fig-iso * { visibility: hidden !important; opacity: 1 !important; }
+html.fig-iso .fig-target, html.fig-iso:not(.fig-bg) .fig-target * { visibility: visible !important; }
+html.fig-iso:not(.fig-bg) .fig-target { opacity: var(--fig-opacity) !important; }
+html.fig-iso.fig-bg .fig-target { color: transparent !important; }
+"""
+ISOLATE_JS = """([el, mode]) => {
+  const root = document.documentElement;
+  if (!document.getElementById("fig-iso")) {
+    const style = document.createElement("style");
+    style.id = "fig-iso";
+    style.textContent = ISOLATE_CSS;
+    document.head.appendChild(style);
+  }
+  if (mode) {
+    el.style.setProperty("--fig-opacity", getComputedStyle(el).opacity);
+    el.classList.add("fig-target");
+    root.classList.add("fig-iso");
+    root.classList.toggle("fig-bg", mode === "bg");
+  } else {
+    el.classList.remove("fig-target");
+    root.classList.remove("fig-iso", "fig-bg");
+  }
+}""".replace("ISOLATE_CSS", json.dumps(ISOLATE_CSS))
 GAP = 160
 # Figma's style names (with spaces): a name the font does not have leaves the text unrendered.
 WEIGHT_STYLE = {100: "Thin", 200: "Extra Light", 300: "Light", 400: "Regular", 500: "Medium", 600: "Semi Bold",
@@ -44,12 +74,21 @@ async def capture(renderer, fragment: str, *, name: str, width: int, theme_css: 
                              scale=SHOT_SCALE) as page:
         tree = await page.evaluate(EXTRACT_JS)
         shots: dict[str, bytes] = {}
-        for element in await page.query_selector_all("[data-shot]"):
-            shot = await element.get_attribute("data-shot")
-            try:
-                shots[shot] = await element.screenshot(type="png", omit_background=True)
-            except Exception:  # noqa: BLE001 — an element that cannot be captured is left out
-                continue
+        targets = [("data-shot", "raster"), ("data-bgshot", "bg")]
+        for attribute, mode in targets:
+            for element in await page.query_selector_all(f"[{attribute}]"):
+                shot = await element.get_attribute(attribute)
+                # Native form controls pick their "auto" accent from the backdrop: capture them in place.
+                isolate = mode == "bg" or await element.evaluate("e => e.tagName !== 'INPUT'")
+                try:
+                    if isolate:
+                        await page.evaluate(ISOLATE_JS, [element, mode])
+                    shots[shot] = await element.screenshot(type="png", omit_background=True)
+                except Exception:  # noqa: BLE001 — an element that cannot be captured is left out
+                    continue
+                finally:
+                    if isolate:
+                        await page.evaluate(ISOLATE_JS, [element, None])
     return CapturedScreen(name, tree, shots)
 
 
@@ -82,15 +121,17 @@ class _Writer:
             return
         box = layer.get("box") or {}
         children = layer.get("children") or []
-        if self._transparent(box) and len(children) == 1 and not box.get("flex") and not layer.get("root"):
+        if (self._transparent(box) and len(children) == 1 and not box.get("flex") and not layer.get("root")
+                and not layer.get("bgShot")):
             only = children[0]
             if abs(only["x"] - layer["x"]) < 0.5 and abs(only["y"] - layer["y"]) < 0.5 and abs(only["w"] - w) < 0.5:
                 self.layer(parent, only, origin, parent_layer, shots)
                 return
-        if not children and self._transparent(box):
+        if not children and self._transparent(box) and not layer.get("bgShot"):
             return
         frame = self.b.frame(parent, layer["name"][:80], x, y, w, h, clip=bool(box.get("clip")),
-                             layout=self._layout(box), **{**extra, **self._paint(box, w, h)})
+                             layout=self._layout(box),
+                             **{**extra, **self._paint(box, w, h, shots.get(layer.get("bgShot") or ""))})
         # CSS paints positioned (absolute/fixed) children above in-flow ones; Figma paints later children on top.
         for child in sorted(children, key=lambda c: bool(c.get("absolute"))):
             self.layer(frame, child, (layer["x"], layer["y"]), layer, shots)
@@ -109,8 +150,12 @@ class _Writer:
             "align": JUSTIFY.get(flex["justify"], "MIN"), "cross": ALIGN.get(flex["align"], "MIN"),
         }
 
-    def _paint(self, box: dict[str, Any], w: float, h: float) -> dict[str, Any]:
-        fields: dict[str, Any] = {"fillPaints": [solid(hexa(box["bg"]))] if box.get("bg") else []}
+    def _paint(self, box: dict[str, Any], w: float, h: float, background: bytes | None = None) -> dict[str, Any]:
+        if background:  # captured photo/gradient (includes the background color under it)
+            fills = [self.b.image_paint(background, round(w * SHOT_SCALE), round(h * SHOT_SCALE), "FILL")]
+        else:
+            fills = [solid(hexa(box["bg"]))] if box.get("bg") else []
+        fields: dict[str, Any] = {"fillPaints": fills}
         borders = [b for b in box.get("border", []) if b["w"] and b["c"]]
         if borders:
             fields["strokePaints"] = [solid(hexa(borders[0]["c"]))]

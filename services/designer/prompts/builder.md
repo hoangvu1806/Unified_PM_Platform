@@ -7,7 +7,12 @@ A screen is an HTML **body fragment** (no `<html>`, `<head>`, `<script>`). It is
 - Interaction with Alpine: `x-data`, `@click`, `x-show`, `x-model`, `:class`, `x-for` (tabs, dropdowns, dialogs, toggles, filters, steppers really work).
 - States: put alternative content in elements with `data-state="error"` (shown only in that state) and hide default content in that state with `data-state-hide="error"`. Design every state of the spec this way.
 - Links to other screens: `data-goto="screen-id"` on the clickable element.
-- Images: `https://picsum.photos/seed/<word>/<w>/<h>` for photos; avatars as initials in a colored circle.
+- Imagery is required: every screen has real visuals that fit its content — a background/hero photo (e.g. a
+  login or onboarding screen over a campus photo with a gradient overlay for legibility), cover images for cards,
+  courses or products, illustrations for empty states. Get photos with `find_images` (English keywords) and use
+  the returned URLs (`<img>` or `bg-[url('…')] bg-cover`). Avatars may be initials in a colored circle.
+- Icons are required wherever they aid scanning: navigation, input fields (leading icon), buttons, stats, list
+  rows, empty/error states — lucide via `<i data-lucide="…">`.
 - Design system components: `find_components` / `get_component` return the HTML of real components of the design system. Reuse them (copy and adapt text, size, classes) instead of inventing look-alikes.
 
 ## Keep the HTML compact (target under 15,000 characters)

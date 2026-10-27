@@ -18,6 +18,7 @@ from ..designsystem.service import DesignContext
 from ..models import ScreenWrite
 from ..render import fragment_of
 from ..render.assets import inline_assets
+from ..render.images import find_images as search_images
 from .schemas import ScreenSpec
 
 MAX_FINDINGS = 8
@@ -114,6 +115,7 @@ class ScreenTools:
         design: DesignContext,
         emit: Callable[[str, dict[str, Any]], Awaitable[None]],
         user: str | None,
+        unsplash_key: str = "",
     ) -> None:
         self.store = store
         self.renderer = renderer
@@ -123,6 +125,7 @@ class ScreenTools:
         self.design = design
         self.emit = emit
         self.user = user
+        self.unsplash_key = unsplash_key
         self.state = BuildState()
         self.width = {"mobile": 390, "tablet": 834}.get(screen.platform, 1440)
 
@@ -243,6 +246,20 @@ class ScreenTools:
                 return {"ok": False, "error": "Unknown variant id; use find_components."}
             return {"ok": True, "html": html[:SNIPPET_LIMIT], "truncated": len(html) > SNIPPET_LIMIT}
 
+        async def find_images(query: str, orientation: str = "landscape") -> dict[str, Any]:
+            """Search real photos for backgrounds, heroes, cards and thumbnails (CC / stock).
+
+            Args:
+                query: 2-4 English keywords describing the photo, e.g. "university library students".
+                orientation: landscape, portrait or squarish.
+            """
+            tools.state.steps += 1
+            images = await search_images(query, orientation, tools.unsplash_key)
+            if not images:
+                return {"ok": False, "error": "No photo found; try other keywords, or use a gradient/illustration."}
+            return {"ok": True, "images": images[:6],
+                    "use": "<img src=URL class='object-cover …'> or a background: bg-[url('URL')] bg-cover bg-center"}
+
         async def finish_screen(summary: str, tool_context: ToolContext) -> dict[str, Any]:
             """Declare the screen finished. Requires: no lint errors and a screenshot of the latest version.
 
@@ -260,7 +277,8 @@ class ScreenTools:
             tool_context.actions.skip_summarization = True  # end the turn: no further model call
             return {"ok": True, "finished": True}
 
-        return [write_screen, edit_screen, read_screen, check_screen, find_components, get_component, finish_screen]
+        return [write_screen, edit_screen, read_screen, check_screen, find_components, get_component, find_images,
+                finish_screen]
 
     async def attach_screenshot(self, callback_context: Any, llm_request: Any) -> None:
         """ADK before_model_callback: compact the history, then add the latest screenshot (this call only)."""

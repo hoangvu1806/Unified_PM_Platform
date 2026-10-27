@@ -201,6 +201,7 @@ class HtmlDesigner:
         tools = ScreenTools(
             store=self.store, renderer=self.service.renderer, session_id=session.id, run_id=run.id, screen=screen,
             design=design, emit=lambda kind, payload: self._emit(run, kind, payload), user="designer-agent",
+            unsplash_key=settings.unsplash_access_key,
         )
         others = [f"{s.id} ({s.name})" for s in spec.screens if s.id != screen.id]
         reference_text = ""

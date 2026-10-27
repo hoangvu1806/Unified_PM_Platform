@@ -67,6 +67,13 @@ async ({ mobile, axe }) => {
   });
   add("warning", "empty-region", "Large empty box: fill it with content or remove it.", empty);
 
+  const photos = [...document.images].filter((img) => img.naturalWidth > 0).length +
+    all.filter((el) => /url\(/.test(getComputedStyle(el).backgroundImage)).length;
+  if (!photos) {
+    findings.push({ severity: "warning", rule: "no-imagery", count: 0, elements: [],
+      message: "The screen has no photo or illustration: add one with find_images (background, hero, cards)." });
+  }
+
   const broken = [...document.images].filter((img) => img.complete && img.naturalWidth === 0);
   add("error", "broken-image", "Image failed to load.", broken);
 

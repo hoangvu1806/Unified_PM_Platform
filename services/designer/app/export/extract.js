@@ -131,11 +131,15 @@
       ...rectOf(r),
       box: box(el, s),
       absolute: s.position === "absolute" || s.position === "fixed",
+      // Photos, gradients and patterns: Python captures the background alone as an image fill.
+      bgShot: s.backgroundImage !== "none" && r.width > 0 && r.height > 0 ? `b${shots++}` : null,
       grow: parseFloat(s.flexGrow) > 0,
       stretch: s.alignSelf === "stretch",
       children: [],
     };
+    if (layer.bgShot) el.setAttribute("data-bgshot", layer.bgShot);
     if (["svg", "img", "canvas", "video", "picture"].includes(tag) || (tag === "input" && RASTER_INPUTS.has(el.type))) {
+      layer.bgShot = null;
       layer.kind = "raster";
       layer.shot = `s${shots++}`;
       el.setAttribute("data-shot", layer.shot);
@@ -145,9 +149,12 @@
       const value = tag === "select" ? el.options[el.selectedIndex]?.text || "" : el.value || el.placeholder || "";
       if (value) {
         const pad = [s.paddingLeft, s.paddingTop].map(px);
+        // Inputs and selects center their single line vertically; textareas start at the top padding.
+        const lineH = s.lineHeight === "normal" ? px(s.fontSize) * 1.25 : px(s.lineHeight);
+        const top = tag === "textarea" ? pad[1] + px(s.borderTopWidth) : (r.height - lineH) / 2;
         layer.children.push({
-          kind: "text", text: value, x: layer.x + pad[0] + px(s.borderLeftWidth), y: layer.y + pad[1] + px(s.borderTopWidth),
-          w: Math.max(1, r.width - 2 * pad[0]), h: Math.max(1, r.height - 2 * pad[1]),
+          kind: "text", text: value, lines: 1, x: layer.x + pad[0] + px(s.borderLeftWidth), y: layer.y + top,
+          w: Math.max(1, r.width - pad[0] - px(s.paddingRight)), h: lineH,
           style: { ...textStyle(s), color: el.value ? rgba(s.color) || [0, 0, 0, 1] : [113, 113, 122, 1] },
         });
       }
