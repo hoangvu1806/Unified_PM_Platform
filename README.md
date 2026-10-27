@@ -101,6 +101,20 @@ design page (`/designer/canvas.html`) in a new tab: clickable prototype, viewpor
 **Logs.** Local: `logs/<service>/<service>.log` (JSON lines, daily rotation, 14 days), each request with `user`,
 `project_id`, `request_id`. Per project: `projects/<project_id>/logs/<service>/<date>/*.jsonl` in storage.
 
+## Dependencies
+
+Python images install with `PIP_CONSTRAINT` pointing at `services/<svc>/constraints.txt`: the exact versions of a
+known-good build, so a rebuild never pulls a newer library by surprise (litellm once started needing `mcp` 2.x and
+every chat turn failed). Each test suite has `tests/test_dependencies.py` (`pip check`, installed = pinned, and for
+BA/Designer the litellm tool-call imports).
+
+To upgrade on purpose: edit the version range in `pyproject.toml` / `requirements.txt`, delete the line from
+`constraints.txt`, rebuild, run the tests, then refresh the pins from the new image:
+
+```bash
+docker run --rm --entrypoint pip platform-designer-api freeze --exclude-editable | grep -v " @ "   # → constraints.txt
+```
+
 ## Commands
 
 | Task | Command |

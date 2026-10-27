@@ -2064,6 +2064,8 @@ async function handleSendWithAction(action = null) {
     referenceAssets = [];
     setAttachLabel('Ảnh tham chiếu');
     isSending = false;
+    // Renders during the turn (e.g. the error message) re-add the dots while isSending is true.
+    if (!remotePending) removeTypingIndicator();
     setSendBusy(false);
     syncControlButtons();
   }

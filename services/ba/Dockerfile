@@ -6,6 +6,10 @@ ENV PIP_DEFAULT_TIMEOUT=120 PIP_RETRIES=5
 
 WORKDIR /app
 
+# Every pip install is pinned to the versions of a known-good build (see constraints.txt).
+COPY services/ba/constraints.txt /opt/constraints.txt
+ENV PIP_CONSTRAINT=/opt/constraints.txt
+
 # Node 20 for API-side BPMN ELK layout (tools/bpmn_elk). Copied from official
 # Node image — no full frontend toolchain.
 COPY --from=node:20-bookworm-slim /usr/local/bin/node /usr/local/bin/node

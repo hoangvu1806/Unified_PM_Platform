@@ -7,6 +7,10 @@ ENV PIP_DEFAULT_TIMEOUT=120 PIP_RETRIES=5
 
 WORKDIR /app
 
+# Every pip install is pinned to the versions of a known-good build (see constraints.txt).
+COPY services/designer/constraints.txt /opt/constraints.txt
+ENV PIP_CONSTRAINT=/opt/constraints.txt
+
 COPY packages/platform_core /opt/platform/packages/platform_core
 RUN pip install --no-cache-dir /opt/platform/packages/platform_core
 
