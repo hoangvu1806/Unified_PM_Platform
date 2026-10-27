@@ -48,14 +48,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logging.getLogger("designer_agent.runs").warning("Marked %s interrupted run(s) as retryable", interrupted)
     events = EventStream(store)
     llm = AdkProvider(settings)
-    runs = RunService(store, events, llm, PromptLibrary())
+    # Chromium starts on the first render, so the API is up even before a browser is needed.
+    renderer = Renderer()
+    runs = RunService(store, events, llm, PromptLibrary(), settings, renderer)
     app.state.settings = settings
     app.state.store = store
     app.state.events = events
     app.state.runs = runs
     app.state.llm = llm
-    # Chromium starts on the first render, so the API is up even before a browser is needed.
-    app.state.renderer = Renderer()
+    app.state.renderer = renderer
 
     # Pre-warm LLM connection in background so the first message is fast
     asyncio.create_task(llm.prewarm())

@@ -2,6 +2,7 @@
 // - data-d ids on elements, so the canvas and lint can point at an element;
 // - data-state / data-state-hide: elements shown only in (or hidden in) a named state;
 // - data-goto="screen-id": prototype navigation, reported to the parent page;
+// - <i data-lucide="name"> icons replaced by lucide SVGs (also after Alpine re-renders);
 // - selection mode: hover outline, click reports the element to the parent page.
 (() => {
   const SKIP = new Set(["SCRIPT", "STYLE", "TEMPLATE", "HEAD", "META", "LINK", "TITLE"]);
@@ -96,8 +97,14 @@
     }
   });
 
+  const icons = () => {
+    if (window.lucide && document.querySelector("i[data-lucide]")) window.lucide.createIcons();
+  };
+
   window.__designer = { assignIds, describe, states: [] };
   const start = () => {
+    icons();
+    new MutationObserver(icons).observe(document.body, { childList: true, subtree: true });
     assignIds(document.body);
     window.__designer.states = installStates();
     post({ type: "ready", states: window.__designer.states, height: document.documentElement.scrollHeight });

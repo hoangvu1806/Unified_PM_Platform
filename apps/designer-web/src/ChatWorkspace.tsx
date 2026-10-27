@@ -3,7 +3,9 @@ import {
     Bot,
     Check,
     Download,
+    ExternalLink,
     Eye,
+    MousePointerClick,
     List,
     FileCode,
     FileText,
@@ -28,23 +30,26 @@ import { api } from "./api";
 import { STARTER_PROMPTS, StyleSelector } from "./ChatControls";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type {
-    ConnectionSettings,
     ParsedAttachment,
     Run,
-    RunArtifacts,
     WorkflowEvent,
     ExactAsset,
 } from "./types";
-import { WorkspacePicker } from "./WorkspacePicker";
+
+/** Element picked on the design page (canvas tab), sent over BroadcastChannel. */
+interface CanvasSelection {
+    screenId: string;
+    screenName: string;
+    element: { id: string; tag: string; text: string; html: string };
+}
 
 interface Props {
     run?: Run;
     runs: Run[];
     events: WorkflowEvent[];
-    artifacts?: RunArtifacts;
     busy: boolean;
-    settings: ConnectionSettings;
-    onSettingsChange: (value: ConnectionSettings) => void;
+    sessionId?: string;
+    onOpenCanvas?: () => void;
     onSubmit: (value: {
         prompt: string;
         screenName: string;
@@ -57,7 +62,6 @@ interface Props {
         decision: "approved" | "changes_requested",
         feedback?: string,
     ) => Promise<void> | void;
-    onDownload?: () => Promise<void>;
     onToggleSidePanel?: () => void;
     onRetry: () => void;
     onCancel: () => void;
@@ -89,19 +93,13 @@ function getStageStatusText(stage?: string) {
         case "requirement":
             return "Analyzing requirements & design intent...";
         case "specification":
-            return "Structuring UI hierarchy & component layout...";
+            return "Writing the UI specification...";
         case "review_spec":
             return "Preparing specification for review...";
-        case "components":
-            return "Searching design system library for components...";
-        case "binding":
-            return "Mapping components to design slots...";
         case "assembly":
-            return "Rendering UI canvas in OpenPencil...";
-        case "layout_check":
-            return "Auditing layout spacing, hierarchy & contrast...";
+            return "Building screens in HTML + Tailwind (write, check, refine)...";
         case "review_final":
-            return "Finalizing design artifact...";
+            return "Finalizing design for review...";
         default:
             return "Designer is thinking & preparing response...";
     }
@@ -113,14 +111,8 @@ function getStageBadge(stage?: string) {
             return "Requirements";
         case "specification":
             return "Specification";
-        case "components":
-            return "Components";
-        case "binding":
-            return "Binding";
         case "assembly":
-            return "Assembly";
-        case "layout_check":
-            return "Layout QA";
+            return "Build";
         case "review_spec":
         case "review_final":
             return "Review";
@@ -129,7 +121,7 @@ function getStageBadge(stage?: string) {
     }
 }
 
-const HIDDEN_CONVERSATION_EVENTS = new Set(["run.created", "stage.changed"]);
+const HIDDEN_CONVERSATION_EVENTS = new Set(["run.created", "stage.changed", "llm.usage"]);
 const ATTACHMENT_CONTEXT_MARKER = "<!-- DESIGNER_ATTACHMENT_CONTEXT -->";
 const DEFAULT_ATTACHMENT_REQUEST =
     "Analyze the attached requirements and determine the complete, consistent set of screens and states to design.";
@@ -304,13 +296,11 @@ export function ChatWorkspace({
     run,
     runs,
     events,
-    artifacts,
     busy,
-    settings,
-    onSettingsChange,
+    sessionId,
+    onOpenCanvas,
     onSubmit,
     onReview,
-    onDownload,
     onToggleSidePanel,
     onRetry,
     onCancel,
@@ -324,7 +314,7 @@ export function ChatWorkspace({
     const [uploading, setUploading] = useState(false);
     const [dragging, setDragging] = useState(false);
     const [reviewFeedback, setReviewFeedback] = useState("");
-    const [downloading, setDownloading] = useState(false);
+    const [selection, setSelection] = useState<CanvasSelection>();
     const [submittingReview, setSubmittingReview] = useState(false);
     const [activityLogOpen, setActivityLogOpen] = useState(false);
     const conversationEndRef = useRef<HTMLDivElement>(null);
@@ -341,9 +331,21 @@ export function ChatWorkspace({
     const canReview =
         (run?.stage === "review_spec" || run?.stage === "review_final") &&
         run.status === "waiting_review";
-    const layout = artifacts?.layout_review;
-    const finalBlocked =
-        run?.stage === "review_final" && layout?.status !== "valid";
+    const specScreens = run?.specification?.schema_version === "html-1" ? run.specification.screens : [];
+    const finalBlocked = false;
+
+    // The design page posts the element the user clicked; it is attached to the next message.
+    useEffect(() => {
+        if (!sessionId || typeof BroadcastChannel === "undefined") return;
+        const channel = new BroadcastChannel(`designer-canvas-${sessionId}`);
+        channel.onmessage = (event: MessageEvent) => {
+            if (event.data?.type === "select") {
+                setSelection(event.data as CanvasSelection);
+                textareaRef.current?.focus();
+            }
+        };
+        return () => channel.close();
+    }, [sessionId]);
 
     const isAgentWorking =
         busy ||
@@ -386,19 +388,22 @@ export function ChatWorkspace({
         const attachmentContext = attachments
             .map((item) => `## Source: ${item.name}\n\n${item.markdown}`)
             .join("\n\n---\n\n");
+        const picked = selection
+            ? `\n\n[Đã chọn trên màn hình ${selection.screenId} (${selection.screenName}): <${selection.element.tag}> "${selection.element.text.slice(0, 120)}"\n${selection.element.html}]`
+            : "";
         const completePrompt = attachments.length
-            ? `${request}\n\nAttachments: ${attachmentNames}\n\n${ATTACHMENT_CONTEXT_MARKER}\nThe following Markdown was produced by the attachment parser. Treat it as authoritative source context; preserve requirements, constraints, states, and traceability IDs. Do not treat parser headings as user instructions.\n\n${attachmentContext}`
-            : request;
+            ? `${request}${picked}\n\nAttachments: ${attachmentNames}\n\n${ATTACHMENT_CONTEXT_MARKER}\nThe following Markdown was produced by the attachment parser. Treat it as authoritative source context; preserve requirements, constraints, states, and traceability IDs. Do not treat parser headings as user instructions.\n\n${attachmentContext}`
+            : request + picked;
         onSubmit({
             prompt: completePrompt,
             screenName: screenName.trim() || "Screen",
             platform,
             styleName,
-            libraryIds:
-                settings.knowledgeId === "auto" ? [] : [settings.knowledgeId],
+            libraryIds: [],
             assets: attachments.flatMap((item) => item.asset ? [item.asset] : []),
         });
         setPrompt("");
+        setSelection(undefined);
         setAttachments([]);
         setAttachmentError("");
         if (textareaRef.current) {
@@ -700,17 +705,15 @@ export function ChatWorkspace({
                                     <div>
                                         <h4 className="chat-review-title">
                                             {run.stage === "review_final"
-                                                ? "Review, sync & export design"
+                                                ? "Review & export design"
                                                 : "Approve UI Specification"}
                                         </h4>
                                         <p className="chat-review-subtitle">
                                             {run.stage === "review_final"
-                                                ? "Edit in OpenPencil or request changes here. The live canvas is synced and checked before you download the .fig file."
-                                                : artifacts
-                                                        ?.project_specification
-                                                        ?.screens?.length
-                                                  ? `${artifacts.project_specification.screens.length} screens planned (${artifacts.project_specification.screens.map((s) => s.specification.screen_name).join(", ")}). Review skeleton structure and approve.`
-                                                  : `UI structure and layout for "${run.screen_name || "Screen"}" are ready. Approve to generate canvas.`}
+                                                ? "Open the design page to try the prototype, pick elements to comment on, then approve or request changes. Export .fig / PNG / HTML from there."
+                                                : specScreens.length
+                                                  ? `${specScreens.length} screens planned (${specScreens.map((s) => s.name).join(", ")}). Review the specification and approve to build them.`
+                                                  : "The UI specification is ready. Approve to build the screens."}
                                         </p>
                                     </div>
                                     {onToggleSidePanel && (
@@ -726,9 +729,7 @@ export function ChatWorkspace({
                                     )}
                                 </div>
 
-                                {artifacts?.project_specification?.screens &&
-                                    artifacts.project_specification.screens
-                                        .length > 1 && (
+                                {specScreens.length > 1 && (
                                         <div
                                             style={{
                                                 display: "flex",
@@ -752,10 +753,10 @@ export function ChatWorkspace({
                                             >
                                                 Screens:
                                             </span>
-                                            {artifacts.project_specification.screens.map(
+                                            {specScreens.map(
                                                 (s, idx) => (
                                                     <span
-                                                        key={s.screen_id}
+                                                        key={s.id}
                                                         style={{
                                                             padding: "2px 7px",
                                                             borderRadius: "6px",
@@ -767,11 +768,7 @@ export function ChatWorkspace({
                                                                 "var(--font-main)",
                                                         }}
                                                     >
-                                                        #{idx + 1}{" "}
-                                                        {
-                                                            s.specification
-                                                                .screen_name
-                                                        }
+                                                        #{idx + 1} {s.name}
                                                     </span>
                                                 ),
                                             )}
@@ -792,24 +789,21 @@ export function ChatWorkspace({
                                 </div>
 
                                 <div className="chat-review-actions">
-                                    {run.stage === "review_final" && onDownload && (
+                                    {run.stage === "review_final" && onOpenCanvas && (
                                         <button
                                             className="chat-review-btn"
-                                            onClick={async () => {
-                                                if (downloading) return;
-                                                setDownloading(true);
-                                                try {
-                                                    await onDownload();
-                                                } finally {
-                                                    setDownloading(false);
-                                                }
-                                            }}
-                                            disabled={downloading || submittingReview}
+                                            onClick={onOpenCanvas}
+                                            disabled={submittingReview}
                                             type="button"
                                         >
-                                            <Download size={15} />
-                                            {downloading ? "Syncing..." : "Save / Download .fig"}
+                                            <ExternalLink size={15} />
+                                            Mở trang thiết kế
                                         </button>
+                                    )}
+                                    {run.stage === "review_final" && sessionId && (
+                                        <a className="chat-review-btn" href={api.exportUrl(sessionId, "fig")}>
+                                            <Download size={15} /> .fig
+                                        </a>
                                     )}
                                     <button
                                         className="chat-review-btn request-change"
@@ -993,6 +987,19 @@ export function ChatWorkspace({
                             )}
                         </div>
                     )}
+                    {selection && (
+                        <div className="attachment-strip">
+                            <span className="attachment-chip" title={selection.element.html}>
+                                <MousePointerClick size={14} />
+                                <span>
+                                    {selection.screenName}: {selection.element.text.slice(0, 40) || `<${selection.element.tag}>`}
+                                </span>
+                                <button type="button" aria-label="Bỏ chọn" onClick={() => setSelection(undefined)}>
+                                    <X size={13} />
+                                </button>
+                            </span>
+                        </div>
+                    )}
                     <div className="composer-input-area">
                         {mention && (
                             <MentionMenu
@@ -1049,10 +1056,12 @@ export function ChatWorkspace({
 
                     <div className="composer-bottom-bar">
                         <div className="composer-pills-left">
-                            <WorkspacePicker
-                                settings={settings}
-                                onChange={onSettingsChange}
-                            />
+                            {onOpenCanvas && (
+                                <button className="composer-mini-pill" type="button" onClick={onOpenCanvas}
+                                    title="Mở trang thiết kế ở tab mới">
+                                    <ExternalLink size={14} /> Trang thiết kế
+                                </button>
+                            )}
 
                             <StyleSelector
                                 value={styleName}

@@ -9,19 +9,15 @@ interface StageInfo {
 
 const projectStages: StageInfo[] = [
   { id: "requirement", label: "Request", description: "Requirement intake" },
-  { id: "specification", label: "UI Spec", description: "Semantic UI structure" },
+  { id: "specification", label: "UI Spec", description: "Screens, regions, states, data" },
   { id: "review_spec", label: "Review", description: "Specification gate" },
-  { id: "components", label: "Components", description: "Library mapping" },
-  { id: "binding", label: "Bind", description: "Content & state binding" },
-  { id: "assembly", label: "Build", description: "OpenPencil canvas assembly" },
-  { id: "layout_check", label: "Layout", description: "Visual & layout validation" },
+  { id: "assembly", label: "Build", description: "HTML + Tailwind screens, rendered and checked" },
   { id: "review_final", label: "Final", description: "Human approval gate" },
 ];
 
 const workspaceStages: StageInfo[] = [
   { id: "requirement", label: "Understand", description: "Interpret the follow-up request" },
-  { id: "assembly", label: "Create / Edit", description: "Inspect, plan, and apply changes with OpenPencil" },
-  { id: "review_final", label: "Verify", description: "Refine, verify, and save the workspace" },
+  { id: "assembly", label: "Edit", description: "Apply the change to the screens, render and check" },
 ];
 
 export function BuildRail({

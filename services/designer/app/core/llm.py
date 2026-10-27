@@ -94,8 +94,14 @@ class AdkProvider:
         stop_when: Callable[[], bool] | None = None,
         progress_token: Callable[[], str] | None = None,
         continuation_message: str = "",
+        usage: dict[str, int] | None = None,
+        force_tools: bool = False,
     ) -> str:
-        """One conversation: tool results (including errors) stay in model context."""
+        """One conversation: tool results (including errors) stay in model context.
+
+        ``usage`` (optional) accumulates prompt/output tokens and model calls across the run.
+        ``force_tools``: every model turn must call a tool (a tool ends the turn by setting
+        ``tool_context.actions.skip_summarization``)."""
         if not self.settings.api_key or not self.settings.base_url:
             raise AppError(
                 "LLM_NOT_CONFIGURED",
@@ -124,6 +130,10 @@ class AdkProvider:
                 model=model or self.settings.llm_model,
                 api_key=self.settings.api_key,
                 api_base=self.settings.cleaned_base_url,
+                max_tokens=self.settings.designer_max_output_tokens,
+                **({"reasoning_effort": self.settings.designer_reasoning_effort}
+                   if self.settings.designer_reasoning_effort else {}),
+                **({"tool_choice": "required"} if force_tools and tools else {}),
             ),
             # Markdown/JSX is already rendered; bypass ADK's {state} expansion.
             instruction=lambda _context: prompt,
@@ -159,7 +169,15 @@ class AdkProvider:
                         new_message=next_message,
                         run_config=RunConfig(max_llm_calls=max_turns),
                     ):
-                        if event.error_code:
+                        meta = getattr(event, "usage_metadata", None)
+                        if usage is not None and meta is not None:
+                            usage["calls"] = usage.get("calls", 0) + 1
+                            usage["prompt_tokens"] = usage.get("prompt_tokens", 0) + (meta.prompt_token_count or 0)
+                            usage["output_tokens"] = usage.get("output_tokens", 0) + (meta.candidates_token_count or 0)
+                        if event.error_code == "MODEL_RETURNED_NO_CONTENT" and stop_when is not None:
+                            # A thought-only turn: treat it as an empty reply and ask to continue below.
+                            reply = ""
+                        elif event.error_code:
                             response_error = AppError(
                                 "LLM_RESPONSE_FAILED",
                                 "Model response failed",
@@ -235,6 +253,7 @@ class AdkProvider:
         image_mime_type: str = "image/jpeg",
         max_attempts: int = 3,
         model: str | None = None,
+        usage: dict[str, int] | None = None,
     ) -> ModelT:
         correction = ""
         last_error: Exception | None = None
@@ -253,6 +272,7 @@ class AdkProvider:
                     max_turns=1,
                     timeout_seconds=LLM_TIMEOUT_SECONDS,
                     model=model,
+                    usage=usage,
                 )
                 return parse_structured_output(content, schema)
             except Exception as error:

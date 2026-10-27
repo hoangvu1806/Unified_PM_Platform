@@ -91,10 +91,12 @@ for the final review, its UI specification and the design files are published as
 marks them "Đã duyệt". Designs link to the BA package version they came from, so a newer BA version marks them
 "cần xem lại".
 
-**Designer (being rebuilt).** The OpenPencil/JSX designer is removed. The new one writes each screen as HTML +
-Tailwind (+ Alpine.js for interaction), renders and checks it in headless Chromium inside `designer-api`, imports
-any design system from a Figma `.fig`, and exports `.fig`, PNG and HTML. Until it lands, Designer runs stop with
-`DESIGNER_REBUILDING`.
+**Designer.** The agent writes each screen as HTML + Tailwind (Alpine.js for interaction, lucide icons), renders
+and checks it in headless Chromium inside `designer-api` (DOM lint + axe-core + screenshot), and refines it with
+tools until it passes. The studio (`/designer/`) keeps chat, review and BA panels; "Trang thiết kế" opens the
+design page (`/designer/canvas.html`) in a new tab: clickable prototype, viewports, states, element picking
+(sent to the chat), code edits with versions, exports. Design systems are imported from a Figma `.fig`
+(Settings → Design system); exports are `.fig` (opens in Figma), PNG per screen/state and an offline HTML zip.
 
 **Logs.** Local: `logs/<service>/<service>.log` (JSON lines, daily rotation, 14 days), each request with `user`,
 `project_id`, `request_id`. Per project: `projects/<project_id>/logs/<service>/<date>/*.jsonl` in storage.

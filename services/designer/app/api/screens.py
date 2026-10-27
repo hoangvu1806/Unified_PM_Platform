@@ -128,3 +128,24 @@ async def screen_screenshot(
         media_type=result.mime or "image/png",
         headers={"Content-Disposition": f'inline; filename="{name}"', "Cache-Control": "no-store"},
     )
+
+
+@router.get("/sessions/{session_id}/export")
+async def export_session(request: Request, session_id: UUID, format: Literal["fig", "zip"] = "zip") -> Response:
+    """All screens of the session: ``fig`` (open in Figma) or ``zip`` (HTML prototype + PNG + design.fig)."""
+    from ..export.bundle import export_screens
+
+    store = request.app.state.store
+    session = await store.get_session(session_id)
+    if session is None:
+        raise not_found("Session")
+    screens = await store.list_screens(session_id, with_html=True)
+    if not screens:
+        raise AppError("NO_SCREENS", "Nothing to export", "The session has no screens yet.", 409)
+    ds = await design_context(store, session)
+    out = await export_screens(request.app.state.renderer, screens, ds, session.title)
+    data, media = (out.fig, "application/octet-stream") if format == "fig" else (out.zip, "application/zip")
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", session.title).strip("-") or "design"
+    return Response(data, media_type=media, headers={
+        "Content-Disposition": f'attachment; filename="{name}.{format}"', "Cache-Control": "no-store",
+    })

@@ -10,10 +10,12 @@ WORKDIR /app
 COPY packages/platform_core /opt/platform/packages/platform_core
 RUN pip install --no-cache-dir /opt/platform/packages/platform_core
 
+# Headless Chromium for rendering screens (shell build only), before the other dependencies
+# so changing requirements.txt does not download the browser again.
+RUN pip install --no-cache-dir playwright==1.60.0     && playwright install --with-deps --only-shell chromium && rm -rf /var/lib/apt/lists/*
+
 COPY services/designer/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-# Headless Chromium for rendering screens (shell build only, no full browser UI).
-RUN playwright install --with-deps --only-shell chromium && rm -rf /var/lib/apt/lists/*
 
 COPY services/designer/ ./
 

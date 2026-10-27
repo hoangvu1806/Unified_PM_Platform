@@ -1,25 +1,18 @@
 import asyncio
-from collections.abc import Coroutine
+from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 from uuid import UUID
 
 from ..api.stream import EventStream
-from ..core.errors import AppError
+from ..core.config import Settings
+from ..core.errors import AppError, unwrap_app_error
 from ..core.llm import AdkProvider
 from ..core.prompts import PromptLibrary
 from ..models import ReviewCreate, RunStage, RunStatus
+from ..render import Renderer
 from ..storage.store import Store
+from .designer import HtmlDesigner
 from .publish import publish_design
-
-# Until the HTML designer lands, accepted runs stop here with a clear, retryable message.
-REBUILDING = AppError(
-    "DESIGNER_REBUILDING",
-    "Designer đang được xây lại",
-    "Designer agent đang chuyển sang thiết kế bằng HTML + Tailwind; run đã được lưu.",
-    503,
-    True,
-    action="Thử lại khi phiên bản mới được triển khai.",
-)
 
 
 class RunService:
@@ -29,12 +22,17 @@ class RunService:
         events: EventStream,
         llm: AdkProvider,
         prompts: PromptLibrary,
+        settings: Settings,
+        renderer: Renderer,
     ) -> None:
         self.store = store
         self.events = events
         self.llm = llm
         self.prompts = prompts
+        self.settings = settings
+        self.renderer = renderer
         self.tasks: dict[UUID, asyncio.Task[None]] = {}
+        self.designer = HtmlDesigner(self)
 
     def _spawn(
         self, run_id: UUID, operation: Coroutine[Any, Any, None], name: str
@@ -42,39 +40,81 @@ class RunService:
         existing = self.tasks.get(run_id)
         if existing and not existing.done():
             existing.cancel()
-        task = asyncio.create_task(operation, name=name)
+        task = asyncio.create_task(self._guard(run_id, operation), name=name)
         self.tasks[run_id] = task
 
         def discard(completed: asyncio.Task[None]) -> None:
             if self.tasks.get(run_id) is completed:
                 self.tasks.pop(run_id, None)
             if not completed.cancelled():
-                # Platform Assets: a finished design is published to the project.
+                # Platform Assets: the spec and the design bundle are published to the project.
                 asyncio.get_running_loop().create_task(publish_design(self, run_id))
 
         task.add_done_callback(discard)
 
-    def start(self, run_id: UUID, feedback: str = "None") -> None:
-        self._spawn(run_id, self.analyze(run_id, feedback), f"analyze:{run_id}")
+    async def _guard(self, run_id: UUID, operation: Coroutine[Any, Any, None]) -> None:
+        """Errors end the run as blocked (configuration) or failed (retryable), never silently."""
+        try:
+            await operation
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:  # noqa: BLE001
+            run = await self.store.get_run(run_id)
+            if run is None:
+                return
+            app_error = unwrap_app_error(error) or AppError(
+                "DESIGNER_FAILED", "Designer failed", f"{type(error).__name__}: {error}", 500, True,
+                action="Retry the run.",
+            )
+            if app_error.code in {"LLM_NOT_CONFIGURED"}:
+                await self._block(run_id, run.revision, app_error)
+            else:
+                await self._fail(run_id, run.revision, app_error)
 
-    async def analyze(self, run_id: UUID, feedback: str = "None") -> None:
-        run = await self._require_run(run_id)
-        await self._block(run_id, run.revision, REBUILDING)
+    def _run(self, run_id: UUID, step: Callable[[], Awaitable[None]], name: str) -> None:
+        self._spawn(run_id, step(), f"{name}:{run_id}")
+
+    def start(self, run_id: UUID, feedback: str = "None") -> None:
+        self._run(run_id, lambda: self.designer.analyze(run_id, feedback), "analyze")
 
     async def review(self, run_id: UUID, request: ReviewCreate) -> None:
         run = await self._require_run(run_id)
         if request.revision != run.revision:
             raise AppError("REVISION_CONFLICT", "Review is for an older revision", f"Current revision is {run.revision}.", 409)
+        expected = {"specification": RunStage.REVIEW_SPEC, "final": RunStage.REVIEW_FINAL}[request.checkpoint]
+        if run.status != RunStatus.WAITING_REVIEW or run.stage != expected:
+            raise AppError("REVIEW_NOT_EXPECTED", "Nothing to review", f"Run is {run.stage}/{run.status}.", 409)
         await self.store.add_review(run_id, run.revision, request.checkpoint, request.decision, request.feedback)
         await self.events.emit(run_id, run.revision, "review.recorded", request.model_dump(mode="json"))
-        self.start(run_id, request.feedback or "None")
+        if request.decision == "rejected":
+            await self.store.update_run(run_id, stage=RunStage.FINISHED, status=RunStatus.CANCELLED,
+                                        assistant_message="Đã dừng theo yêu cầu.")
+            return
+        if request.checkpoint == "specification":
+            if request.decision == "approved":
+                self._run(run_id, lambda: self.designer.build(run_id), "build")
+            else:
+                self._run(run_id, lambda: self.designer.write_spec(run_id, request.feedback or "Revise it."), "spec")
+            return
+        if request.decision == "approved":
+            await self.store.update_run(run_id, stage=RunStage.FINISHED, status=RunStatus.COMPLETED)
+            await self.events.emit(run_id, run.revision, "stage.changed", {"stage": "finished", "status": "completed"})
+            asyncio.get_running_loop().create_task(publish_design(self, run_id))
+            return
+        targets = await self.designer.targets_for(run, request.feedback)
+        self._run(run_id, lambda: self.designer.build(run_id, targets, instruction=request.feedback, review=True), "rebuild")
 
     async def retry(self, run_id: UUID) -> None:
         run = await self._require_run(run_id)
         if run.status not in {RunStatus.BLOCKED, RunStatus.FAILED, RunStatus.CANCELLED}:
             raise AppError("RUN_NOT_RETRYABLE", "Run is not retryable", f"Run status is {run.status}.", 409)
-        await self.store.update_run(run_id, status=RunStatus.QUEUED, stage=RunStage.REQUIREMENT)
-        self.start(run_id)
+        failed_at = (run.error or {}).get("stage") or ""
+        if run.specification and failed_at in {"assembly", "review_final"}:
+            self._run(run_id, lambda: self.designer.build(run_id, review=run.intent != "design"), "build")
+        elif failed_at in {"specification", "review_spec"}:
+            self._run(run_id, lambda: self.designer.write_spec(run_id), "spec")
+        else:
+            self.start(run_id)
 
     async def cancel(self, run_id: UUID) -> None:
         run = await self._require_run(run_id)

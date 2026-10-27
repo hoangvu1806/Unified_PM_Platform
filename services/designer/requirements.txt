@@ -4,6 +4,8 @@ pydantic>=2.10,<3
 pydantic-settings>=2.7,<3
 google-adk>=2.0,<3
 litellm>=1.84,<2
+# litellm imports it when the model is called with tools
+mcp>=2,<3
 psycopg[binary,pool]>=3.2,<4
 zstandard>=0.23,<1
 playwright==1.60.0

@@ -7,6 +7,7 @@ Figma export); geometry is local to the parent, colors are hex strings. Derived 
 
 from __future__ import annotations
 
+import hashlib
 import struct
 import zlib
 from datetime import datetime, timezone
@@ -66,6 +67,7 @@ class FigBuilder:
         self.file_name = file_name
         self.schema = decode_schema(_inflate(SCHEMA_FILE.read_bytes()))
         self.nodes: list[dict[str, Any]] = []
+        self.images: dict[str, bytes] = {}  # sha1 hex -> PNG/JPEG bytes (zip "images/")
         self._children: dict[tuple[int, int], int] = {}
         self._next_local = 2
         self.document = self._node(None, "DOCUMENT", "Document", guid={"sessionID": 0, "localID": 0},
@@ -144,6 +146,18 @@ class FigBuilder:
         fields.update(extra)
         return self._node(parent, "ROUNDED_RECTANGLE", name, **fields)
 
+    def image_paint(self, data: bytes, width: int, height: int, scale_mode: str = "FILL") -> dict[str, Any]:
+        """An IMAGE paint; the bytes go to the zip under their SHA-1 like Figma's own exports."""
+        digest = hashlib.sha1(data).hexdigest()
+        self.images[digest] = data
+        ref = {"hash": bytes.fromhex(digest), "name": digest[:12]}
+        return {
+            "type": "IMAGE", "opacity": 1.0, "visible": True, "blendMode": "NORMAL", "transform": dict(IDENTITY),
+            "image": ref, "imageThumbnail": dict(ref), "animationFrame": 0, "imageScaleMode": scale_mode,
+            "imageShouldColorManage": False, "rotation": 0.0, "scale": 1.0,
+            "originalImageWidth": int(width), "originalImageHeight": int(height),
+        }
+
     def text(self, parent: dict, characters: str, x: float, y: float, w: float, h: float, *, size: float = 14,
              family: str = "Inter", style: str = "Regular", fill: str = "#111111", line_height: float | None = None,
              align: str = "LEFT", auto_resize: str = "HEIGHT", name: str | None = None, **extra: Any) -> dict:
@@ -173,7 +187,7 @@ class FigBuilder:
             "developer_related_links": [],
             "exported_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + "000Z",
         }
-        return FigFile(SCHEMA_VERSION, self.schema, message, meta, _png(400, 300, (245, 245, 245)))
+        return FigFile(SCHEMA_VERSION, self.schema, message, meta, _png(400, 300, (245, 245, 245)), dict(self.images))
 
     def to_bytes(self) -> bytes:
         return write_fig(self.to_fig())

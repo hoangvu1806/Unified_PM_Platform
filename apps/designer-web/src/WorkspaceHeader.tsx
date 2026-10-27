@@ -1,4 +1,4 @@
-import { ArrowLeft, LogOut, Moon, PanelRight, Settings2, Sun } from "lucide-react";
+import { ArrowLeft, ExternalLink, LogOut, Moon, PanelRight, Settings2, Sun } from "lucide-react";
 import { isEmbedded, logout, usePlatform } from "./platform";
 import type { Run, Session } from "./types";
 
@@ -10,6 +10,7 @@ export function WorkspaceHeader({
     onTheme,
     onReview,
     onSettings,
+    onOpenCanvas,
 }: {
     session?: Session;
     run?: Run;
@@ -18,6 +19,7 @@ export function WorkspaceHeader({
     onTheme: () => void;
     onReview: () => void;
     onSettings: () => void;
+    onOpenCanvas?: () => void;
 }) {
     const platform = isEmbedded ? undefined : usePlatform();
     return (
@@ -79,6 +81,16 @@ export function WorkspaceHeader({
                     <span className="run-id-badge" style={{ opacity: 0.7 }}>
                         Ready
                     </span>
+                )}
+                {onOpenCanvas && (
+                    <button
+                        className="secondary-button compact"
+                        onClick={onOpenCanvas}
+                        title="Mở trang thiết kế ở tab mới"
+                        type="button"
+                    >
+                        <ExternalLink size={15} /> Trang thiết kế
+                    </button>
                 )}
                 <div className="topbar-divider" />
                 {/* Embedded: the platform header owns the one light/dark switch. */}

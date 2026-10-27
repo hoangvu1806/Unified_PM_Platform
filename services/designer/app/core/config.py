@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     designer_page_max_steps: int = Field(45, validation_alias="DESIGNER_PAGE_MAX_STEPS")
     designer_page_timeout_seconds: int = Field(720, validation_alias="DESIGNER_PAGE_TIMEOUT_SECONDS")
     unsplash_access_key: str = ""
+    # A whole screen is one tool call: leave room for it, and keep "thinking" from eating the budget.
+    designer_max_output_tokens: int = Field(32000, validation_alias="DESIGNER_MAX_OUTPUT_TOKENS")
+    designer_reasoning_effort: str = Field("low", validation_alias="DESIGNER_REASONING_EFFORT")
 
     @model_validator(mode="after")
     def _fallback_to_shared_llm(self) -> "Settings":

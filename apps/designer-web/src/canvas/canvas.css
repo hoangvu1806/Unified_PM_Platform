@@ -1,0 +1,41 @@
+body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-family: var(--font-main); }
+
+.canvas-shell { display: flex; height: 100vh; overflow: hidden; }
+.canvas-empty { margin: auto; max-width: 420px; text-align: center; color: var(--text-muted); line-height: 1.6; }
+
+.canvas-rail { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px;
+  background: var(--bg-surface); border-right: 1px solid var(--border-strong); overflow-y: auto; }
+.canvas-rail h1 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 4px 8px; }
+.canvas-screen { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border: 0;
+  border-radius: 10px; background: transparent; color: var(--text-primary); cursor: pointer; text-align: left; font: inherit; }
+.canvas-screen small { color: var(--text-muted); font-size: 12px; }
+.canvas-screen:hover { background: var(--bg-surface-hover); }
+.canvas-screen.active { background: var(--violet-soft); color: var(--violet); }
+.canvas-rail-footer { margin-top: auto; display: flex; gap: 6px; flex-wrap: wrap; padding-top: 12px; }
+
+.canvas-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.canvas-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px;
+  background: var(--bg-surface); border-bottom: 1px solid var(--border-strong); font-size: 13px; }
+.canvas-toolbar button, .canvas-toolbar select, .canvas-toolbar input, .canvas-link {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 8px;
+  border: 1px solid var(--border-strong); background: var(--bg-surface-raised); color: var(--text-secondary);
+  font: inherit; cursor: pointer; text-decoration: none; }
+.canvas-toolbar input { cursor: text; min-width: 220px; }
+.canvas-toolbar button.active { background: var(--violet); border-color: var(--violet); color: #fff; }
+.canvas-toolbar button:disabled { opacity: 0.5; cursor: default; }
+.canvas-group { display: inline-flex; align-items: center; gap: 4px; }
+.canvas-versions { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
+
+.canvas-body { flex: 1; display: flex; min-height: 0; }
+.canvas-stage { flex: 1; overflow: auto; padding: 24px; }
+.canvas-frame-box { margin: 0 auto; position: relative; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 12px 32px rgba(15, 23, 42, 0.08);
+  border-radius: 6px; overflow: hidden; background: #fff; }
+.canvas-frame-box iframe { border: 0; display: block; transform-origin: 0 0; background: #fff; }
+
+.canvas-code { width: 44%; min-width: 360px; display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  background: var(--bg-surface); border-left: 1px solid var(--border-strong); }
+.canvas-code textarea { flex: 1; resize: none; font: 12.5px/1.5 var(--font-mono); padding: 12px; border-radius: 8px;
+  border: 1px solid var(--border-strong); background: var(--bg-canvas); color: var(--text-primary); }
+
+.canvas-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 10px;
+  background: var(--text-primary); color: var(--bg-surface); font-size: 13px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); }

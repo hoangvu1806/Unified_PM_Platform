@@ -4,6 +4,7 @@ services:
     build:
       context: ../..
       dockerfile: services/designer/Dockerfile
+    image: platform-designer-api:latest
     env_file:
       - path: ../../.env
         required: true
@@ -35,9 +36,7 @@ services:
 
   designer-test:
     profiles: ["test"]
-    build:
-      context: ../..
-      dockerfile: services/designer/Dockerfile
+    image: platform-designer-api:latest   # reuses the designer-api image: no second build
     env_file:
       - path: ../../.env
         required: true

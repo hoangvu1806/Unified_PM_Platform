@@ -1,14 +1,20 @@
 # Designer service (designer-api)
 
-UI design agent of the platform, being rebuilt: the OpenPencil/JSX pipeline is removed
-and the agent will write each screen as **HTML + Tailwind** (Alpine.js for interaction).
+UI design agent of the platform: it writes each screen as **HTML + Tailwind** (Alpine.js for
+interaction, lucide icons) and checks it in headless Chromium.
 UI at `/designer/`, API at `/designer/api/v1/` behind the gateway; data in Postgres schema
 `designer`, files in platform storage (S3). Everything runs in this one container.
 
 ## Today
 
 - Sessions, runs, events (SSE), reviews, BA handoffs and project access work as before.
-- Accepted runs stop with `DESIGNER_REBUILDING` (retryable) until the new agent lands.
+- The agent (`app/workflow/designer.py`): router → UI spec (human review) → per screen a tool loop
+  (`write_screen`, `edit_screen`, `read_screen`, `check_screen`, `find_components`, `get_component`,
+  `finish_screen`) → final review; chat edits go straight to the tool loop. Prompts in `prompts/`.
+  Earlier HTML is compacted out of the conversation (`compact_history`), so a call costs ≈ 6k tokens.
+- `app/designsystem/`: `.fig` → tokens (Tailwind `@theme`) + component HTML snippets; gallery.
+- `app/export/`: DOM → Figma nodes (`extract.js` + `figma.py`), bundle zip (HTML prototype, PNG, `design.fig`),
+  published to Assets as `designer_output`.
 - `app/figio/`: pure-Python reader/writer for Figma `.fig` files (Kiwi codec, zip container,
   `FigBuilder`). Reads real Figma exports byte-exactly; files it writes open in Figma.
 - `app/render/`: a screen is an HTML body fragment. `build_document` wraps it with theme tokens
@@ -30,7 +36,7 @@ Screen conventions for the agent and the design page:
 | Alpine (`x-data`, `@click`, `x-show`, …) | Real interaction inside a screen |
 | `data-d` | Element id added by the runtime at render time (never stored) |
 
-## Planned
+## Flow
 
 ```text
 message / BA handoff

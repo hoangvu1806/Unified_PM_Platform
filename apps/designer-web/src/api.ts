@@ -1,11 +1,12 @@
 import type {
-    OpenPencilDocument,
-    OpenPencilProfile,
+    DesignSystemInfo,
+    ExactAsset,
     ParsedAttachment,
     Run,
     RunArtifacts,
+    Screen,
+    ScreenVersion,
     Session,
-    ExactAsset,
 } from "./types";
 
 import { projectId } from "./platform";
@@ -14,28 +15,41 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 if (!API_BASE) throw new Error("VITE_API_BASE_URL is required");
 
+async function failure(response: Response): Promise<Error> {
+    const problem = (await response
+        .json()
+        .catch(() => ({ detail: response.statusText }))) as {
+        detail?: string | { loc?: (string | number)[]; msg?: string }[] | { message?: string };
+        title?: string;
+    };
+    const detail = problem.detail;
+    const message = Array.isArray(detail)
+        ? detail
+              .map(
+                  (item) =>
+                      `${item.loc?.slice(1).join(".") || "request"}: ${item.msg || "invalid value"}`,
+              )
+              .join("; ")
+        : typeof detail === "object" && detail
+          ? detail.message || problem.title || "Request failed"
+          : detail || problem.title || "Request failed";
+    return new Error(message);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {
         ...init,
         headers: { "Content-Type": "application/json", ...init?.headers },
     });
-    if (!response.ok) {
-        const problem = (await response
-            .json()
-            .catch(() => ({ detail: response.statusText }))) as {
-            detail?: string | { loc?: (string | number)[]; msg?: string }[];
-        };
-        const message = Array.isArray(problem.detail)
-            ? problem.detail
-                  .map(
-                      (item) =>
-                          `${item.loc?.slice(1).join(".") || "request"}: ${item.msg || "invalid value"}`,
-                  )
-                  .join("; ")
-            : problem.detail || "Request failed";
-        throw new Error(message);
-    }
+    if (!response.ok) throw await failure(response);
+    if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
+}
+
+async function text(path: string): Promise<string> {
+    const response = await fetch(`${API_BASE}${path}`);
+    if (!response.ok) throw await failure(response);
+    return response.text();
 }
 
 function fileAsBase64(file: File): Promise<string> {
@@ -50,6 +64,8 @@ function fileAsBase64(file: File): Promise<string> {
     });
 }
 
+const projectQuery = () => (projectId ? `?project_id=${encodeURIComponent(projectId)}` : "");
+
 export const api = {
     parseAttachment: async (file: File) =>
         request<ParsedAttachment>("/attachments/parse", {
@@ -60,10 +76,8 @@ export const api = {
                 data_base64: await fileAsBase64(file),
             }),
         }),
-    listSessions: () =>
-        request<Session[]>(
-            projectId ? `/sessions?project_id=${encodeURIComponent(projectId)}` : "/sessions",
-        ),
+    listSessions: () => request<Session[]>(`/sessions${projectQuery()}`),
+    getSessions: () => request<Session[]>(`/sessions${projectQuery()}`),
     createSession: (title: string) =>
         request<Session>("/sessions", {
             method: "POST",
@@ -73,35 +87,11 @@ export const api = {
         request<{ status: string }>(`/sessions/${sessionId}`, {
             method: "DELETE",
         }),
-    updateSessionWorkspace: (
-        sessionId: string,
-        workspace: import("./types").SessionWorkspace,
-    ) =>
-        request<Session>(`/sessions/${sessionId}/workspace`, {
-            method: "PUT",
-            body: JSON.stringify(workspace),
-        }),
     listRuns: (sessionId: string) =>
         request<Run[]>(`/sessions/${sessionId}/runs`),
     getRun: (runId: string) => request<Run>(`/runs/${runId}`),
     getArtifacts: (runId: string) =>
         request<RunArtifacts>(`/runs/${runId}/artifacts`),
-    createRun: (
-        sessionId: string,
-        body: {
-            prompt: string;
-            screen_name: string;
-            platform: string;
-            style_name?: string;
-            library_ids: string[];
-            mcp_profile?: OpenPencilProfile;
-            assets?: ExactAsset[];
-        },
-    ) =>
-        request<Run>(`/sessions/${sessionId}/runs`, {
-            method: "POST",
-            body: JSON.stringify(body),
-        }),
     sendMessage: (
         sessionId: string,
         body: {
@@ -110,7 +100,6 @@ export const api = {
             platform_hint?: string;
             style_hint?: string;
             library_ids: string[];
-            mcp_profile?: OpenPencilProfile;
             assets?: ExactAsset[];
         },
     ) =>
@@ -124,79 +113,75 @@ export const api = {
         checkpoint: "specification" | "final",
         decision: string,
         feedback = "",
-        mcpProfile?: OpenPencilProfile,
     ) =>
         request<{ status: string }>(`/runs/${runId}/reviews`, {
             method: "POST",
-            body: JSON.stringify({
-                checkpoint,
-                decision,
-                revision,
-                feedback,
-                mcp_profile: mcpProfile,
-            }),
+            body: JSON.stringify({ checkpoint, decision, revision, feedback }),
         }),
-    retry: (runId: string, mcpProfile?: OpenPencilProfile) =>
-        request<{ status: string }>(`/runs/${runId}/retry`, {
-            method: "POST",
-            body: JSON.stringify({ mcp_profile: mcpProfile }),
-        }),
-    recheckLayout: (runId: string) =>
-        request<{
-            status: string;
-            layout_review: NonNullable<RunArtifacts["layout_review"]>;
-        }>(`/runs/${runId}/layout/recheck`, { method: "POST" }),
-    syncCanvas: (runId: string) =>
-        request<{ status: string; canvas_sync: Record<string, unknown> }>(
-            `/runs/${runId}/canvas/sync`,
-            { method: "POST" },
-        ),
-    downloadRunFile: (runId: string) => `${API_BASE}/runs/${runId}/download`,
+    retry: (runId: string) =>
+        request<{ status: string }>(`/runs/${runId}/retry`, { method: "POST" }),
     cancel: (runId: string) =>
         request<{ status: string }>(`/runs/${runId}/cancel`, {
             method: "POST",
         }),
-    probeMcp: (endpoint: string) =>
-        request<{ reachable: boolean; message: string }>(
-            "/integrations/openpencil/probe",
-            {
-                method: "POST",
-                body: JSON.stringify({ endpoint }),
-            },
+
+    // Screens (HTML designer)
+    listScreens: (sessionId: string) =>
+        request<Screen[]>(`/sessions/${sessionId}/screens`),
+    getScreen: (sessionId: string, screenId: string, version?: number) =>
+        request<Screen>(
+            `/sessions/${sessionId}/screens/${screenId}${version ? `?version=${version}` : ""}`,
         ),
-    listOpenPencilDocuments: (endpoint: string) =>
-        request<OpenPencilDocument[]>("/integrations/openpencil/documents", {
-            method: "POST",
-            body: JSON.stringify({ endpoint }),
-        }),
-    createOpenPencilDocument: (endpoint: string, name: string) =>
-        request<OpenPencilDocument>(
-            "/integrations/openpencil/documents/create",
-            {
-                method: "POST",
-                body: JSON.stringify({ endpoint, name }),
-            },
-        ),
-    createOpenPencilPage: (
-        endpoint: string,
-        documentId: string,
-        name: string,
+    saveScreen: (
+        sessionId: string,
+        screenId: string,
+        body: { name: string; platform: string; html: string; note?: string },
     ) =>
-        request<OpenPencilDocument>(
-            `/integrations/openpencil/documents/${encodeURIComponent(documentId)}/pages`,
-            {
-                method: "POST",
-                body: JSON.stringify({ endpoint, name }),
-            },
-        ),
-    listComponents: (profile: OpenPencilProfile) =>
-        request<
-            { component_id: string; name: string; canonical_path: string }[]
-        >("/integrations/openpencil/components", {
-            method: "POST",
-            body: JSON.stringify(profile),
+        request<Screen>(`/sessions/${sessionId}/screens/${screenId}`, {
+            method: "PUT",
+            body: JSON.stringify(body),
         }),
+    screenVersions: (sessionId: string, screenId: string) =>
+        request<ScreenVersion[]>(`/sessions/${sessionId}/screens/${screenId}/versions`),
+    screenDocument: (sessionId: string, screenId: string, version?: number) =>
+        text(
+            `/sessions/${sessionId}/screens/${screenId}/document${version ? `?version=${version}` : ""}`,
+        ),
+    screenshotUrl: (sessionId: string, screenId: string, state?: string) =>
+        `${API_BASE}/sessions/${sessionId}/screens/${screenId}/screenshot?format=png${state ? `&state=${encodeURIComponent(state)}` : ""}`,
+    exportUrl: (sessionId: string, format: "fig" | "zip") =>
+        `${API_BASE}/sessions/${sessionId}/export?format=${format}`,
+
+    // Design systems
     listDesignSystems: () =>
-        request<import("./types").DesignSystemInfo[]>("/design-systems"),
+        request<DesignSystemInfo[]>(`/design-systems${projectQuery()}`),
+    importDesignSystem: async (file: File, name: string) => {
+        const params = new URLSearchParams({ name, filename: file.name });
+        if (projectId) params.set("project_id", projectId);
+        const response = await fetch(`${API_BASE}/design-systems?${params}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: file,
+        });
+        if (!response.ok) throw await failure(response);
+        return (await response.json()) as DesignSystemInfo;
+    },
+    deleteDesignSystem: (id: string) =>
+        request<void>(`/design-systems/${id}`, { method: "DELETE" }),
+    galleryDocument: (id: string, page = 0, q = "") =>
+        text(`/design-systems/${id}/gallery?page=${page}&q=${encodeURIComponent(q)}`),
+    setSessionDesignSystem: (sessionId: string, designSystemId: string) =>
+        request<Session>(`/sessions/${sessionId}/design-system`, {
+            method: "PUT",
+            body: JSON.stringify({ design_system_id: designSystemId }),
+        }),
+
     eventUrl: (runId: string) => `${API_BASE}/runs/${runId}/events`,
 };
+
+/** URL of the design page (canvas) for a session; one browser tab per session. */
+export function canvasUrl(sessionId: string): string {
+    const params = new URLSearchParams({ session: sessionId });
+    if (projectId) params.set("project", projectId);
+    return `${import.meta.env.BASE_URL}canvas.html?${params}`;
+}

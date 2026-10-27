@@ -4,6 +4,7 @@ services:
     build:
       context: ../..
       dockerfile: services/ba/Dockerfile
+    image: platform-ba-api:latest
     env_file:
       - path: ../../.env
         required: true
@@ -51,9 +52,7 @@ services:
 
   ba-test:
     profiles: ["test"]
-    build:
-      context: ../..
-      dockerfile: services/ba/Dockerfile
+    image: platform-ba-api:latest   # reuses the ba-api image: no second build
     env_file:
       - path: ../../.env
         required: true
@@ -72,9 +71,7 @@ services:
 
   wiki-test:
     profiles: ["test"]
-    build:
-      context: ../..
-      dockerfile: services/ba/Dockerfile
+    image: platform-ba-api:latest   # reuses the ba-api image: no second build
     env_file:
       - path: ../../.env
         required: true

@@ -4,10 +4,8 @@ import type { WorkflowEvent } from "./types";
 const EVENT_TYPES = [
   "run.created", "run.finished", "run.failed", "run.cancelled", "stage.changed",
   "assistant.message", "specification.ready", "review.required", "review.accepted",
-  "review.changes_requested", "components.discovered", "bindings.ready",
-  "openpencil.checkpoint", "openpencil.assembled", "workspace.updated",
-  "workspace.inspecting", "workspace.page_updated", "component.batch_resolved",
-  "layout.checked", "action.required", "design.tool", "run.retrying",
+  "review.changes_requested", "review.recorded", "action.required", "run.retrying",
+  "screen.started", "screen.saved", "screen.finished", "screen.warning", "llm.usage",
 ];
 
 export function openRunStream(runId: string, onEvent: (event: WorkflowEvent) => void) {

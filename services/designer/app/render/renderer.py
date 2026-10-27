@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from playwright.async_api import Browser, Playwright, Route, async_playwright
+from playwright.async_api import Browser, Page, Playwright, Route, async_playwright
 
 from .document import VENDOR_DIR, build_document
 
@@ -95,6 +97,44 @@ class Renderer:
             return
         await route.abort()
 
+    @asynccontextmanager
+    async def page(
+        self,
+        fragment: str,
+        *,
+        width: int,
+        height: int = 900,
+        theme_css: str | None = None,
+        fonts: list[str] | None = None,
+        state: str | None = None,
+        scale: float = 1,
+        axe: bool = False,
+        console: list[str] | None = None,
+    ) -> AsyncIterator[Page]:
+        """A page with the screen loaded, Tailwind compiled, fonts loaded and ``state`` applied."""
+        browser = await self._ensure()
+        extra = {"fonts": fonts} if fonts is not None else {}
+        document = build_document(fragment, vendor_base=VENDOR_BASE, theme_css=theme_css, axe=axe, **extra)
+        context = await browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=scale)
+        try:
+            page = await context.new_page()
+            page.set_default_timeout(self.timeout_ms)
+            if console is not None:
+                page.on("console", lambda m: console.append(f"{m.type}: {m.text}") if m.type in {"error", "warning"} else None)
+                page.on("pageerror", lambda e: console.append(f"pageerror: {e}"))
+            # A real navigation (not set_content/document.write) so scripts load normally and
+            # the CSP applies to a proper origin.
+            await page.route("**/*", lambda route: self._route(route, document))
+            await page.goto(SCREEN_URL, wait_until="load")
+            await page.wait_for_function(READY_JS)
+            if state:
+                await page.evaluate("s => document.documentElement.setAttribute('data-active-state', s)", state)
+            await page.evaluate("() => document.fonts.ready")
+            await page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+            yield page
+        finally:
+            await context.close()
+
     async def render(
         self,
         fragment: str,
@@ -110,28 +150,11 @@ class Renderer:
         axe: bool = True,
         max_height: int = 6000,
     ) -> RenderResult:
-        browser = await self._ensure()
-        extra = {"fonts": fonts} if fonts is not None else {}
-        document = build_document(fragment, vendor_base=VENDOR_BASE, theme_css=theme_css, axe=lint and axe, **extra)
-        context = await browser.new_context(
-            viewport={"width": width, "height": height}, device_scale_factor=scale, java_script_enabled=True
-        )
         console: list[str] = []
-        try:
-            page = await context.new_page()
-            page.set_default_timeout(self.timeout_ms)
-            page.on("console", lambda m: console.append(f"{m.type}: {m.text}") if m.type in {"error", "warning"} else None)
-            page.on("pageerror", lambda e: console.append(f"pageerror: {e}"))
-            # A real navigation (not set_content/document.write) so scripts load normally and
-            # the CSP applies to a proper origin.
-            await page.route("**/*", lambda route: self._route(route, document))
-            await page.goto(SCREEN_URL, wait_until="load")
-            await page.wait_for_function(READY_JS)
-            if state:
-                await page.evaluate("s => document.documentElement.setAttribute('data-active-state', s)", state)
-            await page.evaluate("() => document.fonts.ready")
-            await page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
-
+        async with self.page(
+            fragment, width=width, height=height, theme_css=theme_css, fonts=fonts, state=state, scale=scale,
+            axe=lint and axe, console=console,
+        ) as page:
             result = RenderResult(width=width, height=height, console=console)
             result.states = await page.evaluate("() => window.__designer.states")
             result.css = await page.evaluate(CSS_JS)
@@ -149,5 +172,3 @@ class Renderer:
                 result.image = await page.screenshot(**options)
                 result.mime = f"image/{screenshot}"
             return result
-        finally:
-            await context.close()

@@ -4,10 +4,7 @@ const WORKFLOW_STAGES = new Set<RunStage>([
     "requirement",
     "specification",
     "review_spec",
-    "components",
-    "binding",
     "assembly",
-    "layout_check",
     "review_final",
     "finished",
 ]);

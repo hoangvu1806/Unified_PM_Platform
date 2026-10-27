@@ -2,10 +2,7 @@ export type RunStage =
     | "requirement"
     | "specification"
     | "review_spec"
-    | "components"
-    | "binding"
     | "assembly"
-    | "layout_check"
     | "review_final"
     | "finished"
     | "blocked"
@@ -16,21 +13,13 @@ export interface Session {
     title: string;
     created_at: string;
     updated_at: string;
-    workspace?: SessionWorkspace | null;
+    design_system_id?: string | null;
     // Platform: project and provenance (BA handoff -> source_ref = BA feature id)
     project_id?: string | null;
     created_by?: string | null;
     source?: string | null;
     source_ref?: string | null;
     source_artifact_id?: string | null;
-}
-
-export interface SessionWorkspace {
-    document_id: string;
-    document_path: string;
-    document_name: string;
-    page_id: string;
-    page_name: string;
 }
 
 export interface ParsedAttachment {
@@ -58,106 +47,57 @@ export interface ExactAsset {
     safe_padding_percent?: number;
 }
 
-export interface LayoutRule {
-    mode: "block" | "flex" | "grid" | "absolute";
-    direction: "row" | "column";
-    gap: number;
-    columns?: number;
-    padding: number;
-}
-
-export interface UiNode {
-    id: string;
-    kind: "container" | "component" | "text" | "media" | "icon" | "graphic";
-    name: string;
-    content: Record<string, unknown>;
-    layout?: LayoutRule;
-    requirement?: {
-        role: string;
-        variant_intent?: string;
-        required_slots: string[];
-        capabilities: string[];
-    };
-    children: UiNode[];
-}
-
-export interface LayoutFinding {
-    severity: "info" | "warning" | "error";
-    category: string;
-    node_ids: string[];
-    evidence: string;
-    correction: string;
-}
-
-export interface RunArtifacts {
-    project_specification?: ProjectSpecification;
-    openpencil_capability?: Record<string, unknown>;
-    openpencil_checkpoint?: Record<string, unknown>;
-    cohesion_review?: Record<string, unknown>;
-    media_manifest?: { assets?: Record<string, unknown>[] };
-    knowledge_snapshot?: { libraries?: string[]; strategy?: string };
-    component_candidates: Record<string, unknown>[];
-    component_bindings?: { bindings?: Record<string, unknown>[] };
-    openpencil_artifact?: {
-        document_id: string;
-        page_id: string;
-        page_name: string;
-        output_file: string;
-        root_node_id: string;
-        created_nodes: number;
-        share_url?: string;
-    };
-    layout_review?: {
-        status: "valid" | "advisory" | "invalid";
-        summary: string;
-        findings: LayoutFinding[];
-    };
-    workspace_mutation?: Record<string, unknown>;
-}
-
-export interface UiSpecification {
-    schema_version: "2.0";
-    screen_name: string;
-    platform: "mobile" | "tablet" | "desktop" | "responsive";
-    viewport_width: number;
-    viewport_height: number;
-    summary: string;
-    root: UiNode;
-}
-
-export interface ScreenBrief {
+export interface ScreenSpec {
     id: string;
     name: string;
-    purpose: string;
-    platforms: string[];
+    platform: "mobile" | "tablet" | "desktop";
+    purpose?: string;
+    layout?: string;
+    sections?: string[];
+    states?: string[];
+    data?: string[];
+    navigation?: string[];
     source_ui_ids?: string[];
 }
 
-export interface ProjectSpecification {
-    schema_version: "3.0";
-    brief: {
-        product_name: string;
-        product_description: string;
-        platforms: string[];
-        screens: ScreenBrief[];
-        output_filename: string;
-        style_name?: string;
-        scope_confirmed: boolean;
-    };
-    design_context: {
-        product_summary: string;
-        visual_direction: string;
-        style_manifest: Record<string, unknown>;
-        navigation: string[];
-        shared_patterns: string[];
-        content_tone: string;
-        responsive_strategy: string;
-    };
-    screens: {
-        screen_id: string;
-        platforms: string[];
-        specification: UiSpecification;
-    }[];
+/** UI specification of the HTML designer (schema "html-1"). */
+export interface HtmlSpec {
+    schema_version: "html-1";
+    style_direction?: string;
+    screens: ScreenSpec[];
+}
+
+export interface Screen {
+    id: string;
+    name: string;
+    platform: "mobile" | "tablet" | "desktop" | "responsive";
+    width: number;
+    position: number;
+    version: number;
+    updated_at: string;
+    updated_by?: string | null;
+    run_id?: string | null;
+    html?: string | null;
+}
+
+export interface ScreenVersion {
+    version: number;
+    created_at: string;
+    updated_by?: string | null;
+    note?: string | null;
+}
+
+export interface TokenUsage {
+    calls?: number;
+    prompt_tokens?: number;
+    output_tokens?: number;
+    steps?: { step: string; calls?: number; prompt_tokens?: number; output_tokens?: number }[];
+}
+
+export interface RunArtifacts {
+    token_usage?: TokenUsage;
+    exact_assets?: ExactAsset[];
+    [key: string]: unknown;
 }
 
 export interface Run {
@@ -173,8 +113,7 @@ export interface Run {
     intent?: "chat" | "clarify_design" | "start_design" | "gather" | "design";
     assistant_message?: string;
     library_ids: string[];
-    mcp_profile?: OpenPencilProfile;
-    specification?: UiSpecification;
+    specification?: HtmlSpec | null;
     error?: {
         code: string;
         detail: string;
@@ -256,43 +195,13 @@ export interface WorkflowEvent {
     payload: Record<string, unknown>;
 }
 
-export interface ConnectionSettings {
-    mcpEndpoint: string;
-    sourceFile: string;
-    knowledgeId: "auto" | "shadcn-ui" | "taptap";
-    documentId: string;
-    documentPath: string;
-    documentName: string;
-    pageId: string;
-    pageName: string;
-}
-
-export interface OpenPencilPage {
-    id: string;
-    name: string;
-}
-
-export interface OpenPencilDocument {
-    id: string;
-    name: string;
-    path?: string;
-    active: boolean;
-    current_page_id?: string;
-    current_page_name?: string;
-    pages: OpenPencilPage[];
-}
-
-export interface OpenPencilProfile {
-    endpoint: string;
-    source_file: string;
-    output_file?: string;
-    target_mode: "new_file" | "existing_file";
-    knowledge_id: ConnectionSettings["knowledgeId"];
-}
-
 export interface DesignSystemInfo {
     id: string;
     name: string;
-    path: string;
-    knowledge_id: "auto" | "shadcn-ui" | "taptap";
+    project_id?: string | null;
+    status: "importing" | "ready" | "failed";
+    error?: string | null;
+    source_name?: string | null;
+    created_at?: string | null;
+    summary: { components?: number; tokens?: Record<string, unknown> };
 }

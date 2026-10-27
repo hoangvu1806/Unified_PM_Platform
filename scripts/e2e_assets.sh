@@ -24,8 +24,8 @@ ARTS=$(curl -sf -b "$jar_binh" "$G/api/core/projects/PRJ-AURORA/artifacts")
 STALE=$(echo "$ARTS" | py "import json,sys;a=[x for x in json.load(sys.stdin) if x['id']=='$DESIGN_ID'][0];print(a['stale'],a['derived_version'],a['derived_latest_version'])")
 echo "design stale/derived/latest: $STALE"
 [ "$STALE" = "True 1 2" ] || { echo "FAIL: design should be stale (from BA v1, latest v2)"; exit 1; }
-BYTES=$(curl -sf -b "$jar_binh" "$G/api/core/artifacts/$DESIGN_ID/download")
-[ "$BYTES" = "FIG-E2E-BYTES" ] || { echo "FAIL: design download"; exit 1; }
+MAGIC=$(curl -sf -b "$jar_binh" "$G/api/core/artifacts/$DESIGN_ID/download" | head -c 2)
+[ "$MAGIC" = "PK" ] || { echo "FAIL: design download is not the zip bundle"; exit 1; }
 CODE=$(curl -s -o /dev/null -w '%{http_code}' -b "$jar_chi" "$G/api/core/artifacts/$DESIGN_ID/download")
 [ "$CODE" = "404" ] || { echo "FAIL: non-member download should be 404, got $CODE"; exit 1; }
 CODE=$(curl -s -o /dev/null -w '%{http_code}' -b "$jar_chi" "$G/api/core/projects/PRJ-AURORA/artifacts")

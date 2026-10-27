@@ -1,67 +1,71 @@
 import {
     CheckCircle2,
+    Eye,
     Laptop,
     Moon,
     RefreshCw,
     Sun,
+    Trash2,
+    Upload,
     X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { projectId } from "./platform";
 import { useTheme } from "./theme";
-import type { ConnectionSettings, DesignSystemInfo } from "./types";
+import type { DesignSystemInfo, Session } from "./types";
 
 interface Props {
-    value: ConnectionSettings;
+    session?: Session;
     onClose: () => void;
-    onSave: (value: ConnectionSettings) => void;
-    onLoadComponents: (
-        value: ConnectionSettings,
-    ) => Promise<
-        { component_id: string; name: string; canonical_path: string }[]
-    >;
+    onSessionChange: (session: Session) => void;
 }
 
-export function SettingsDrawer({
-    value,
-    onClose,
-    onSave,
-    onLoadComponents,
-}: Props) {
-    const [draft, setDraft] = useState(value);
-    const [designSystems, setDesignSystems] = useState<DesignSystemInfo[]>([]);
-    const [result, setResult] = useState<{ message: string; ok: boolean }>();
-    const [busy, setBusy] = useState(false);
-    const [customSourceMode, setCustomSourceMode] = useState(false);
+/** Appearance + design systems: choose the one a session renders with, import from a Figma .fig. */
+export function SettingsDrawer({ session, onClose, onSessionChange }: Props) {
     const { theme, setTheme } = useTheme();
-    const selectedSourceId =
-        customSourceMode
-            ? "__custom__"
-            : designSystems.find((system) => system.path === draft.sourceFile)?.id ??
-              (draft.sourceFile ? "__custom__" : "");
+    const [systems, setSystems] = useState<DesignSystemInfo[]>([]);
+    const [file, setFile] = useState<File>();
+    const [name, setName] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [result, setResult] = useState<{ message: string; ok: boolean }>();
 
-    useEffect(() => {
+    const load = useCallback(() => {
         api.listDesignSystems()
-            .then(setDesignSystems)
-            .catch(() => undefined);
+            .then(setSystems)
+            .catch((error) => setResult({ message: (error as Error).message, ok: false }));
     }, []);
 
+    useEffect(load, [load]);
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
-        };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [onClose]);
+        // Imports run in the background: refresh while one is in progress.
+        if (!systems.some((s) => s.status === "importing")) return;
+        const timer = window.setInterval(load, 2500);
+        return () => window.clearInterval(timer);
+    }, [systems, load]);
 
-    const sync = async () => {
-        setBusy(true);
+    const active = session?.design_system_id || "default";
+
+    const choose = async (id: string) => {
+        if (!session) return;
         try {
-            const items = await onLoadComponents(draft);
-            setResult({
-                message: `Synced ${items.length} components.`,
-                ok: true,
-            });
+            onSessionChange(await api.setSessionDesignSystem(session.id, id));
+            setResult({ message: "Đã đổi design system cho session này.", ok: true });
+        } catch (error) {
+            setResult({ message: (error as Error).message, ok: false });
+        }
+    };
+
+    const importFig = async () => {
+        if (!file) return;
+        setBusy(true);
+        setResult(undefined);
+        try {
+            await api.importDesignSystem(file, name.trim() || file.name.replace(/\.fig$/i, ""));
+            setFile(undefined);
+            setName("");
+            setResult({ message: "Đang import… component sẽ xuất hiện khi xong.", ok: true });
+            load();
         } catch (error) {
             setResult({ message: (error as Error).message, ok: false });
         } finally {
@@ -69,17 +73,29 @@ export function SettingsDrawer({
         }
     };
 
+    const remove = async (system: DesignSystemInfo) => {
+        if (!window.confirm(`Xoá design system "${system.name}"?`)) return;
+        try {
+            await api.deleteDesignSystem(system.id);
+            load();
+        } catch (error) {
+            setResult({ message: (error as Error).message, ok: false });
+        }
+    };
+
+    const gallery = (id: string) => {
+        const params = new URLSearchParams({ ds: id });
+        if (projectId) params.set("project", projectId);
+        window.open(`${import.meta.env.BASE_URL}canvas.html?${params}`, `designer-ds-${id}`);
+    };
+
     return (
-        <div
-            className="drawer-backdrop"
-            role="presentation"
-            onMouseDown={onClose}
-        >
+        <div className="drawer-backdrop" role="presentation" onMouseDown={onClose}>
             <aside
                 className="settings-drawer"
                 role="dialog"
                 aria-modal="true"
-                aria-label="Agentic Designer Settings"
+                aria-label="Designer settings"
                 onMouseDown={(event) => event.stopPropagation()}
             >
                 <header>
@@ -87,213 +103,108 @@ export function SettingsDrawer({
                         <span className="eyebrow">Control Plane</span>
                         <h2>Workspace Settings</h2>
                     </div>
-                    <button
-                        className="icon-button"
-                        onClick={onClose}
-                        title="Close settings"
-                        type="button"
-                    >
+                    <button className="icon-button" onClick={onClose} title="Close settings" type="button">
                         <X size={18} />
                     </button>
                 </header>
 
                 <p className="drawer-intro">
-                    Configure visual appearance and read-only component library
-                    sources.
+                    Giao diện của studio và design system mà agent dùng để thiết kế.
                 </p>
 
-                {/* Section: Appearance & Theme */}
                 <section>
                     <h3>Appearance & Theme</h3>
                     <div className="theme-options-grid">
-                        <button
-                            type="button"
-                            className={`theme-option-btn ${theme === "light" ? "active" : ""}`}
-                            onClick={() => setTheme("light")}
-                            title="Light theme"
-                        >
+                        <button type="button" className={`theme-option-btn ${theme === "light" ? "active" : ""}`}
+                            onClick={() => setTheme("light")} title="Light theme">
                             <Sun size={20} />
                             <span>Light</span>
                         </button>
-                        <button
-                            type="button"
-                            className={`theme-option-btn ${theme === "dark" ? "active" : ""}`}
-                            onClick={() => setTheme("dark")}
-                            title="Dark theme"
-                        >
+                        <button type="button" className={`theme-option-btn ${theme === "dark" ? "active" : ""}`}
+                            onClick={() => setTheme("dark")} title="Dark theme">
                             <Moon size={20} />
                             <span>Dark</span>
                         </button>
-                        <button
-                            type="button"
-                            className={`theme-option-btn ${theme === "system" ? "active" : ""}`}
-                            onClick={() => setTheme("system")}
-                            title="Sync with system preference"
-                        >
+                        <button type="button" className={`theme-option-btn ${theme === "system" ? "active" : ""}`}
+                            onClick={() => setTheme("system")} title="Sync with system preference">
                             <Laptop size={20} />
                             <span>System</span>
                         </button>
                     </div>
                 </section>
 
-                {/* Section: Files */}
                 <section>
-                    <h3>Design System & Files</h3>
-                    <label>
-                        OpenPencil MCP endpoint
-                        <input
-                            value={draft.mcpEndpoint}
-                            onChange={(event) =>
-                                setDraft({
-                                    ...draft,
-                                    mcpEndpoint: event.target.value,
-                                })
-                            }
-                            placeholder="http://host.docker.internal:7600/mcp"
-                        />
-                    </label>
-                    <p className="field-note">
-                        For the Docker setup, use 
-                        <code>http://host.docker.internal:7600/mcp</code>.
-                    </p>
-                    <label>
-                        Component Source (.fig)
-                        {designSystems.length > 0 ? (
-                            <select
-                                value={selectedSourceId}
-                                onChange={(event) => {
-                                    const selected = designSystems.find(
-                                        (system) => system.id === event.target.value,
-                                    );
-                                    if (selected) {
-                                        setCustomSourceMode(false);
-                                        setDraft({
-                                            ...draft,
-                                            sourceFile: selected.path,
-                                            knowledgeId: selected.knowledge_id,
-                                        });
-                                    } else if (event.target.value === "__custom__") {
-                                        setCustomSourceMode(true);
-                                        setDraft({ ...draft, sourceFile: "" });
-                                    } else {
-                                        setCustomSourceMode(false);
-                                        setDraft({ ...draft, sourceFile: "" });
-                                    }
-                                }}
-                            >
-                                <option value="">
-                                    -- Select an installed design system --
-                                </option>
-                                {designSystems.map((system) => (
-                                    <option key={system.id} value={system.id}>
-                                        {system.name}
-                                    </option>
-                                ))}
-                                <option value="__custom__">Custom path...</option>
-                            </select>
-                        ) : (
-                            <input
-                                value={draft.sourceFile}
-                                onChange={(event) =>
-                                    setDraft({
-                                        ...draft,
-                                        sourceFile: event.target.value,
-                                    })
-                                }
-                                placeholder="Full path to a .fig file"
-                            />
-                        )}
-                    </label>
-                    {designSystems.length > 0 && selectedSourceId === "__custom__" && (
-                        <label>
-                            Custom component source path
-                            <input
-                                value={draft.sourceFile}
-                                onChange={(event) =>
-                                    setDraft({
-                                        ...draft,
-                                        sourceFile: event.target.value,
-                                    })
-                                }
-                                placeholder="Full path to a .fig file"
-                            />
-                        </label>
-                    )}
-                    <label>
-                        Component Knowledge
-                        <select
-                            value={draft.knowledgeId}
-                            onChange={(event) =>
-                                setDraft({
-                                    ...draft,
-                                    knowledgeId: event.target
-                                        .value as ConnectionSettings["knowledgeId"],
-                                })
-                            }
-                        >
-                            <option value="auto">
-                                Auto detect from source file
-                            </option>
-                            <option value="shadcn-ui">shadcn/ui catalog</option>
-                            <option value="taptap">TapTap catalog</option>
-                        </select>
-                    </label>
-                    <p className="field-note">
-                        The source `.fig` is read directly from disk and is
-                        separate from the working document selected below the
-                        message input.
-                    </p>
-                </section>
-
-                {/* Section: Component Catalog */}
-                <section>
-                    <div
-                        className="section-heading"
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            marginBottom: "12px",
-                        }}
-                    >
-                        <h3 style={{ margin: 0 }}>Component Catalog</h3>
-                        <button
-                            className="secondary-button compact"
-                            onClick={sync}
-                            disabled={busy}
-                            type="button"
-                        >
-                            <RefreshCw
-                                size={13}
-                                className={busy ? "spin" : ""}
-                            />
-                            <span>{busy ? "Syncing..." : "Sync Catalog"}</span>
+                    <div className="section-heading">
+                        <h3>Design system</h3>
+                        <button className="secondary-button compact" type="button" onClick={load} title="Làm mới">
+                            <RefreshCw size={14} />
                         </button>
                     </div>
+                    <p className="field-note">
+                        {session
+                            ? `Session "${session.title}" dùng design system được chọn bên dưới.`
+                            : "Mở một session để chọn design system cho nó."}
+                    </p>
+                    <div className="ds-list">
+                        {systems.map((system) => (
+                            <div key={system.id} className={`ds-item ${active === system.id ? "active" : ""}`}>
+                                <label>
+                                    <input
+                                        type="radio"
+                                        name="design-system"
+                                        checked={active === system.id}
+                                        disabled={!session || system.status !== "ready"}
+                                        onChange={() => void choose(system.id)}
+                                    />
+                                    <span>
+                                        <strong>{system.name}</strong>
+                                        <small>
+                                            {system.status === "importing"
+                                                ? "Đang import…"
+                                                : system.status === "failed"
+                                                  ? `Lỗi: ${system.error ?? ""}`
+                                                  : system.id === "default"
+                                                    ? "Tailwind + token trung tính"
+                                                    : `${system.summary.components ?? 0} component · ${system.source_name ?? ".fig"}`}
+                                        </small>
+                                    </span>
+                                </label>
+                                {system.id !== "default" && system.status === "ready" && (
+                                    <button className="icon-button" type="button" title="Xem component" onClick={() => gallery(system.id)}>
+                                        <Eye size={15} />
+                                    </button>
+                                )}
+                                {system.id !== "default" && (
+                                    <button className="icon-button" type="button" title="Xoá" onClick={() => void remove(system)}>
+                                        <Trash2 size={15} />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    <h3>Import từ Figma (.fig)</h3>
+                    <p className="field-note">
+                        Trong Figma: File → Save local copy. Token màu, chữ, đổ bóng và component sẽ được chuyển sang HTML + Tailwind.
+                    </p>
+                    <label>
+                        File .fig
+                        <input type="file" accept=".fig" onChange={(event) => setFile(event.target.files?.[0])} />
+                    </label>
+                    <label>
+                        Tên
+                        <input value={name} onChange={(event) => setName(event.target.value)}
+                            placeholder={file?.name.replace(/\.fig$/i, "") || "Design system của dự án"} />
+                    </label>
+                    <button className="primary-button" type="button" disabled={!file || busy} onClick={() => void importFig()}>
+                        <Upload size={15} /> {busy ? "Đang tải lên…" : "Import"}
+                    </button>
                     {result && (
-                        <div className={`catalog-result ${result.ok ? "success" : "error"}`}>
-                            {result.ok ? <CheckCircle2 size={14} /> : <X size={14} />}
-                            <span>{result.message}</span>
-                        </div>
+                        <p className={`field-note ${result.ok ? "" : "error"}`}>
+                            {result.ok && <CheckCircle2 size={14} />} {result.message}
+                        </p>
                     )}
                 </section>
-
-                <footer>
-                    <button
-                        className="secondary-button"
-                        onClick={onClose}
-                        type="button"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        className="primary-button"
-                        onClick={() => onSave(draft)}
-                        type="button"
-                    >
-                        Save Settings
-                    </button>
-                </footer>
             </aside>
         </div>
     );

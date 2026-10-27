@@ -76,6 +76,7 @@ def build_document(
 }}
 </style>
 {"".join(scripts)}
+<script src="{vendor_base}lucide.min.js"></script>
 <script defer src="{vendor_base}alpine.min.js"></script>
 <script>{RUNTIME_JS}</script>
 </head>

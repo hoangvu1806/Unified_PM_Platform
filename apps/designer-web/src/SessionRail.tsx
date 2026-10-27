@@ -109,10 +109,10 @@ export function SessionRail(props: Props) {
             <div className="rail-footer">
                 <button
                     onClick={props.onSettings}
-                    title="Open MCP & Connection Settings"
+                    title="Design system & settings"
                 >
                     <Settings2 size={18} />
-                    {!props.collapsed && <span>Settings & MCP</span>}
+                    {!props.collapsed && <span>Design system</span>}
                 </button>
                 <button
                     onClick={props.onToggle}
