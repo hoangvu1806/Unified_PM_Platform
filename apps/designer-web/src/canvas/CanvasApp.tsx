@@ -293,14 +293,31 @@ function noScrollDoc(doc: string): string {
     return doc.includes("</head>") ? doc.replace("</head>", `${tag}</head>`) : tag + doc;
 }
 
-/** One iframe card that activates a specific state after load. */
+/** One iframe card that activates a specific state after load and auto-sizes to content height. */
 function StateFrame({
-    doc, w, h, state, screenName, zoom, onClick,
+    doc, w, h: defaultH, state, screenName, zoom, onClick,
 }: { doc: string; w: number; h: number; state: string; screenName: string; zoom: number; onClick: () => void }) {
     const ref = useRef<HTMLIFrameElement>(null);
+    const [h, setH] = useState(defaultH);
     const baseScale = Math.min(1, 300 / w);
     const scale = baseScale * zoom;
+
+    // Post state after load; runtime.js replies with a "ready" message that includes scrollHeight.
     const handleLoad = () => ref.current?.contentWindow?.postMessage({ type: "designer:state", state }, "*");
+
+    // Listen for the "ready" message from THIS iframe to learn the real content height.
+    useEffect(() => {
+        const onMsg = (e: MessageEvent) => {
+            if (e.source !== ref.current?.contentWindow) return;
+            const d = e.data as { source?: string; type?: string; height?: number };
+            if (d?.source === "designer-screen" && d.type === "ready" && d.height) {
+                setH(Math.max(defaultH, d.height));
+            }
+        };
+        window.addEventListener("message", onMsg);
+        return () => window.removeEventListener("message", onMsg);
+    }, [defaultH]);
+
     return (
         <div className="canvas-multi-frame" onClick={onClick}>
             <div className="canvas-multi-viewport" style={{ width: w * scale, height: h * scale }}>
