@@ -1293,7 +1293,7 @@ function renderSectionList() {
       item.addEventListener('click', () => selectSection(idx));
     }
 
-    const stampHtml = getStatusStamp(state.status);
+    const stampHtml = REGISTER_IDS.has(sec.id) ? getRegisterStamp(sec.id) : getStatusStamp(state.status);
     const failStat = progress && progress.fails
       ? `<span class="stat-fail">${progress.fails}</span>`
       : '';
@@ -1323,6 +1323,23 @@ function renderSectionList() {
     if (sec.group === 1) g1El.appendChild(item);
     else g2El.appendChild(item);
   });
+}
+
+// SEC-07/08 are registers the agent fills while analysing (not steps to work through):
+// their stamp reflects what they hold instead of a workflow status.
+const REGISTER_IDS = new Set(['open_questions', 'assumptions']);
+
+function getRegisterStamp(sectionId) {
+  if (sectionId === 'open_questions') {
+    if (!openQuestions.length) return '<span class="stamp stamp-pending">Chưa có</span>';
+    const open = openQuestions.filter((oq) => (oq.status || 'open') !== 'resolved');
+    if (!open.length) return '<span class="stamp stamp-approved">Đã giải quyết</span>';
+    const critical = open.filter((oq) => oq.severity === 'critical').length;
+    const title = critical ? ` title="${critical} câu critical chặn bước Validate"` : '';
+    return `<span class="stamp stamp-warning"${title}>Còn ${open.length} mở${critical ? ` · ${critical} critical` : ''}</span>`;
+  }
+  if (!assumptions.length) return '<span class="stamp stamp-pending">Chưa có</span>';
+  return `<span class="stamp stamp-draft">${assumptions.length} giả định</span>`;
 }
 
 function getStatusStamp(status) {
