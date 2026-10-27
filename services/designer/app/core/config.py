@@ -5,11 +5,6 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Platform layout flattens Designer/backend into services/designer, so the
-# service root (docs/, data/, logs/) is two levels above this file.
-PROJECT_DIR = Path(__file__).resolve().parents[2]
-
-
 class Settings(BaseSettings):
     # No env_file: the single platform/.env is injected by Compose (env_file)
     # or exported by the Makefile for local runs.
@@ -29,23 +24,11 @@ class Settings(BaseSettings):
     shared_llm_api_key: str = Field("", validation_alias="LLM_API_KEY")
     shared_llm_base_url: str = Field("", validation_alias="LLM_BASE_URL")
 
-    openpencil_mcp_auth_token: str = ""
-    # Default OpenPencil instance; per-designer instances live in the
-    # designer.openpencil_instances table (refactor-plan/06).
-    openpencil_default_mcp_url: str = "http://host.docker.internal:7600/mcp"
-    openpencil_default_editor_url: str = "http://localhost:1420"
     platform_env: str = "dev"
     designer_shared_secret: str = ""
-    mcp_timeout_seconds: int = 150
-    # Local mount of the default OpenPencil data volume (saved .fig files); HTTP is the fallback.
-    openpencil_data_dir: str = ""
-    # One page = a bounded Plan → Act → Inspect → Reflect loop (no endless polishing).
+    # One screen = a bounded write → check → edit loop (no endless polishing).
     designer_page_max_steps: int = Field(45, validation_alias="DESIGNER_PAGE_MAX_STEPS")
     designer_page_timeout_seconds: int = Field(720, validation_alias="DESIGNER_PAGE_TIMEOUT_SECONDS")
-    # The workspace root owns the read-only design-systems folder. Runtime
-    # caches may still live alongside it under ``designer-data``.
-    design_data_dir: Path = PROJECT_DIR.parent
-    openpencil_cli: str = "openpencil"
     unsplash_access_key: str = ""
 
     @model_validator(mode="after")

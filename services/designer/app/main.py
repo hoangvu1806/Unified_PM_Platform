@@ -16,8 +16,6 @@ from .core.errors import AppError
 from .core.llm import AdkProvider
 from .core.prompts import PromptLibrary
 from .models import Problem
-from .openpencil.gateway import OpenPencilGateway
-from .openpencil.knowledge import KnowledgeIndex
 from .storage.store import Store
 from .workflow.service import RunService
 
@@ -46,22 +44,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if interrupted:
         logging.getLogger("designer_agent.runs").warning("Marked %s interrupted run(s) as retryable", interrupted)
     events = EventStream(store)
-    openpencil = OpenPencilGateway(settings)
     llm = AdkProvider(settings)
-    runs = RunService(
-        store,
-        events,
-        llm,
-        PromptLibrary(),
-        openpencil,
-        KnowledgeIndex(),
-    )
+    runs = RunService(store, events, llm, PromptLibrary())
     app.state.settings = settings
     app.state.store = store
     app.state.events = events
     app.state.runs = runs
     app.state.llm = llm
-    app.state.openpencil = openpencil
 
     # Pre-warm LLM connection in background so the first message is fast
     asyncio.create_task(llm.prewarm())

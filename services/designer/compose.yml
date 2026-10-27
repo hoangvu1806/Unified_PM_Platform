@@ -1,5 +1,4 @@
 # Designer module. Run alone with: docker compose -f compose.designer.yml up -d
-# Needs the openpencil:local image: cd ../BA/open-pencil && docker compose up -d
 services:
   designer-api:
     build:
@@ -11,18 +10,10 @@ services:
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
-      DESIGN_DATA_DIR: /data/design-data
-      OPENPENCIL_DATA_DIR: /openpencil-data
     volumes:
       - designer-data:/app/data          # assets until Sprint 2 storage move, logs
-      # The default OpenPencil instance saves .fig files here: read them directly for Assets.
-      - openpencil-data:/openpencil-data:ro
       - platform-storage:/data/storage
       - ../../logs:/logs                    # platform/logs/designer-api/
-      - designer-cache:/data/design-data/cache
-      - ${DESIGNER_HOST_DESIGN_SYSTEMS:-../../../design-systems}:/data/design-data/design-systems:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"   # OpenPencil MCP on the host
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,7 +55,3 @@ services:
 
 volumes:
   designer-data:
-  designer-cache:
-  openpencil-data:
-    external: true
-    name: open-pencil_openpencil-data   # created by ../BA/open-pencil (docker compose up)

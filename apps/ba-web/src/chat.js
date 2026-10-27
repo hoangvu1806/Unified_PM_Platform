@@ -1799,10 +1799,9 @@ async function handleExportAndOpenDesigner() {
   }
   // Platform journey: when embedded, the shell switches to Designer itself (no new tabs).
   const embedded = isEmbedded;
-  // Reserve both tabs during the click gesture; browsers may block a popup
+  // Reserve the tab during the click gesture; browsers may block a popup
   // opened after the async handoff request has started.
   const designerWindow = embedded ? null : window.open('about:blank', 'designer-agent');
-  const openpencilWindow = embedded ? null : window.open('about:blank', 'openpencil-editor');
   try {
     const result = await exportAndOpenDesigner(sessionId);
     featureStatus = 'EXPORTED';
@@ -1818,7 +1817,6 @@ async function handleExportAndOpenDesigner() {
       (result.designer_session_id
         ? `http://127.0.0.1:3232/?session=${encodeURIComponent(result.designer_session_id)}`
         : '');
-    const openpencilUrl = result.openpencil_url || 'http://127.0.0.1:1420/';
     if (embedded) {
       window.parent.postMessage({ type: 'platform:open-designer', session: result.designer_session_id }, window.location.origin);
       return;
@@ -1827,13 +1825,8 @@ async function handleExportAndOpenDesigner() {
       if (designerWindow) designerWindow.location.replace(designerUrl);
       else window.open(designerUrl, 'designer-agent');
     }
-    if (openpencilUrl) {
-      if (openpencilWindow) openpencilWindow.location.replace(openpencilUrl);
-      else window.location.assign(openpencilUrl);
-    }
   } catch (err) {
     if (designerWindow && !designerWindow.closed) designerWindow.close();
-    if (openpencilWindow && !openpencilWindow.closed) openpencilWindow.close();
     const sec = SECTIONS[activeSectionIndex];
     chatHistories[sec.id] = chatHistories[sec.id] || [];
     chatHistories[sec.id].push({

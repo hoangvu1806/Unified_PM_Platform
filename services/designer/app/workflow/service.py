@@ -7,14 +7,19 @@ from ..api.stream import EventStream
 from ..core.errors import AppError
 from ..core.llm import AdkProvider
 from ..core.prompts import PromptLibrary
-from ..models import OpenPencilProfile, ReviewCreate, RunStage, RunStatus
-from ..openpencil.gateway import OpenPencilGateway
-from ..openpencil.knowledge import KnowledgeIndex
+from ..models import ReviewCreate, RunStage, RunStatus
 from ..storage.store import Store
-from .analysis import analyze_request
-from .build import build_after_review
 from .publish import publish_design
-from .review import HumanReviewFlow
+
+# Until the HTML designer lands, accepted runs stop here with a clear, retryable message.
+REBUILDING = AppError(
+    "DESIGNER_REBUILDING",
+    "Designer đang được xây lại",
+    "Designer agent đang chuyển sang thiết kế bằng HTML + Tailwind; run đã được lưu.",
+    503,
+    True,
+    action="Thử lại khi phiên bản mới được triển khai.",
+)
 
 
 class RunService:
@@ -24,17 +29,12 @@ class RunService:
         events: EventStream,
         llm: AdkProvider,
         prompts: PromptLibrary,
-        openpencil: OpenPencilGateway,
-        knowledge: KnowledgeIndex,
     ) -> None:
         self.store = store
         self.events = events
         self.llm = llm
         self.prompts = prompts
-        self.openpencil = openpencil
-        self.knowledge = knowledge
         self.tasks: dict[UUID, asyncio.Task[None]] = {}
-        self.human_review = HumanReviewFlow(self)
 
     def _spawn(
         self, run_id: UUID, operation: Coroutine[Any, Any, None], name: str
@@ -58,27 +58,37 @@ class RunService:
         self._spawn(run_id, self.analyze(run_id, feedback), f"analyze:{run_id}")
 
     async def analyze(self, run_id: UUID, feedback: str = "None") -> None:
-        await analyze_request(self, run_id, feedback)
-
-    async def continue_after_review(self, run_id: UUID) -> None:
-        await build_after_review(self, run_id)
+        run = await self._require_run(run_id)
+        await self._block(run_id, run.revision, REBUILDING)
 
     async def review(self, run_id: UUID, request: ReviewCreate) -> None:
-        await self.human_review.review(run_id, request)
+        run = await self._require_run(run_id)
+        if request.revision != run.revision:
+            raise AppError("REVISION_CONFLICT", "Review is for an older revision", f"Current revision is {run.revision}.", 409)
+        await self.store.add_review(run_id, run.revision, request.checkpoint, request.decision, request.feedback)
+        await self.events.emit(run_id, run.revision, "review.recorded", request.model_dump(mode="json"))
+        self.start(run_id, request.feedback or "None")
 
-    async def recheck_layout(self, run_id: UUID) -> dict[str, Any]:
-        return await self.human_review.recheck_layout(run_id)
-
-    async def sync_canvas(self, run_id: UUID) -> dict[str, Any]:
-        return await self.human_review.sync_live_canvas(run_id)
-
-    async def retry(
-        self, run_id: UUID, profile: OpenPencilProfile | None = None
-    ) -> None:
-        await self.human_review.retry(run_id, profile)
+    async def retry(self, run_id: UUID) -> None:
+        run = await self._require_run(run_id)
+        if run.status not in {RunStatus.BLOCKED, RunStatus.FAILED, RunStatus.CANCELLED}:
+            raise AppError("RUN_NOT_RETRYABLE", "Run is not retryable", f"Run status is {run.status}.", 409)
+        await self.store.update_run(run_id, status=RunStatus.QUEUED, stage=RunStage.REQUIREMENT)
+        self.start(run_id)
 
     async def cancel(self, run_id: UUID) -> None:
-        await self.human_review.cancel(run_id)
+        run = await self._require_run(run_id)
+        task = self.tasks.pop(run_id, None)
+        if task and not task.done():
+            task.cancel()
+        await self.store.update_run(run_id, status=RunStatus.CANCELLED)
+        await self.events.emit(run_id, run.revision, "run.cancelled", {"stage": run.stage.value})
+
+    async def _require_run(self, run_id: UUID):
+        run = await self.store.get_run(run_id)
+        if run is None:
+            raise AppError("RUN_NOT_FOUND", "Run not found", str(run_id), 404)
+        return run
 
     async def delete_session(self, session_id: UUID) -> None:
         session = await self.store.get_session(session_id)

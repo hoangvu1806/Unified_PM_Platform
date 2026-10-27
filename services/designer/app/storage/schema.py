@@ -3,6 +3,8 @@ from psycopg import Connection
 # Postgres port of the original SQLite schema. Column order is kept identical
 # and every INSERT names its columns. JSON payloads stay TEXT (the store
 # json.dumps/loads them), timestamps stay ISO-8601 TEXT.
+# sessions.workspace_* / pending_workspace_action and runs.mcp_profile belong to the
+# OpenPencil designer: no longer written, kept so existing databases need no migration.
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY, title TEXT NOT NULL,
@@ -56,15 +58,6 @@ MIGRATIONS = (
     "ALTER TABLE runs ADD COLUMN IF NOT EXISTS triggered_by TEXT",
     "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS source_artifact_id TEXT",
     "CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)",
-    # Which OpenPencil instance each designer uses (hosted elsewhere, later
-    # one per designer). No row = the default instance from .env.
-    """CREATE TABLE IF NOT EXISTS openpencil_instances (
-      user_id TEXT PRIMARY KEY,
-      mcp_url TEXT NOT NULL,
-      editor_url TEXT NOT NULL,
-      auth_token TEXT,
-      updated_at TEXT NOT NULL
-    )""",
 )
 
 

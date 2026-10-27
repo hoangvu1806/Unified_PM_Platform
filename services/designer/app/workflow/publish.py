@@ -1,13 +1,10 @@
 """Publish designs to the project's Assets.
 
-As soon as a run has drawn its screens and waits for the final review, the
-OpenPencil output file (.fig) is copied to platform storage and registered as a
-``designer_output`` artifact (version = run revision) with ``meta.state =
-"review"``. When the final review is approved (run completed) the same version
-is refreshed with the latest file and ``meta.state = "approved"``. Designs
-started from a BA handoff link to the BA package version they were made from,
-so a newer BA version marks them stale. Failures are logged; they never affect
-the run.
+The UI specification of a run is registered as a ``ui_spec`` artifact (version =
+run revision) as soon as it exists. Designs started from a BA handoff link to the
+BA package version they were made from, so a newer BA version marks them stale.
+The design bundle (``designer_output``: HTML, PNG, .fig) is published by the HTML
+designer once it renders screens. Failures are logged; they never affect the run.
 """
 
 from __future__ import annotations
@@ -18,21 +15,12 @@ import logging
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from ..models import RunStage, RunStatus
+from ..models import RunStatus
 
 if TYPE_CHECKING:
     from .service import RunService
 
 logger = logging.getLogger("designer_agent.publish")
-
-
-def _state(run) -> str | None:
-    if run.status == RunStatus.COMPLETED:
-        # Chat/workspace design turns save the .fig without a final review: a draft.
-        return "draft" if run.intent == "design" else "approved"
-    if run.status == RunStatus.WAITING_REVIEW and run.stage == RunStage.REVIEW_FINAL:
-        return "review"
-    return None
 
 
 def _spec_state(run) -> str:
@@ -94,50 +82,5 @@ async def publish_design(service: "RunService", run_id: UUID) -> None:
         # The UI spec goes to Assets as soon as it exists — no approval needed first.
         if run.specification is not None:
             _publish_spec(session, run, _spec_state(run))
-        state = _state(run)
-        if state is None or not run.mcp_profile:
-            return
-        artifact = await service.store.get_artifact(run.id, run.revision, "openpencil_artifact") or {}
-        path = str(artifact.get("output_file") or "")
-        if not path:
-            return  # chat-only turn, nothing was drawn
-
-        from platform_core import artifacts
-        from platform_core.storage import get_storage, project_key
-
-        existing = artifacts.latest("designer_output", str(run.id))
-        if existing and existing["version"] > run.revision:
-            return
-        raw, media_type = await service.openpencil.download_workspace_file(run.mcp_profile.endpoint, path)
-        digest = hashlib.sha256(raw).hexdigest()
-        filename = path.replace("\\", "/").rsplit("/", 1)[-1] or "design.fig"
-        key = project_key(session.project_id, "designer", "outputs", str(run.id), f"r{run.revision}-{filename}")
-        meta = {"session_id": str(session.id), "file": filename, "output_file": path, "state": state}
-
-        if existing and existing["version"] == run.revision:
-            old_meta = existing.get("meta") or {}
-            if existing.get("content_hash") == digest and old_meta.get("state") == state:
-                return
-            get_storage().put(key, raw, content_type=media_type or "application/octet-stream")
-            artifacts.update(existing["id"], storage_key=key, content_hash=digest, meta=meta)
-            logger.info("Design %s r%s updated (%s) -> %s", run.id, run.revision, state, key)
-            return
-
-        get_storage().put(key, raw, content_type=media_type or "application/octet-stream")
-        _row, created = artifacts.register(
-            project_id=session.project_id,
-            kind="designer_output",
-            source_module="designer",
-            source_ref=str(run.id),
-            version=run.revision,
-            title=f"{session.title} — {run.screen_name}",
-            storage_key=key,
-            content_hash=digest,
-            derived_from_id=session.source_artifact_id,
-            meta=meta,
-            created_by=session.created_by,
-        )
-        if created:
-            logger.info("Published design %s r%s (%s) -> %s", run.id, run.revision, state, key)
     except Exception:  # noqa: BLE001
         logger.exception("Publishing design for run %s failed", run_id)

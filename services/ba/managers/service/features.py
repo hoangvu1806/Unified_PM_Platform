@@ -346,15 +346,14 @@ async def designer_handoff(session_id: str):
         if record and record.response_payload:
             cached = dict(record.response_payload)
             cached["status"] = record.status.lower()
-            # Rebuild browser URLs from current configuration so old handoffs
-            # created with the previous OpenPencil URL are repaired on retry.
+            # Rebuild the browser URL from current configuration so old handoffs stay valid.
+            cached.pop("openpencil_url", None)
             if record.designer_session_id:
                 query = f"project={project_id}&" if project_id else ""
                 cached["designer_url"] = (
                     settings.designer_ui_base_url.rstrip("/")
                     + f"/?{query}session={record.designer_session_id}"
                 )
-                cached["openpencil_url"] = settings.openpencil_ui_base_url.rstrip("/")
             return cached
         if record is None:
             record = DesignerHandoffModel(
@@ -407,7 +406,6 @@ async def designer_handoff(session_id: str):
         "designer_session_id": response.get("session_id"),
         "designer_run_id": response.get("run_id"),
         "designer_url": designer_url,
-        "openpencil_url": settings.openpencil_ui_base_url.rstrip("/"),
     }
     db = _get_db()
     try:

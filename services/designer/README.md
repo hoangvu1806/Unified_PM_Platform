@@ -1,71 +1,33 @@
 # Designer service (designer-api)
 
-Conversation-first UI design agent built with FastAPI, Google ADK and OpenPencil MCP.
-It runs inside the platform (`../../README.md`): UI at `/designer/`, API at
-`/designer/api/v1/` behind the gateway; data in Postgres schema `designer`, files in
-platform storage (S3).
+UI design agent of the platform, being rebuilt: the OpenPencil/JSX pipeline is removed
+and the agent will write each screen as **HTML + Tailwind** (Alpine.js for interaction).
+UI at `/designer/`, API at `/designer/api/v1/` behind the gateway; data in Postgres schema
+`designer`, files in platform storage (S3). Everything runs in this one container.
 
-## How it works
+## Today
+
+- Sessions, runs, events (SSE), reviews, BA handoffs and project access work as before.
+- Accepted runs stop with `DESIGNER_REBUILDING` (retryable) until the new agent lands.
+- `app/figio/`: pure-Python reader/writer for Figma `.fig` files (Kiwi codec, zip container,
+  `FigBuilder`). Reads real Figma exports byte-exactly; files it writes open in Figma.
+
+## Planned
 
 ```text
-message
-  -> root: answer | clarify design | start design
-  -> project analyzer
-  -> screen specification loop
-  -> human scope review
-  -> design-system component retrieval
-  -> one OpenPencil file, one page per screen/platform
-  -> one tool-driven page designer: render, inspect, correct, refine
-  -> final human review
+message / BA handoff
+  -> planner: brief + UiSpec (screens, regions, data)   -> human spec review
+  -> screen builder: write_screen / edit_screen / check_screen / finish_screen
+       check = headless Chromium render + DOM lint + screenshot
+  -> human final review
+  -> Assets: HTML bundle, PNG per screen/state, .fig (DOM -> Figma nodes via figio)
+design systems: imported from a Figma .fig (or file link) -> theme tokens + HTML snippets
 ```
 
-Normal questions are answered without starting the design graph. A design starts only
-after product intent, platforms, screen scope, output filename, and scope confirmation
-are available. Screen count is dynamic; there is no fixed three-screen template.
-
-## Quality model
-
-- Skeleton JSON records a chosen composition, visual anchor and component
-  treatment for every section before semantic component requirements are expanded.
-- Every required control retrieves inspected design-system options. Real component
-  instances and fetched icons are used to build the interface.
-- One ADK tool conversation designs and refines each page. Tool and syntax errors
-  go back to the model with their context; there is no synthetic fallback screen.
-- Mounted design-system instances can be selectively adjusted through the same
-  tool loop, then visually inspected again before completion.
-- `inspect_page` retrieves live JSX, geometry and a current MCP raster. Completion
-  requires that raster and rejects approved content missing from the live JSX;
-  a clean `reflect_page` assessment then completes the page directly.
-- Project creation and workspace editing share the same page designer.
-- The designer inspects JSX, measurements and a screenshot when available, then
-  refines the layout and decoration before completing the page. Completion rejects
-  wrong viewport width, empty component mounts and critical container overflow.
-- Source libraries, output files, checkpoints and human reviews remain separate.
-- Sourced design guidance lives in [design-craft.md](docs/knowledge/design-craft.md).
-
-## Run and test
-
-From `platform/` (everything runs in Docker):
+## Test
 
 ```powershell
-cd ..\..\BA\open-pencil; docker compose up -d     # default OpenPencil instance (editor :1420, MCP :7600)
-cd <platform>; docker compose up -d                # whole platform, http://localhost:8080
 docker compose --profile test run --rm designer-test
+# figio only, on the host:
+.venv\Scripts\python -m pytest -q --noconftest services/designer/tests/test_figio.py
 ```
-
-The editor tab (http://localhost:1420) must be open for MCP write automation. Each
-designer's runs use their OpenPencil instance (`designer.openpencil_instances`) or the
-default one; the endpoint typed in Settings is only used in `PLATFORM_ENV=dev`.
-
-Project files (BA packages, wiki documents, finished designs) are listed in the right
-panel ("Files dự án") and can be dragged into the chat or cited with `@`.
-
-Architecture details are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
-### Model endpoint protocol
-
-For an OpenAI-compatible proxy, use `DESIGNER_LLM_MODEL=openai/<model-name>` and
-`DESIGNER_LLM_BASE_URL=<proxy>/v1`. The prefix selects the wire protocol, not the model vendor.
-Use `gemini/` only for a working Gemini-native endpoint. This project’s proxy
-returned empty Gemini responses (`STOP`, zero tokens) for the page tools; its
-OpenAI-compatible route returned valid tool calls for the same model and prompt.

@@ -91,7 +91,6 @@ async def create_handoff(request: Request, body: DesignerHandoffRequest) -> Desi
             platform=body.platform,
             style_name=body.style_name,
             library_ids=body.library_ids,
-            mcp_profile=body.mcp_profile,
             assets=body.assets,
         ),
     )

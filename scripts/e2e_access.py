@@ -108,10 +108,6 @@ check("ba.an cannot create Designer session", an.call("POST", "/designer/api/v1/
 check("ba.chi cannot read Aurora Designer runs", chi.call("GET", f"/designer/api/v1/sessions/{dsid}/runs")[0], 403)
 check("ba.chi cannot list Aurora Designer sessions", chi.call("GET", f"/designer/api/v1/sessions?project_id={AURORA}")[0], 403)
 check("handoff without agent secret", anon.call("POST", "/designer/api/v1/handoffs", {"correlation_id": "c", "feature_id": "f", "prompt": "abc"})[0], 401)
-_, me_op = binh.call("GET", "/designer/api/v1/openpencil/me")
-check("OpenPencil resolves default instance", int(me_op.get("source") == "default") * 200, 200)
-check("non-admin cannot manage OpenPencil instances", binh.call("GET", f"/designer/api/v1/openpencil-instances?project_id={AURORA}")[0], 403)
-check("admin lists OpenPencil instances", dung.call("GET", f"/designer/api/v1/openpencil-instances?project_id={AURORA}")[0], 200)
 
 # ── Legacy data ──────────────────────────────────────────────────
 _, legacy = dung.call("GET", f"/ba/api/features?project_id={LEGACY}")

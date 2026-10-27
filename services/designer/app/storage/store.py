@@ -10,34 +10,19 @@ from psycopg import Connection, errors
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from ..models import (
-    DesignBrief,
-    OpenPencilProfile,
-    RunCreate,
-    RunStage,
-    RunStatus,
-    RunView,
-    SessionView,
-    SessionWorkspace,
-    UiSpecification,
-    WorkflowEvent,
-    utc_now,
-)
+from pydantic import BaseModel
+
+from ..models import DesignBrief, RunCreate, RunStage, RunStatus, RunView, SessionView, WorkflowEvent, utc_now
 from .schema import initialize_schema
 
 T = TypeVar("T")
 
 
-def output_file_for_run(screen_name: str, run_id: UUID) -> str:
-    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', " ", screen_name)
-    name = re.sub(r"\s+", " ", name).strip(" .")
-    if name.lower().endswith(".fig"):
-        name = name[:-4].rstrip(" .")
-    name = (name[:100].rstrip(" .") or "Untitled") + ".fig"
-    return f"generated/{run_id}/{name}"
-
-
 Row = dict[str, Any]
+
+
+def _json(value: BaseModel | dict[str, Any]) -> str:
+    return value.model_dump_json(by_alias=True) if isinstance(value, BaseModel) else json.dumps(value, ensure_ascii=False)
 
 
 def _param(value: Any) -> Any:
@@ -138,25 +123,6 @@ class Store:
         )
         return (row is not None, row["project_id"] if row else None)
 
-    async def get_openpencil_instance(self, user_id: str) -> Row | None:
-        return await self._fetchone("SELECT * FROM openpencil_instances WHERE user_id = ?", (user_id,))
-
-    async def list_openpencil_instances(self) -> list[Row]:
-        return await self._fetchall("SELECT * FROM openpencil_instances ORDER BY user_id")
-
-    async def upsert_openpencil_instance(
-        self, user_id: str, mcp_url: str, editor_url: str, auth_token: str | None
-    ) -> None:
-        await self._execute(
-            "INSERT INTO openpencil_instances (user_id, mcp_url, editor_url, auth_token, updated_at) "
-            "VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET mcp_url=excluded.mcp_url, "
-            "editor_url=excluded.editor_url, auth_token=excluded.auth_token, updated_at=excluded.updated_at",
-            (user_id, mcp_url, editor_url, auth_token, utc_now().isoformat()),
-        )
-
-    async def delete_openpencil_instance(self, user_id: str) -> None:
-        await self._execute("DELETE FROM openpencil_instances WHERE user_id = ?", (user_id,))
-
     async def get_session(self, session_id: UUID) -> SessionView | None:
         row = await self._fetchone("SELECT * FROM sessions WHERE id = ?", (str(session_id),))
         return self._session_from_row(row) if row else None
@@ -182,86 +148,11 @@ class Store:
             (brief.model_dump_json(), utc_now().isoformat(), str(session_id)),
         )
 
-    async def update_session_workspace(
-        self, session_id: UUID, workspace: SessionWorkspace
-    ) -> SessionView:
-        await self._execute(
-            "UPDATE sessions SET workspace_document_id=?, workspace_document_path=?, "
-            "workspace_document_name=?, workspace_page_id=?, workspace_page_name=?, "
-            "updated_at=? WHERE id=?",
-            (
-                workspace.document_id or None,
-                workspace.document_path or None,
-                workspace.document_name or None,
-                workspace.page_id or None,
-                workspace.page_name or None,
-                utc_now().isoformat(),
-                str(session_id),
-            ),
-        )
-        session = await self.get_session(session_id)
-        if session is None:
-            raise LookupError(str(session_id))
-        return session
-
-    async def set_pending_workspace_action(
-        self, session_id: UUID, decision: Any | None
-    ) -> None:
-        value = decision.model_dump_json() if decision is not None else None
-        await self._execute(
-            "UPDATE sessions SET pending_workspace_action=?, updated_at=? WHERE id=?",
-            (value, utc_now().isoformat(), str(session_id)),
-        )
-
-    async def update_session_screen_registry(
-        self, session_id: UUID, entries: dict[str, Any]
-    ) -> None:
-        session = await self.get_session(session_id)
-        registry = {
-            key: value.model_dump(mode="json")
-            for key, value in (session.screen_registry if session else {}).items()
-        }
-        for key, value in entries.items():
-            registry[str(key)] = (
-                value.model_dump(mode="json")
-                if hasattr(value, "model_dump")
-                else value
-            )
-        await self._execute(
-            "UPDATE sessions SET workspace_screen_registry=?, updated_at=? WHERE id=?",
-            (
-                json.dumps(registry, ensure_ascii=False),
-                utc_now().isoformat(),
-                str(session_id),
-            ),
-        )
-
     async def create_run(
         self, session_id: UUID, request: RunCreate, *, triggered_by: str | None = None
     ) -> RunView:
         now = utc_now()
         run_id = uuid4()
-        profile = request.mcp_profile
-        if profile:
-            session = await self.get_session(session_id)
-            workspace_path = (
-                session.workspace.document_path
-                if session and session.workspace
-                else ""
-            )
-            if profile.target_mode == "existing_file" and profile.output_file:
-                pass
-            elif workspace_path:
-                profile = profile.model_copy(
-                    update={"output_file": workspace_path, "target_mode": "existing_file"}
-                )
-            else:
-                profile = profile.model_copy(
-                    update={
-                        "output_file": output_file_for_run(request.screen_name, run_id),
-                        "target_mode": "new_file",
-                    }
-                )
         run = RunView(
             id=run_id,
             session_id=session_id,
@@ -273,7 +164,6 @@ class Store:
             stage=RunStage.REQUIREMENT,
             status=RunStatus.QUEUED,
             library_ids=request.library_ids,
-            mcp_profile=profile,
             created_at=now,
             updated_at=now,
         )
@@ -292,7 +182,7 @@ class Store:
                 run.stage,
                 run.status,
                 json.dumps(run.library_ids),
-                profile.model_dump_json() if profile else None,
+                None,
                 None,
                 None,
                 None,
@@ -335,7 +225,7 @@ class Store:
                     "title": "The run was interrupted by a service restart",
                     "detail": f"It stopped during {row['stage']}.",
                     "retryable": True,
-                    "action": "Retry to continue from the saved canvas.",
+                    "action": "Retry the run.",
                     "stage": row["stage"],
                 },
             )
@@ -347,7 +237,7 @@ class Store:
         *,
         stage: RunStage | None = None,
         status: RunStatus | None = None,
-        specification: UiSpecification | None = None,
+        specification: BaseModel | dict[str, Any] | None = None,
         error: dict[str, Any] | None = None,
         intent: str | None = None,
         assistant_message: str | None = None,
@@ -364,7 +254,7 @@ class Store:
             (
                 stage,
                 status,
-                specification.model_dump_json(by_alias=True) if specification else None,
+                _json(specification) if specification is not None else None,
                 json.dumps(error) if error else None,
                 intent,
                 assistant_message,
@@ -384,42 +274,6 @@ class Store:
         await self._execute(
             "UPDATE runs SET revision=revision+1, stage=?, status=?, error=NULL, updated_at=? WHERE id=?",
             (RunStage.SPECIFICATION, RunStatus.QUEUED, utc_now().isoformat(), str(run_id)),
-        )
-        run = await self.get_run(run_id)
-        if run is None:
-            raise LookupError(str(run_id))
-        return run
-
-    async def update_mcp_profile(
-        self,
-        run_id: UUID,
-        profile: OpenPencilProfile,
-    ) -> RunView:
-        run = await self.get_run(run_id)
-        if run is None:
-            raise LookupError(str(run_id))
-        brief = await self.get_design_brief(run.session_id)
-        output_name = brief.output_filename or run.screen_name
-        session = await self.get_session(run.session_id)
-        workspace_path = (
-            session.workspace.document_path if session and session.workspace else ""
-        )
-        if profile.target_mode == "existing_file" and profile.output_file:
-            pass
-        elif workspace_path:
-            profile = profile.model_copy(
-                update={"output_file": workspace_path, "target_mode": "existing_file"}
-            )
-        else:
-            profile = profile.model_copy(
-                update={
-                    "output_file": output_file_for_run(output_name, run.id),
-                    "target_mode": "new_file",
-                }
-            )
-        await self._execute(
-            "UPDATE runs SET mcp_profile=?, updated_at=? WHERE id=?",
-            (profile.model_dump_json(), utc_now().isoformat(), str(run_id)),
         )
         run = await self.get_run(run_id)
         if run is None:
@@ -537,13 +391,6 @@ class Store:
     def _run_from_row(self, row: Row) -> RunView:
         value = dict(row)
         value["library_ids"] = json.loads(value["library_ids"])
-        profile = json.loads(value["mcp_profile"]) if value["mcp_profile"] else None
-        # Older runs could be persisted before a component source was selected.
-        # Treat that incomplete profile as absent so historical runs remain
-        # readable and can be retried after the current settings are configured.
-        if isinstance(profile, dict) and not str(profile.get("source_file") or "").strip():
-            profile = None
-        value["mcp_profile"] = profile
         value["specification"] = json.loads(value["specification"]) if value["specification"] else None
         value["error"] = json.loads(value["error"]) if value["error"] else None
         return RunView.model_validate(value)
@@ -551,31 +398,7 @@ class Store:
     @staticmethod
     def _session_from_row(row: Row) -> SessionView:
         value = dict(row)
-        value["design_brief"] = (
-            json.loads(value["design_brief"]) if value.get("design_brief") else None
-        )
-        value["pending_workspace_action"] = (
-            json.loads(value["pending_workspace_action"])
-            if value.get("pending_workspace_action")
-            else None
-        )
-        value["screen_registry"] = (
-            json.loads(value["workspace_screen_registry"])
-            if value.get("workspace_screen_registry")
-            else {}
-        )
-        document_id = str(value.get("workspace_document_id") or "")
-        value["workspace"] = (
-            {
-                "document_id": document_id,
-                "document_path": str(value.get("workspace_document_path") or ""),
-                "document_name": str(value.get("workspace_document_name") or ""),
-                "page_id": str(value.get("workspace_page_id") or ""),
-                "page_name": str(value.get("workspace_page_name") or ""),
-            }
-            if document_id
-            else None
-        )
+        value["design_brief"] = json.loads(value["design_brief"]) if value.get("design_brief") else None
         return SessionView.model_validate(value)
 
     @staticmethod

@@ -9,43 +9,19 @@ from pathlib import Path
 from typing import Any, Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Header, Query, Request, Response, status
+from fastapi import APIRouter, Header, Query, Request, status
 from platform_core.fastapi import auth_disabled, require_project
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 from ..attachments.parser import parse_bpmn_document, parse_json_document, parse_text_document
-from ..core.config import designer_asset_dir, save_designer_asset
+from ..core.config import save_designer_asset
 from ..core.errors import AppError, not_found
 from ..core.llm import STRUCTURED_PARSER_VERSION
-from ..models import (
-    DesignSystemView,
-    OpenPencilDocumentView,
-    OpenPencilProfile,
-    Platform,
-    ReviewCreate,
-    RunArtifacts,
-    RunCreate,
-    RunRetry,
-    RunView,
-    SessionCreate,
-    SessionView,
-    SessionWorkspaceUpdate,
-    ExactAsset,
-)
-from ..openpencil.client import OpenPencilCapability
-from ..openpencil.instances import resolve_endpoint, resolve_instance
-from .access import DESIGNER_ROLE, current_user_id, current_username, require_platform_admin
+from ..models import ExactAsset, Platform, ReviewCreate, RunCreate, RunView, SessionCreate, SessionView
+from .access import DESIGNER_ROLE, current_user_id, current_username
 
 router = APIRouter(prefix="/api/v1")
-
-
-class McpProbeRequest(BaseModel):
-    endpoint: HttpUrl
-
-
-class NamedMcpRequest(McpProbeRequest):
-    name: str = Field(min_length=1, max_length=120)
 
 
 class MessageCreate(BaseModel):
@@ -54,7 +30,6 @@ class MessageCreate(BaseModel):
     platform_hint: Platform = "responsive"
     style_hint: str | None = None
     library_ids: list[str] = Field(default_factory=list)
-    mcp_profile: OpenPencilProfile | None = None
     assets: list[ExactAsset] = Field(default_factory=list, max_length=4)
 
 
@@ -89,11 +64,6 @@ class ImageAttachmentAnalysis(BaseModel):
 IMAGE_SUFFIXES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml"}
 TEXT_SUFFIXES = {".txt", ".md", ".csv", ".yaml", ".yml"}
 MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
-
-def _asset_path(asset_id: str) -> Path:
-    # Uploaded bytes live in the shared platform storage volume.
-    return designer_asset_dir() / asset_id
-
 
 def _standard_asset_id(name: str, suffix: str) -> str:
     stem = unicodedata.normalize("NFKD", Path(name).stem)
@@ -291,22 +261,6 @@ async def list_sessions(
     return await request.app.state.store.list_sessions(pid)
 
 
-async def _resolved_profile(request: Request, profile: OpenPencilProfile | None) -> OpenPencilProfile | None:
-    """Platform: point the run at the caller's OpenPencil instance."""
-    if profile is None:
-        return None
-    endpoint = await resolve_endpoint(
-        request.app.state.store, request.app.state.settings, current_user_id(), profile.endpoint
-    )
-    return profile.model_copy(update={"endpoint": endpoint})
-
-
-async def _resolved_url(request: Request, requested: str) -> str:
-    return await resolve_endpoint(
-        request.app.state.store, request.app.state.settings, current_user_id(), requested
-    )
-
-
 @router.delete("/sessions/{session_id}")
 async def delete_session(request: Request, session_id: UUID) -> dict[str, str]:
     await request.app.state.runs.delete_session(session_id)
@@ -318,15 +272,6 @@ async def list_runs(request: Request, session_id: UUID) -> list[RunView]:
     if not await request.app.state.store.get_session(session_id):
         raise not_found("Session")
     return await request.app.state.store.list_runs(session_id)
-
-
-@router.put("/sessions/{session_id}/workspace", response_model=SessionView)
-async def update_session_workspace(
-    request: Request, session_id: UUID, body: SessionWorkspaceUpdate
-) -> SessionView:
-    if not await request.app.state.store.get_session(session_id):
-        raise not_found("Session")
-    return await request.app.state.store.update_session_workspace(session_id, body)
 
 
 @router.post(
@@ -347,7 +292,6 @@ async def create_message(
             platform=body.platform_hint,
             style_name=body.style_hint,
             library_ids=body.library_ids,
-            mcp_profile=await _resolved_profile(request, body.mcp_profile),
             assets=body.assets,
         ),
         triggered_by=current_user_id(),
@@ -370,7 +314,6 @@ async def create_message(
 async def create_run(request: Request, session_id: UUID, body: RunCreate) -> RunView:
     if not await request.app.state.store.get_session(session_id):
         raise not_found("Session")
-    body = body.model_copy(update={"mcp_profile": await _resolved_profile(request, body.mcp_profile)})
     run = await request.app.state.store.create_run(session_id, body, triggered_by=current_user_id())
     await request.app.state.events.emit(
         run.id,
@@ -390,58 +333,12 @@ async def get_run(request: Request, run_id: UUID) -> RunView:
     return run
 
 
-@router.get("/runs/{run_id}/artifacts", response_model=RunArtifacts)
-async def get_run_artifacts(request: Request, run_id: UUID) -> RunArtifacts:
+@router.get("/runs/{run_id}/artifacts")
+async def get_run_artifacts(request: Request, run_id: UUID) -> dict[str, Any]:
     run = await request.app.state.store.get_run(run_id)
     if run is None:
         raise not_found("Run")
-    values = await request.app.state.store.list_artifacts(run.id, run.revision)
-    return RunArtifacts.model_validate(values)
-
-
-@router.get("/runs/{run_id}/preview")
-async def get_run_preview(
-    request: Request,
-    run_id: UUID,
-    mode: str = "desktop",
-    screen: str | None = None,
-) -> Response:
-    previews_dir = Path(__file__).resolve().parent.parent / "data" / "previews"
-    if screen:
-        clean_screen = "".join(
-            character for character in screen if character.isalnum() or character in "_-"
-        )
-        for target in previews_dir.glob(f"{run_id}_{clean_screen}.*"):
-            ext = target.suffix.lower().lstrip(".")
-            media_type = "image/svg+xml" if ext == "svg" else f"image/{ext}"
-            return Response(content=target.read_bytes(), media_type=media_type)
-    clean_mode = "mobile" if mode == "mobile" else "desktop"
-
-    for ext, media_type in [
-        ("jpg", "image/jpeg"),
-        ("png", "image/png"),
-        ("svg", "image/svg+xml"),
-    ]:
-        target = previews_dir / f"{run_id}_{clean_mode}.{ext}"
-        if target.is_file():
-            return Response(
-                content=target.read_bytes(),
-                media_type=media_type,
-                headers={"Cache-Control": "public, max-age=3600"},
-            )
-
-    candidates = list(previews_dir.glob(f"{run_id}*.*"))
-    if candidates:
-        target_file = candidates[0]
-        ext = target_file.suffix.lower().lstrip(".")
-        media_type = "image/svg+xml" if ext == "svg" else f"image/{ext}"
-        return Response(
-            content=target_file.read_bytes(),
-            media_type=media_type,
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
-
-    raise not_found("Preview image")
+    return await request.app.state.store.list_artifacts(run.id, run.revision)
 
 
 @router.get("/runs/{run_id}/events")
@@ -462,82 +359,13 @@ async def stream_events(
 
 @router.post("/runs/{run_id}/reviews", status_code=status.HTTP_202_ACCEPTED)
 async def review_run(request: Request, run_id: UUID, body: ReviewCreate) -> dict[str, str]:
-    body = body.model_copy(update={"mcp_profile": await _resolved_profile(request, body.mcp_profile)})
     await request.app.state.runs.review(run_id, body)
     return {"status": "accepted"}
 
 
-@router.post("/runs/{run_id}/layout/recheck")
-async def recheck_layout(request: Request, run_id: UUID) -> dict[str, Any]:
-    layout = await request.app.state.runs.recheck_layout(run_id)
-    return {"status": "rechecked", "layout_review": layout}
-
-
-@router.post("/runs/{run_id}/canvas/sync")
-async def sync_canvas(request: Request, run_id: UUID) -> dict[str, Any]:
-    sync = await request.app.state.runs.sync_canvas(run_id)
-    return {"status": "synced", "canvas_sync": sync}
-
-
-@router.get("/runs/{run_id}/download")
-async def download_run_file(request: Request, run_id: UUID) -> Response:
-    run = await request.app.state.store.get_run(run_id)
-    if run is None:
-        raise not_found("Run")
-    if not run.mcp_profile:
-        raise AppError(
-            "MCP_CONTEXT_REQUIRED",
-            "OpenPencil context is required",
-            "Configure OpenPencil before downloading.",
-            409,
-        )
-    layout = await request.app.state.runs.recheck_layout(run_id)
-    if layout.get("status") != "valid":
-        raise AppError(
-            "EXPORT_PREFLIGHT_FAILED",
-            "Export is blocked by layout findings",
-            layout.get("summary", "Fix the layout findings before downloading."),
-            409,
-            action="Request changes or edit the live OpenPencil canvas, then recheck.",
-        )
-    await request.app.state.store.set_artifact(
-        run.id,
-        run.revision,
-        "export_preflight",
-        {"status": "passed", "source": "live_openpencil", "layout_status": layout.get("status")},
-    )
-    artifact = await request.app.state.store.get_artifact(run.id, run.revision, "openpencil_artifact") or {}
-    path = str(artifact.get("output_file") or run.mcp_profile.output_file or "")
-    if not path:
-        raise AppError(
-            "OUTPUT_FILE_MISSING",
-            "Output file is missing",
-            "Build the design before downloading.",
-            409,
-        )
-    raw, media_type = await request.app.state.openpencil.download_workspace_file(
-        run.mcp_profile.endpoint,
-        path,
-    )
-    filename = path.replace("\\", "/").rsplit("/", 1)[-1] or "design.fig"
-    return Response(
-        content=raw,
-        media_type=media_type or "application/octet-stream",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Cache-Control": "no-store",
-        },
-    )
-
-
 @router.post("/runs/{run_id}/retry", status_code=status.HTTP_202_ACCEPTED)
-async def retry_run(
-    request: Request,
-    run_id: UUID,
-    body: RunRetry | None = None,
-) -> dict[str, str]:
-    profile = await _resolved_profile(request, body.mcp_profile) if body else None
-    await request.app.state.runs.retry(run_id, profile)
+async def retry_run(request: Request, run_id: UUID) -> dict[str, str]:
+    await request.app.state.runs.retry(run_id)
     return {"status": "accepted"}
 
 
@@ -545,142 +373,3 @@ async def retry_run(
 async def cancel_run(request: Request, run_id: UUID) -> dict[str, str]:
     await request.app.state.runs.cancel(run_id)
     return {"status": "accepted"}
-
-
-@router.post("/integrations/openpencil/probe", response_model=OpenPencilCapability)
-async def probe_mcp(request: Request, body: McpProbeRequest) -> OpenPencilCapability:
-    return await request.app.state.openpencil.probe(await _resolved_url(request, str(body.endpoint)))
-
-
-@router.post(
-    "/integrations/openpencil/documents",
-    response_model=list[OpenPencilDocumentView],
-)
-async def openpencil_documents(
-    request: Request, body: McpProbeRequest
-) -> list[OpenPencilDocumentView]:
-    return await request.app.state.openpencil.documents(await _resolved_url(request, str(body.endpoint)))
-
-
-@router.post(
-    "/integrations/openpencil/documents/create",
-    response_model=OpenPencilDocumentView,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_openpencil_document(
-    request: Request, body: NamedMcpRequest
-) -> OpenPencilDocumentView:
-    return await request.app.state.openpencil.create_document(
-        await _resolved_url(request, str(body.endpoint)), body.name
-    )
-
-
-@router.post(
-    "/integrations/openpencil/documents/{document_id}/pages",
-    response_model=OpenPencilDocumentView,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_openpencil_page(
-    request: Request, document_id: str, body: NamedMcpRequest
-) -> OpenPencilDocumentView:
-    return await request.app.state.openpencil.create_page(
-        await _resolved_url(request, str(body.endpoint)), document_id, body.name
-    )
-
-
-@router.post("/integrations/openpencil/components")
-async def openpencil_components(
-    request: Request,
-    profile: OpenPencilProfile,
-) -> list[dict[str, object]]:
-    profile = await _resolved_profile(request, profile)
-    components = await request.app.state.openpencil.components(profile)
-    return [component.model_dump(mode="json") for component in components]
-
-
-@router.get("/design-systems", response_model=list[DesignSystemView])
-async def list_design_systems(request: Request) -> list[DesignSystemView]:
-    settings = request.app.state.settings
-    folder = settings.design_data_dir / "design-systems"
-    results: list[DesignSystemView] = []
-    if not folder.is_dir():
-        return results
-
-    for fig in sorted(folder.glob("*.fig")):
-        stem = fig.stem.lower()
-        if "taptap" in stem or "tap tap" in stem:
-            sys_id = "taptap"
-            name = "TapTap Design System"
-            knowledge_id = "taptap"
-        elif "shadcn" in stem:
-            sys_id = "shadcn-ui"
-            name = "shadcn/ui Design System"
-            knowledge_id = "shadcn-ui"
-        elif "material 3" in stem or "material-3" in stem or "material_3" in stem:
-            sys_id = "material-3"
-            name = "Material 3 (Google)"
-            knowledge_id = "auto"
-        elif "material" in stem:
-            sys_id = "material-ui"
-            name = "Material UI (MUI)"
-            knowledge_id = "auto"
-        elif "v0.3" in stem or "v0" in stem:
-            sys_id = "design-system-v0.3"
-            name = "Design System v0.3"
-            knowledge_id = "auto"
-        else:
-            slug = re.sub(r"[^a-z0-9]+", "-", stem).strip("-") or "custom"
-            sys_id = f"custom-{slug}"
-            name = fig.stem
-            knowledge_id = "auto"
-
-        results.append(
-            DesignSystemView(
-                id=sys_id,
-                name=name,
-                path=str(fig.resolve()),
-                knowledge_id=knowledge_id,
-            )
-        )
-    return results
-
-
-# ── Platform: OpenPencil instance per designer (refactor-plan/06) ──────────
-
-
-class OpenPencilInstanceIn(BaseModel):
-    mcp_url: HttpUrl
-    editor_url: HttpUrl
-    auth_token: str | None = Field(default=None, max_length=400)
-
-
-@router.get("/openpencil/me")
-async def my_openpencil(request: Request) -> dict[str, str]:
-    """The OpenPencil instance the current user's runs use."""
-    instance = await resolve_instance(request.app.state.store, request.app.state.settings, current_user_id())
-    return {"mcp_url": instance.mcp_url, "editor_url": instance.editor_url, "source": instance.source}
-
-
-@router.get("/openpencil-instances")
-async def list_openpencil_instances(request: Request, project_id: str = Query(...)) -> list[dict[str, Any]]:
-    require_platform_admin(project_id)
-    rows = await request.app.state.store.list_openpencil_instances()
-    return [{k: v for k, v in row.items() if k != "auth_token"} for row in rows]
-
-
-@router.put("/openpencil-instances/{user_id}")
-async def put_openpencil_instance(
-    request: Request, user_id: str, body: OpenPencilInstanceIn, project_id: str = Query(...)
-) -> dict[str, str]:
-    require_platform_admin(project_id)
-    await request.app.state.store.upsert_openpencil_instance(
-        user_id, str(body.mcp_url), str(body.editor_url), body.auth_token
-    )
-    return {"status": "saved", "user_id": user_id}
-
-
-@router.delete("/openpencil-instances/{user_id}")
-async def delete_openpencil_instance(request: Request, user_id: str, project_id: str = Query(...)) -> dict[str, str]:
-    require_platform_admin(project_id)
-    await request.app.state.store.delete_openpencil_instance(user_id)
-    return {"status": "deleted", "user_id": user_id}

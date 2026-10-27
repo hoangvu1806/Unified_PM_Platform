@@ -6,7 +6,7 @@ Keys look like ``projects/<project_id>/designer/assets/<name>`` or
 * ``LocalStorage`` keeps files under ``STORAGE_LOCAL_ROOT``.
 * ``S3Storage`` is the source of truth in S3 and keeps a write-through cache
   under ``STORAGE_LOCAL_ROOT``: services that read files by path (PDF
-  extraction, OpenPencil media) call :meth:`local_path`, which downloads the
+  extraction, design assets) call :meth:`local_path`, which downloads the
   object when the cache misses.
 """
 

@@ -128,11 +128,6 @@ class Settings(BaseSettings):
         default="http://localhost:8080",
         description="Gateway origin the browser uses for every platform UI",
     )
-    openpencil_ui_base_url: str = Field(
-        validation_alias=AliasChoices("OPENPENCIL_DEFAULT_EDITOR_URL", "OPENPENCIL_UI_BASE_URL"),
-        default="http://127.0.0.1:1420",
-        description="Browser URL used to open the OpenPencil canvas",
-    )
     designer_timeout_seconds: float = Field(default=30.0, ge=1, le=300)
     designer_shared_secret: str = Field(default="")
 

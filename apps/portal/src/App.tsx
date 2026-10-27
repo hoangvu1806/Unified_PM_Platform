@@ -353,7 +353,7 @@ function KeyIcon() {
 
 const LOGIN_POINTS: { icon: ReactNode; title: string; text: string }[] = [
   { icon: <MessagesSquare size={17} />, title: "Phân tích với BA agent", text: "Mục tiêu, quy tắc, quy trình, use case — kiểm tra và bàn giao BA package." },
-  { icon: <PenTool size={17} />, title: "Thiết kế với Designer agent", text: "Từ BA package ra màn hình trên OpenPencil, duyệt spec và bản cuối." },
+  { icon: <PenTool size={17} />, title: "Thiết kế với Designer agent", text: "Từ BA package ra màn hình HTML tương tác, duyệt spec và bản cuối, xuất Figma/PNG." },
   { icon: <Boxes size={17} />, title: "Một nơi cho mọi tài sản", text: "Wiki, BA package, BPMN, UI spec và file thiết kế có phiên bản." },
 ];
 
@@ -768,7 +768,7 @@ function FeaturesTab({ project, onOpenFeature }: { project: ProjectDetail; onOpe
             <span className="module-icon designer"><PenTool size={18} /></span>
             <div>
               <strong>Designer agent</strong>
-              <span className="muted small">Thiết kế màn hình trên OpenPencil từ BA package</span>
+              <span className="muted small">Thiết kế màn hình tương tác từ BA package</span>
             </div>
             <span className={`state-pill ${handedOff ? "ok" : "wait"}`}>
               {features === null ? "…" : handedOff ? `${handedOff} package sẵn sàng` : <><Lock size={11} /> Chờ BA</>}
@@ -1167,7 +1167,7 @@ function GuideDialog({
         </div>
         <p>
           Bạn sẽ chuyển sang vai <strong>Designer</strong>. Designer agent đọc BA package, đề xuất danh sách màn hình;
-          bạn chốt phạm vi, duyệt spec, rồi agent dựng màn hình trên OpenPencil.
+          bạn chốt phạm vi, duyệt spec, rồi agent dựng màn hình tương tác ngay trên trang.
         </p>
         <p className="muted small">Các bước BA vẫn xem được trên thanh hành trình. Nếu BA thay đổi, thiết kế sẽ được đánh dấu "cần xem lại".</p>
         <div className="dialog-actions">

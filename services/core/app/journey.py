@@ -108,7 +108,7 @@ def build_journey(conn, project_id: str, feature_id: str) -> dict[str, Any] | No
     scope = _step("design_scope", "Phạm vi thiết kế", "DESIGNER", "Designer agent đề xuất màn hình, bạn chốt phạm vi và duyệt spec.")
     # "finished" alone is not progress: the scope-proposal run after a handoff also ends "finished".
     scope["status"] = "done" if ("specification", "approved") in reviews or stages & (DESIGN_PAST_SPEC - {"finished"}) else "todo"
-    build = _step("design_build", "Dựng màn hình", "DESIGNER", "Agent dựng màn hình trên OpenPencil (editor phải đang mở).")
+    build = _step("design_build", "Dựng màn hình", "DESIGNER", "Agent dựng từng màn hình bằng HTML + Tailwind, xem trực tiếp trên trang.")
     reviewed_final = any(cp == "final" for cp, _d in reviews)
     build["status"] = "done" if ("review_final" in stages or reviewed_final or design) else "todo"
     final = _step("design_review", "Duyệt thiết kế", "DESIGNER", "Duyệt bản cuối; thiết kế được lưu vào Assets.")

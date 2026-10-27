@@ -52,15 +52,6 @@ def current_username() -> str | None:
     return None if auth_disabled() else get_current_user().username
 
 
-def require_platform_admin(project_id: str | None) -> None:
-    """Managing OpenPencil instances needs ADMIN in the acting project."""
-    if auth_disabled():
-        return
-    roles = require_project(project_id)
-    if "ADMIN" not in roles:
-        raise HTTPException(403, detail={"code": "ADMIN_REQUIRED", "message": "Project ADMIN role required"})
-
-
 async def handoff_secret(request: Request) -> None:
     """Service-to-service: BA presents X-Agent-Secret when one is configured."""
     expected = request.app.state.settings.designer_shared_secret
