@@ -16,8 +16,9 @@ from ..figio.writer import FigBuilder, drop_shadow, solid
 EXTRACT_JS = (Path(__file__).resolve().parent / "extract.js").read_text(encoding="utf-8")
 SHOT_SCALE = 2
 GAP = 160
-WEIGHT_STYLE = {100: "Thin", 200: "ExtraLight", 300: "Light", 400: "Regular", 500: "Medium", 600: "SemiBold",
-                700: "Bold", 800: "ExtraBold", 900: "Black"}
+# Figma's style names (with spaces): a name the font does not have leaves the text unrendered.
+WEIGHT_STYLE = {100: "Thin", 200: "Extra Light", 300: "Light", 400: "Regular", 500: "Medium", 600: "Semi Bold",
+                700: "Bold", 800: "Extra Bold", 900: "Black"}
 JUSTIFY = {"center": "CENTER", "flex-end": "MAX", "end": "MAX", "right": "MAX", "space-between": "SPACE_BETWEEN",
            "space-around": "SPACE_AROUND", "space-evenly": "SPACE_EVENLY"}
 ALIGN = {"center": "CENTER", "flex-end": "MAX", "end": "MAX", "baseline": "BASELINE"}
@@ -90,7 +91,8 @@ class _Writer:
             return
         frame = self.b.frame(parent, layer["name"][:80], x, y, w, h, clip=bool(box.get("clip")),
                              layout=self._layout(box), **{**extra, **self._paint(box, w, h)})
-        for child in children:
+        # CSS paints positioned (absolute/fixed) children above in-flow ones; Figma paints later children on top.
+        for child in sorted(children, key=lambda c: bool(c.get("absolute"))):
             self.layer(frame, child, (layer["x"], layer["y"]), layer, shots)
 
     @staticmethod
@@ -147,8 +149,7 @@ class _Writer:
         if st.get("transform") == "uppercase":
             text = text.upper()
         weight = min(WEIGHT_STYLE, key=lambda k: abs(k - st.get("weight", 400)))
-        style = WEIGHT_STYLE[weight] + (" Italic" if st.get("italic") else "")
-        single = layer.get("lines", 1) <= 1
+        style = ("Italic" if weight == 400 else WEIGHT_STYLE[weight] + " Italic") if st.get("italic") else WEIGHT_STYLE[weight]
         fields = {
             "textAlignHorizontal": {"center": "CENTER", "right": "RIGHT", "end": "RIGHT", "justify": "JUSTIFIED"}.get(
                 st.get("align"), "LEFT"),
@@ -157,10 +158,11 @@ class _Writer:
             fields["letterSpacing"] = {"value": float(st["letterSpacing"]), "units": "PIXELS"}
         if st.get("decoration") and "underline" in st["decoration"]:
             fields["textDecoration"] = "UNDERLINE"
+        # Lines are already broken as the browser rendered them: Figma only sizes the box, never re-wraps.
         self.b.text(
-            parent, text, x, y, w + (1 if single else 0), h, size=st["size"], family=st["family"] or "Inter",
+            parent, text, x, y, w + 1, h, size=st["size"], family=st["family"] or "Inter",
             style=style, fill=hexa(st["color"]) or "#000000", line_height=st.get("lineHeight"),
-            auto_resize="WIDTH_AND_HEIGHT" if single else "HEIGHT", **fields, **extra,
+            auto_resize="WIDTH_AND_HEIGHT", **fields, **extra,
         )
 
 
