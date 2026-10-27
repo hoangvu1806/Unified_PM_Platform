@@ -47,6 +47,56 @@ function readLayout(): FigLayout {
     }
 }
 
+/** Custom dropdown that renders entirely in our design tokens — no OS chrome. */
+function CanvasPicker<T extends string | number>({
+    icon: Icon,
+    value,
+    options,
+    onChange,
+    title,
+}: {
+    icon: React.ComponentType<{ size: number }>;
+    value: T;
+    options: { value: T; label: string }[];
+    onChange: (v: T) => void;
+    title?: string;
+}) {
+    const [open, setOpen] = useState(false);
+    const box = useRef<HTMLDivElement>(null);
+    const current = options.find((o) => o.value === value);
+
+    useEffect(() => {
+        if (!open) return;
+        const close = (e: MouseEvent | KeyboardEvent) => {
+            if (e instanceof KeyboardEvent ? e.key === "Escape" : !box.current?.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener("mousedown", close);
+        document.addEventListener("keydown", close);
+        return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close); };
+    }, [open]);
+
+    return (
+        <div className="canvas-picker" ref={box} title={title}>
+            <button className="canvas-picker-trigger" onClick={() => setOpen(!open)} type="button" aria-haspopup="listbox" aria-expanded={open}>
+                <Icon size={14} />
+                <span>{current?.label ?? String(value)}</span>
+                <ChevronDown size={13} className={open ? "flip" : ""} />
+            </button>
+            {open && (
+                <ul className="canvas-picker-pop" role="listbox">
+                    {options.map((o) => (
+                        <li key={String(o.value)} role="option" aria-selected={o.value === value}
+                            onClick={() => { onChange(o.value); setOpen(false); }}>
+                            {o.label}
+                            {o.value === value && <Check size={13} />}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+}
+
 function Brand({ subtitle }: { subtitle: string }) {
     return (
         <div className="brand-lockup canvas-brand">
@@ -372,29 +422,24 @@ function ScreensCanvas() {
                     </div>
                     <div className="canvas-tools">
                         {states.length > 0 && (
-                            <label className="canvas-select" title="Trạng thái của màn hình">
-                                <Layers size={15} />
-                                <select value={state} onChange={(e) => setState(e.target.value)}>
-                                    <option value="">Mặc định</option>
-                                    {states.map((s) => (
-                                        <option key={s} value={s}>
-                                            {s}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
+                            <CanvasPicker
+                                icon={Layers}
+                                title="Trạng thái của màn hình"
+                                value={state}
+                                options={[{ value: "", label: "Mặc định" }, ...states.map((s) => ({ value: s, label: s }))]}
+                                onChange={setState}
+                            />
                         )}
-                        <label className="canvas-select" title="Lịch sử phiên bản">
-                            <History size={15} />
-                            <select value={version ?? ""} onChange={(e) => setVersion(e.target.value ? Number(e.target.value) : undefined)}>
-                                <option value="">v{screen?.version} · mới nhất</option>
-                                {versions.slice(1).map((v) => (
-                                    <option key={v.version} value={v.version}>
-                                        v{v.version} · {v.note || v.updated_by || ""}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
+                        <CanvasPicker
+                            icon={History}
+                            title="Lịch sử phiên bản"
+                            value={version ?? ""}
+                            options={[
+                                { value: "", label: `v${screen?.version} · mới nhất` },
+                                ...versions.slice(1).map((v) => ({ value: v.version, label: `v${v.version} · ${v.note || v.updated_by || ""}` })),
+                            ]}
+                            onChange={(v) => setVersion(v ? Number(v) : undefined)}
+                        />
                         <span className="canvas-divider" aria-hidden />
                         <button
                             className={`canvas-tool ${selecting ? "active" : ""}`}

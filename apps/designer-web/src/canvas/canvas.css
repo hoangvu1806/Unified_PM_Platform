@@ -40,18 +40,26 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
 .canvas-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .canvas-divider { width: 1px; height: 20px; margin: 0 4px; background: var(--border-strong); }
 
-.canvas-select { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px 0 10px;
-  border-radius: 10px; background: var(--bg-surface-raised); color: var(--text-muted); transition: background 0.15s ease; }
-.canvas-select:hover { background: var(--bg-surface-hover); }
-.canvas-select select { height: 100%; max-width: 220px; padding: 0; border: 0; background: transparent;
-  color: var(--text-secondary); font: inherit; font-weight: 600; cursor: pointer; outline: none;
-  appearance: none; -webkit-appearance: none; }
-.canvas-select select option { background: var(--bg-surface); color: var(--text-primary); }
-.canvas-select::after { content: ""; display: block; width: 14px; height: 14px; flex-shrink: 0;
-  background-color: var(--text-muted);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center/contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center/contain no-repeat;
-  pointer-events: none; }
+/* ── Custom picker (replaces native <select>) ─────── */
+.canvas-picker { position: relative; }
+.canvas-picker-trigger { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px;
+  border: 0; border-radius: 10px; background: var(--bg-surface-raised); color: var(--text-secondary);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease; }
+.canvas-picker-trigger:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+.canvas-picker-trigger svg { color: var(--text-muted); transition: transform 0.15s ease; }
+.canvas-picker-trigger svg.flip { transform: rotate(180deg); }
+.canvas-picker-pop { position: absolute; top: calc(100% + 6px); left: 0; min-width: 100%; max-height: 260px;
+  overflow-y: auto; padding: 4px; margin: 0; list-style: none; border-radius: 12px;
+  background: var(--bg-surface); box-shadow: var(--shadow-lg); z-index: 30;
+  animation: picker-in 0.12s ease-out; }
+@keyframes picker-in { from { opacity: 0; transform: translateY(-4px); } }
+.canvas-picker-pop li { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 7px 10px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text-secondary);
+  cursor: pointer; transition: background 0.1s ease, color 0.1s ease; white-space: nowrap; }
+.canvas-picker-pop li:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+.canvas-picker-pop li[aria-selected="true"] { color: var(--violet); font-weight: 600; }
+.canvas-picker-pop li[aria-selected="true"] svg { color: var(--violet); }
 
 .canvas-tool, .canvas-export, .canvas-icon, .canvas-toolbar form button {
   display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 0; border-radius: 10px;
@@ -60,7 +68,7 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
 .canvas-tool:hover, .canvas-icon:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
 .canvas-tool.active { background: var(--violet-soft); color: var(--violet); }
 .canvas-icon { width: 32px; height: 32px; padding: 0; justify-content: center; }
-.canvas-tool:focus-visible, .canvas-export:focus-visible, .canvas-select:focus-within, .canvas-screen:focus-visible {
+.canvas-tool:focus-visible, .canvas-export:focus-visible, .canvas-picker-trigger:focus-visible, .canvas-screen:focus-visible {
   outline: 2px solid var(--border-focus); outline-offset: 2px; }
 
 /* ── Export menu ──────────────────────────────────── */
