@@ -38,7 +38,7 @@ Login ─► Projects ─► Project
 
 ## Run (Docker only)
 
-Requirements: Docker Desktop.
+Requirements: Docker Desktop (local) or Docker Engine + Docker Compose v2 (VPS/server).
 
 ```bash
 cp .env.example .env                              # LLM keys, DB password, JWT secret, S3 keys
@@ -57,6 +57,163 @@ Accounts (`AUTH_MODE=mock`, password `demo123`): `pm.hoa` and `lead.dung`, both 
 seeded; create one after login. `MOCK_SEED=full` adds the single-role accounts (`ba.an`, `ba.chi`, `designer.binh`)
 and the sample projects `PRJ-AURORA`, `PRJ-DEMO` — the test containers use it, and `scripts/e2e_access.py` needs it.
 The login page also shows "Đăng nhập với Keycloak", enabled once `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID` are set.
+
+## Deploy on a VPS
+
+### Option A — Full stack (Postgres managed by Docker Compose)
+
+Identical to the local dev flow above. Docker Compose starts Postgres alongside the other
+services. This is the simplest option and requires no additional setup.
+
+```bash
+cp .env.example .env          # fill in all keys and secrets
+docker compose up -d --build
+```
+
+Set `PLATFORM_PUBLIC_URL` to your public domain or IP before building so that the platform
+generates correct links.
+
+### Option B — VPS with an existing PostgreSQL server
+
+Use this when the VPS already runs PostgreSQL (managed instance, system package, etc.).
+
+**1. Prepare the database.**
+
+Connect to your PostgreSQL server (≥ 14) as a superuser and run:
+
+```sql
+CREATE DATABASE platform;
+CREATE USER platform WITH PASSWORD 'strong-password-here';
+GRANT ALL PRIVILEGES ON DATABASE platform TO platform;
+```
+
+The platform creates all schemas (`core`, `ba`, `designer`, `wiki`) and tables on first start.
+No manual schema migration is needed.
+
+**2. Configure `.env`.**
+
+```env
+PLATFORM_PUBLIC_URL=https://your-domain.com
+
+POSTGRES_HOST=127.0.0.1        # host IP as seen from inside the containers
+POSTGRES_PORT=5432
+POSTGRES_DB=platform
+POSTGRES_USER=platform
+POSTGRES_PASSWORD=strong-password-here
+POSTGRES_POOL_MIN=2
+POSTGRES_POOL_MAX=15
+```
+
+If PostgreSQL listens on a private LAN address (e.g. a separate DB server), use that IP.
+`POSTGRES_HOST=host.docker.internal` works on Linux with `--add-host=host.docker.internal:host-gateway`
+added to each service in the compose file, or just use the real IP.
+
+**3. Disable the managed Postgres container.**
+
+Create a compose override file next to `docker-compose.yml`:
+
+```yaml
+# compose.external-pg.yml  —  use an external PostgreSQL, skip the managed container
+services:
+  postgres:
+    profiles: [disabled]      # never started by `docker compose up`
+  core-api:
+    depends_on: {}
+  ba-api:
+    depends_on: {}
+  designer-api:
+    depends_on: {}
+```
+
+Start the platform:
+
+```bash
+docker compose -f docker-compose.yml -f compose.external-pg.yml up -d --build
+```
+
+Or edit `docker-compose.yml` directly: remove the `postgres` service block and every
+`depends_on: postgres` entry from the other services.
+
+**4. Storage.**
+
+`STORAGE_BACKEND=local` (the default) writes files under `STORAGE_LOCAL_ROOT` on the VPS host.
+The compose volume bind-mounts that path into the containers.
+
+```env
+STORAGE_BACKEND=local
+STORAGE_LOCAL_ROOT=/data/platform-storage    # a directory on the VPS host
+```
+
+For object storage, switch to `s3` and fill the `S3_*` variables — any S3-compatible endpoint
+works (AWS S3, MinIO, Ceph, Cloudflare R2):
+
+```env
+STORAGE_BACKEND=s3
+S3_ENDPOINT_URL=https://s3.amazonaws.com
+S3_REGION=ap-southeast-1
+S3_BUCKET=my-platform-bucket
+S3_ACCESS_KEY_ID=AKIA...
+S3_SECRET_ACCESS_KEY=...
+```
+
+**5. Reverse proxy (nginx on the VPS).**
+
+The platform gateway listens on `PLATFORM_GATEWAY_PORT` (default `8080`). Put nginx in front
+for TLS and the large `.fig` upload limit:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    ssl_certificate     /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+
+    client_max_body_size 110m;   # .fig upload limit (infra/gateway/nginx.conf default)
+
+    location / {
+        proxy_pass         http://127.0.0.1:8080;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;    # designer agent and BA sessions can take time
+        proxy_buffering    off;     # SSE / streaming designer events
+    }
+}
+```
+
+Use Certbot for the TLS certificate: `certbot --nginx -d your-domain.com`.
+
+**6. Run as a systemd service (optional).**
+
+```ini
+# /etc/systemd/system/platform.service
+[Unit]
+Description=BA × Designer Platform
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+WorkingDirectory=/opt/platform
+ExecStart=/usr/bin/docker compose up
+ExecStop=/usr/bin/docker compose down
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl enable --now platform
+```
 
 ## Configuration
 
@@ -109,10 +266,16 @@ marks them "Đã duyệt". Designs link to the BA package version they came from
 **Designer.** The agent writes each screen as HTML + Tailwind (Alpine.js for interaction, lucide icons), renders
 and checks it in headless Chromium inside `designer-api` (DOM lint + axe-core + screenshot), and refines it with
 tools until it passes. The studio (`/designer/`) keeps chat, review and BA panels; "Trang thiết kế" opens the
-design page (`/designer/canvas.html`) in a new tab: clickable prototype, viewports, states, element picking
-(sent to the chat), code edits with versions, exports. Design systems are imported from a Figma `.fig`
-(Settings → Design system); exports are `.fig` (opens in Figma; one page with a row per screen, or a page per
-screen), PNG per screen/state and an offline HTML zip.
+design page (`/designer/canvas.html`) in a new tab. The design page has two view modes:
+
+- **Single-screen mode** — clickable prototype, viewport picker, state switcher, element picking (reported to
+  the chat via BroadcastChannel), inline code editor with version history, and the Export menu.
+- **Multi-frame overview mode** — all screen × state combinations shown as side-by-side frames (Figma-style
+  overview); each frame auto-sizes to its content height. Canvas zoom (Ctrl+wheel, or ±  buttons) and a
+  floating zoom bar. Click any frame to jump to single-screen mode for that screen and state.
+
+Design systems are imported from a Figma `.fig` (Settings → Design system); exports are `.fig` (opens in Figma;
+one page with a row per screen, or a page per screen), PNG per screen/state and an offline HTML zip.
 
 **Logs.** Local: `logs/<service>/<service>.log` (JSON lines, daily rotation, 14 days), each request with `user`,
 `project_id`, `request_id`. Per project: `projects/<project_id>/logs/<service>/<date>/*.jsonl` in storage.

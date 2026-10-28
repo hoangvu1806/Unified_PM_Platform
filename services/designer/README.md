@@ -31,6 +31,11 @@ UI at `/designer/`, API at `/designer/api/v1/` behind the gateway; data in Postg
   `data-state`, returns the compiled CSS and runs `lint.js` (page overflow, clipped text,
   child overflow, empty regions, broken images, tap targets, type scale + axe-core contrast
   and names). Vendor files and versions: `app/render/vendor/README.md`.
+- `app/render/runtime.js`: injected into every screen document. Assigns `data-d` element ids,
+  installs CSS rules for `data-state` / `data-state-hide` visibility, handles `data-goto` prototype
+  navigation, replaces `<i data-lucide>` with SVGs, and manages selection mode (hover outline + click
+  report). On `designer:state` messages, sets `data-active-state` on `<html>` then posts a `resize`
+  message with `scrollHeight` after 60 ms so the caller can read the accurate post-render height.
 - Screens are stored per session (`screens`, every save in `screen_versions`) and served by
   `app/api/screens.py`: list/read/save/delete, versions, `/document` (iframe `srcdoc`) and
   `/screenshot`.
@@ -40,6 +45,30 @@ UI at `/designer/`, API at `/designer/api/v1/` behind the gateway; data in Postg
   (sha256 + size in the row). Uploaded images are per project (`storage/assets.py`; screens reference
   `asset:<id>`, inlined when rendered). On start the store moves HTML still stored inline by older versions
   to storage, then drops those columns. Deleting a session/screen/design system deletes its files.
+
+## Design page (`/designer/canvas.html`)
+
+The design page (`apps/designer-web/src/canvas/`) has two view modes toggled by the button in
+the left rail:
+
+**Single-screen mode** (default)
+- Clickable prototype rendered in an `<iframe>` at selected viewport width
+- Viewport picker and state switcher (custom `CanvasPicker` dropdown, styled with design tokens)
+- Element picking: hover → outline; click → selected element sent to the chat via `BroadcastChannel`
+- Inline code editor with version history; save triggers a new `screen_version`
+- "Xuất" (Export) menu: `.fig`, PNG per screen/state, offline HTML zip; layout choice (rows/pages)
+
+**Multi-frame overview mode**
+- All screen × state combinations rendered as side-by-side frames — same concept as Figma frames
+- Each `StateFrame` posts `designer:state` into its iframe and listens for `ready` + `resize`
+  messages from `runtime.js` to grow the card to the full content height (no cropping)
+- Canvas zoom: Ctrl+wheel on the overview area, or the ± buttons in the floating zoom bar
+  (range 30 % – 200 %, step 15 %)
+- Click any frame to switch back to single-screen mode focused on that screen and state
+
+Both modes share:
+- Back (←) button in the rail header to return to the chat studio
+- Theme toggle (Sun/Moon) in the toolbar, propagated into every iframe via `data-theme`
 
 Screen conventions for the agent and the design page:
 
