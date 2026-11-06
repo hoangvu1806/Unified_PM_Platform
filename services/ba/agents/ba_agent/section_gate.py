@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from agents.ba_agent.constants import (
@@ -94,37 +95,150 @@ def can_access_section(state: dict[str, Any], section_id: str) -> tuple[bool, st
 
 
 def mark_downstream_needs_review(state: dict[str, Any], edited_section: str) -> None:
-    """When user edits an earlier section, mark downstream sections stale."""
-    if edited_section not in TIER1_SECTIONS:
+    """Mark artifacts that depend on an edited section for a fresh review."""
+    dependents = {
+        SECTION_FEATURE_DEFINITION: (
+            SECTION_BUSINESS_RULES,
+            SECTION_WORKFLOW,
+            SECTION_USE_CASES,
+            "bpmn_reference",
+            "ui_touchpoints",
+        ),
+        SECTION_BUSINESS_RULES: (
+            SECTION_WORKFLOW,
+            SECTION_USE_CASES,
+            "bpmn_reference",
+            "ui_touchpoints",
+        ),
+        SECTION_WORKFLOW: (SECTION_USE_CASES, "bpmn_reference", "ui_touchpoints"),
+        SECTION_USE_CASES: ("ui_touchpoints",),
+    }
+    affected = dependents.get(edited_section, ())
+    if not affected:
         return
-    idx = TIER1_SECTIONS.index(edited_section)
     sec_status = dict(state.get("sections_status", {}))
-    for downstream in TIER1_SECTIONS[idx + 1 :]:
-        if sec_status.get(downstream) in {"completed", "in_progress"}:
+    for downstream in affected:
+        artifact_exists = bool((state.get("artifacts") or {}).get(downstream))
+        if sec_status.get(downstream) in {"completed", "in_progress"} or artifact_exists:
             sec_status[downstream] = "needs_review"
     state["sections_status"] = sec_status
+
+
+def record_package_change_review(state: dict[str, Any], edited_section: str) -> None:
+    """Run deterministic cross-section checks after an artifact has changed."""
+    from agents.sub_graph.validation_agent.checks import run_cross_section_checks
+    from agents.sub_graph.validation_agent.logic import run_schema_check
+
+    # An earlier VA run may have left a frozen payload in state. Review the
+    # freshly merged artifacts, never that stale validation snapshot.
+    review_state = {
+        key: deepcopy(state.get(key))
+        for key in (
+            "ticket_type",
+            "project_id",
+            "session_id",
+            "feature_id",
+            "feature_title",
+            "artifacts",
+            "sections_status",
+            "open_questions",
+            "assumptions",
+            "flags",
+            "feature_status",
+        )
+    }
+    review_state.pop("_va_payload", None)
+    schema_blocked = run_schema_check(review_state)
+    failed, warnings, passed = run_cross_section_checks(review_state)
+    if schema_blocked:
+        failed = list(schema_blocked.get("failed_checks") or []) + failed
+    for question in state.get("open_questions") or []:
+        critical_open = (
+            str(question.get("severity") or "").lower() == "critical"
+            and str(question.get("status") or "open").lower() != "resolved"
+        )
+        sync_pending = question.get("sync_status") in {"pending", "failed"}
+        if critical_open:
+            warnings.append(
+                {
+                    "check_id": "OQ-GATE",
+                    "name": "Open Question chưa trả lời",
+                    "detail": f"{question.get('id') or 'OQ'} chưa được chốt: {question.get('question') or ''}",
+                    "suggestion": "Đây là thông tin tham khảo; Validate không bị chặn bởi Open Questions.",
+                }
+            )
+        elif sync_pending:
+            warnings.append(
+                {
+                    "check_id": "OQ-SYNC",
+                    "name": "Open Question sync pending",
+                    "detail": f"{question.get('id') or 'OQ'} đã có câu trả lời nhưng artifact liên quan chưa xác nhận đồng bộ.",
+                    "suggestion": "Validate sẽ rà các artifact hiện có; xem cảnh báo này trước khi bàn giao Designer.",
+                }
+            )
+    for section, status in (state.get("sections_status") or {}).items():
+        if status == "needs_review" and section not in TIER1_SECTIONS:
+            failed.append(
+                {
+                    "check_id": "IMPACT-REVIEW",
+                    "name": "Dependent artifact needs review",
+                    "detail": f"{section} bị ảnh hưởng bởi thay đổi nhưng chưa được đồng bộ/rà soát lại.",
+                    "affected_sections": [section],
+                    "suggestion": "Cập nhật hoặc tạo lại artifact phụ thuộc, sau đó xác nhận trạng thái review đã hoàn tất.",
+                }
+            )
+    if not failed:
+        statuses = dict(state.get("sections_status") or {})
+        for section, status in statuses.items():
+            if status == "needs_review" and section in TIER1_SECTIONS:
+                statuses[section] = "completed"
+        state["sections_status"] = statuses
+    state["_ba_change_review"] = {
+        "edited_section": edited_section,
+        "turn": state.get("current_turn"),
+        "status": "needs_fixes" if failed else "ready_for_user_validate",
+        "failed_checks": failed,
+        "warnings": warnings,
+        "passed_checks": passed,
+        "sections_needing_review": [
+            section
+            for section, status in (state.get("sections_status") or {}).items()
+            if status == "needs_review"
+        ],
+    }
 
 
 def has_critical_open_oq(state: dict[str, Any]) -> bool:
     oqs = state.get("open_questions", [])
     return any(
-        oq.get("status", "open") == "open" and oq.get("severity") == "critical"
+        str(oq.get("severity") or "").lower() == "critical"
+        and (
+            oq.get("status", "open") != "resolved"
+        )
         for oq in oqs
     )
 
 
 def all_required_sections_complete(state: dict[str, Any]) -> bool:
-    return all(section_is_complete(state, sec) for sec in TIER1_SECTIONS)
+    statuses = state.get("sections_status") or {}
+    return all(
+        section_is_complete(state, section_id)
+        or statuses.get(section_id) in {"completed", "needs_review"}
+        for section_id in TIER1_SECTIONS
+    )
 
 
 def can_proceed_to_validation(state: dict[str, Any]) -> bool:
-    """Package-level: all Tier-1 complete and no critical open OQs.
+    """The Validate button depends only on the four required BA sections.
+
+    Open Questions and Assumptions are supporting context, not completion
+    gates. Validation can still report issues found in the actual artifacts.
 
     Wiki updates over time, so this stays true after VALIDATED / VALIDATION_FAILED
-    / EXPORTED as long as Group 1 and critical OQs still clear. Status EXPORTED
-    no longer permanently blocks Validate.
+    / EXPORTED as long as the four required BA sections remain complete. Status
+    EXPORTED no longer permanently blocks Validate.
     """
-    return all_required_sections_complete(state) and not has_critical_open_oq(state)
+    return all_required_sections_complete(state)
 
 
 def compute_feature_status_transition(state: dict[str, Any]) -> str:
@@ -134,10 +248,10 @@ def compute_feature_status_transition(state: dict[str, Any]) -> str:
         return current
     if current == "DRAFT" and state.get("current_turn", 0) > 0:
         current = "IN_PROGRESS"
-    if all_required_sections_complete(state) and not has_critical_open_oq(state):
+    if can_proceed_to_validation(state):
         if current in {"IN_PROGRESS", "DRAFT"}:
             return "PENDING_VALIDATION"
-    if current == "PENDING_VALIDATION" and not all_required_sections_complete(state):
+    if current == "PENDING_VALIDATION" and not can_proceed_to_validation(state):
         return "IN_PROGRESS"
     return current or "IN_PROGRESS"
 
@@ -156,12 +270,11 @@ def sync_sections_status_from_flags(state: dict[str, Any]) -> None:
     flags_root = state.get("flags", {})
 
     for section_id in TIER1_SECTIONS:
-        if section_is_complete(state, section_id):
-            sec_status[section_id] = "completed"
-            continue
-
         prev = sec_status.get(section_id)
         if prev == "needs_review":
+            continue
+        if section_is_complete(state, section_id):
+            sec_status[section_id] = "completed"
             continue
 
         flag_key = SECTION_FLAG_KEYS.get(section_id, "")

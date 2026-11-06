@@ -42,6 +42,14 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
   background: var(--bg-surface-raised); color: var(--text-muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .canvas-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .canvas-divider { width: 1px; height: 20px; margin: 0 4px; background: var(--border-strong); }
+.canvas-test-menu { position: relative; }
+.canvas-test-panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 35; width: min(320px, calc(100vw - 32px));
+  display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 14px; border: 1px solid var(--border-strong);
+  border-radius: 14px; background: var(--bg-surface); color: var(--text-primary); box-shadow: var(--shadow-lg); }
+.canvas-test-panel > strong { font-size: 13px; font-weight: 700; }
+.canvas-test-panel > p { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.canvas-test-panel .canvas-picker { width: 100%; }
+.canvas-test-panel .canvas-picker-trigger { width: 100%; justify-content: space-between; }
 
 /* ── Custom picker (replaces native <select>) ─────── */
 .canvas-picker { position: relative; }

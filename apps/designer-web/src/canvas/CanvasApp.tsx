@@ -7,6 +7,7 @@ import {
     Download,
     FileArchive,
     Files,
+    FlaskConical,
     History,
     Image,
     Layers,
@@ -407,6 +408,7 @@ function ScreensCanvas() {
     const [states, setStates] = useState<string[]>([]);
     const [state, setState] = useState("");
     const [selecting, setSelecting] = useState(false);
+    const [testPanelOpen, setTestPanelOpen] = useState(false);
     const [codeOpen, setCodeOpen] = useState(false);
     const [code, setCode] = useState("");
     const [versions, setVersions] = useState<ScreenVersion[]>([]);
@@ -459,6 +461,7 @@ function ScreensCanvas() {
     useEffect(() => {
         setState("");
         setVersion(undefined);
+        setTestPanelOpen(false);
     }, [screen?.id]);
 
     const post = (message: Record<string, unknown>) => frameRef.current?.contentWindow?.postMessage(message, "*");
@@ -572,13 +575,31 @@ function ScreensCanvas() {
                     <div className="canvas-tools">
                         {viewMode === "single" && <>
                             {states.length > 0 && (
-                                <CanvasPicker
-                                    icon={Layers}
-                                    title="Trạng thái của màn hình"
-                                    value={state}
-                                    options={[{ value: "", label: "Mặc định" }, ...states.map((s) => ({ value: s, label: s }))]}
-                                    onChange={setState}
-                                />
+                                <div className="canvas-test-menu">
+                                    <button
+                                        className={`canvas-tool ${testPanelOpen ? "active" : ""}`}
+                                        onClick={() => setTestPanelOpen((open) => !open)}
+                                        type="button"
+                                        aria-expanded={testPanelOpen}
+                                        aria-controls="canvas-test-panel"
+                                        title="Mở công cụ thử trạng thái màn hình"
+                                    >
+                                        <FlaskConical size={15} /> Test
+                                    </button>
+                                    {testPanelOpen && (
+                                        <section className="canvas-test-panel" id="canvas-test-panel" aria-label="Công cụ thử trạng thái">
+                                            <strong>Thử trạng thái màn hình</strong>
+                                            <p>Chỉ dùng để xem trước trạng thái; không thêm các điều khiển này vào giao diện ứng dụng.</p>
+                                            <CanvasPicker
+                                                icon={Layers}
+                                                title="Chọn trạng thái để xem thử"
+                                                value={state}
+                                                options={[{ value: "", label: "Mặc định" }, ...states.map((s) => ({ value: s, label: s }))]}
+                                                onChange={setState}
+                                            />
+                                        </section>
+                                    )}
+                                </div>
                             )}
                             <CanvasPicker
                                 icon={History}

@@ -20,6 +20,7 @@ from .nodes import (
     create_fd_extractor_node,
     create_fd_flags_checker_node,
     create_oq_asm_detector_node,
+    create_oq_followthrough_node,
 )
 
 join_node = JoinNode(name="fd_fan_in_join")
@@ -31,6 +32,7 @@ def create_feature_definition_pipeline(db_repository=None):
     fd_extractor_node = create_fd_extractor_node()
     fd_flags_checker_node = create_fd_flags_checker_node()
     oq_asm_detector_node = create_oq_asm_detector_node()
+    oq_followthrough_node = create_oq_followthrough_node()
 
     # Define ADK Parallel Fan-Out / Fan-In Workflow Edges
     return Workflow(
@@ -42,8 +44,10 @@ def create_feature_definition_pipeline(db_repository=None):
             (fd_extractor_node, fd_flags_checker_node),
             # 3. Fan-In: Gom cả 2 nhánh (Flags Checker & OQ/ASM Detector) vào JoinNode
             ((fd_flags_checker_node, oq_asm_detector_node), join_node),
-            # 4. Tiếp tục sang Discussion Agent
-            (join_node, fd_discussion_node),
+            # 4. Synchronize artifacts affected by answered OQs before composing the reply.
+            (join_node, oq_followthrough_node),
+            # 5. Continue to the Discussion Agent after the artifact sync review.
+            (oq_followthrough_node, fd_discussion_node),
         ],
     )
 

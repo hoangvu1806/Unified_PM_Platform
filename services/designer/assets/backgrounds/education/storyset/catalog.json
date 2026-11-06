@@ -1,0 +1,54 @@
+{
+  "assets": [
+    {
+      "id": "storyset-studying-rafiki",
+      "title": "Studying",
+      "description": "Student studying with books and a laptop; friendly flat illustration.",
+      "style": "Rafiki",
+      "tags": ["education", "student", "learning", "study", "school", "campus", "e-learning", "giáo dục", "học tập", "sinh viên", "trường học", "đào tạo"],
+      "relative_path": "rafiki/studying.svg",
+      "source_url": "https://storyset.com/illustration/studying/rafiki",
+      "credit": "Storyset"
+    },
+    {
+      "id": "storyset-studying-bro",
+      "title": "Studying",
+      "description": "Student studying with books and a laptop; geometric, bold illustration.",
+      "style": "Bro",
+      "tags": ["education", "student", "learning", "study", "school", "campus", "e-learning", "giáo dục", "học tập", "sinh viên", "trường học", "đào tạo"],
+      "relative_path": "bro/studying.svg",
+      "source_url": "https://storyset.com/illustration/studying/bro",
+      "credit": "Storyset"
+    },
+    {
+      "id": "storyset-studying-amico",
+      "title": "Studying",
+      "description": "Student studying with books and a laptop; dimensional, friendly illustration.",
+      "style": "Amico",
+      "tags": ["education", "student", "learning", "study", "school", "campus", "e-learning", "giáo dục", "học tập", "sinh viên", "trường học", "đào tạo"],
+      "relative_path": "amico/studying.svg",
+      "source_url": "https://storyset.com/illustration/studying/amico",
+      "credit": "Storyset"
+    },
+    {
+      "id": "storyset-studying-pana",
+      "title": "Studying",
+      "description": "Student studying with books and a laptop; clean, structured illustration.",
+      "style": "Pana",
+      "tags": ["education", "student", "learning", "study", "school", "campus", "e-learning", "giáo dục", "học tập", "sinh viên", "trường học", "đào tạo"],
+      "relative_path": "pana/studying.svg",
+      "source_url": "https://storyset.com/illustration/studying/pana",
+      "credit": "Storyset"
+    },
+    {
+      "id": "storyset-studying-cuate",
+      "title": "Studying",
+      "description": "Student studying with books and a laptop; expressive, playful illustration.",
+      "style": "Cuate",
+      "tags": ["education", "student", "learning", "study", "school", "campus", "e-learning", "giáo dục", "học tập", "sinh viên", "trường học", "đào tạo"],
+      "relative_path": "cuate/studying.svg",
+      "source_url": "https://storyset.com/illustration/studying/cuate",
+      "credit": "Storyset"
+    }
+  ]
+}

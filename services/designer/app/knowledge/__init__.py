@@ -96,6 +96,73 @@ def product_profile(query: str) -> dict[str, Any] | None:
             "style": style[0] if style else {}, "fonts": fonts}
 
 
+def style_preview_candidates(query: str, k: int = 3) -> list[dict[str, Any]]:
+    """Return a few distinct, domain-relevant style recipes for visual previews."""
+    table = _tables()["styles"]
+    profile = product_profile(query)
+    names: list[str] = []
+    if profile:
+        product = profile["product"]
+        for field in ("Primary Style Recommendation", "Secondary Styles"):
+            names.extend(part.strip() for part in re.split(r"[+,;/]", product.get(field, "")) if part.strip())
+    names.extend(row["Style Category"] for row in table.search(query, 12))
+
+    results: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for name in names:
+        row = table.search(name, 1)
+        if not row:
+            continue
+        item = row[0]
+        key = item.get("Style ID") or item.get("Style Category", "").lower().replace(" ", "-")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        tokens = {
+            name.lower().replace("_", "-"): color.lower()
+            for name, color in re.findall(
+                r"--([a-zA-Z0-9_-]+)\s*:\s*(#[0-9a-fA-F]{6})", item.get("Design System Variables", "")
+            )
+        }
+        source_colors = [color.lower() for color in re.findall(
+            r"#[0-9a-fA-F]{6}", item.get("Primary Colors", "") + " " + item.get("Secondary Colors", "")
+        )]
+        pick = lambda *names, fallback: next((tokens[name] for name in names if name in tokens), fallback)
+        primary = pick("primary", "accent-primary", "accent-color", "accent", fallback=source_colors[0] if source_colors else "#2563eb")
+        background = pick("bg", "background", fallback="#ffffff")
+        foreground = pick("fg", "foreground", fallback="#111827")
+        surface = pick("card", "surface", "bg-alt", fallback="#ffffff")
+        accent = pick("accent-secondary", "accent", fallback=source_colors[1] if len(source_colors) > 1 else primary)
+        palette = {
+            "primary": primary, "primary_foreground": pick("primary-foreground", "on-primary", fallback="#ffffff"),
+            "background": background, "foreground": foreground, "surface": surface,
+            "muted": pick("muted", "bg-muted", fallback="#f1f5f9"),
+            "muted_foreground": pick("muted-fg", "muted-foreground", fallback="#64748b"),
+            "border": pick("border", fallback="#e2e8f0"), "accent": accent,
+            "success": pick("success", fallback="#16a34a"),
+            "warning": pick("warning", fallback="#d97706"),
+            "destructive": pick("destructive", "danger", fallback="#dc2626"),
+        }
+        results.append({
+            "key": key,
+            "name": item.get("Style Category", name),
+            "tagline": (item.get("Era/Origin", "") + " · " + item.get("Best For", ""))[:230],
+            "direction": (item.get("AI Prompt Keywords", "") or item.get("Keywords", ""))[:1_900],
+            "palette": palette,
+            "heading_font": "",
+            "body_font": "",
+            "radius": "lg",
+            "density": "comfortable",
+            "composition": item.get("CSS/Technical Keywords", "")[:500],
+            "surface_language": item.get("Effects & Animation", "")[:500],
+            "shape_language": item.get("Keywords", "")[:500],
+            "hero_placement": "Use a product-relevant focal visual in a dedicated hero/background area when the screen task benefits from it.",
+        })
+        if len(results) >= k:
+            break
+    return results
+
+
 def profile_text(profile: dict[str, Any] | None) -> str:
     """Compact brief of a product profile for the spec / art-direction prompt."""
     if not profile:
@@ -151,6 +218,25 @@ def tailwind_rules(query: str, k: int = 4) -> list[str]:
 def frontend_design_skill() -> str:
     text = (ROOT / "frontend-design" / "SKILL.md").read_text(encoding="utf-8")
     return text.split("---", 2)[2].strip() if text.startswith("---") else text
+
+
+@lru_cache
+def style_preview_skill() -> str:
+    """Project-aware workflow for designing, rendering, and critiquing style previews."""
+    return (ROOT / "style-preview" / "SKILL.md").read_text(encoding="utf-8").strip()
+
+
+@lru_cache
+def ui_ux_design_rules() -> str:
+    """Required product-independent UI/UX rules for specifying, building, and reviewing screens."""
+    files = (
+        "material-ui-ux-knowledge-reference.md",
+        "multi-screen-design-rules.md",
+        "screen-sequence-identity-and-content.md",
+    )
+    return "\n\n---\n\n".join(
+        (ROOT / name).read_text(encoding="utf-8").strip() for name in files
+    )
 
 
 @lru_cache

@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..designsystem.scene import slug
-from ..models import DesignBrief, Platform
+from ..models import DesignBrief, Platform, StyleCandidate
 
 HEX = re.compile(r"^#?([0-9a-fA-F]{6})$")
 
 
 class DesignDecision(BaseModel):
-    intent: Literal["chat", "clarify_design", "propose_scope", "start_design", "edit_screens"]
+    intent: Literal["chat", "clarify_design", "propose_scope", "gather", "start_design", "edit_screens"]
     reply: str = Field(min_length=1)
     brief: DesignBrief = Field(default_factory=DesignBrief)
     target_screen_ids: list[str] = Field(default_factory=list)
@@ -24,6 +24,33 @@ class DesignDecision(BaseModel):
     @classmethod
     def slugs(cls, value: list[str]) -> list[str]:
         return [slug(v, "screen") for v in value]
+
+
+class StylePreviewPlan(BaseModel):
+    """Three project-specific art directions for the style-preview gallery."""
+
+    options: list[StyleCandidate] = Field(min_length=3, max_length=3)
+
+    @model_validator(mode="after")
+    def distinct_options(self) -> "StylePreviewPlan":
+        keys = [item.key for item in self.options]
+        if len(set(keys)) != 3:
+            raise ValueError("Style preview option keys must be unique")
+        palette_roles = {
+            "primary", "primary_foreground", "background", "foreground", "surface", "muted",
+            "muted_foreground", "border", "accent", "success", "warning", "destructive",
+        }
+        for item in self.options:
+            if not palette_roles.issubset(item.palette):
+                raise ValueError(f"Style option {item.key} must define every shared palette role")
+            Palette.model_validate(item.palette)
+        asset_ids = [item.preview_asset_id for item in self.options if item.preview_asset_id]
+        if len(set(asset_ids)) != len(asset_ids):
+            raise ValueError("Style preview options must use distinct illustration assets")
+        if sum(item.recommended for item in self.options) != 1:
+            for index, item in enumerate(self.options):
+                item.recommended = index == 0
+        return self
 
 
 class Palette(BaseModel):
@@ -49,6 +76,13 @@ class Palette(BaseModel):
             value = {k: (f"#{m.group(1).lower()}" if isinstance(v, str) and (m := HEX.match(v.strip())) else v)
                      for k, v in value.items()}
         return value
+
+    @model_validator(mode="after")
+    def require_hex_colors(self) -> "Palette":
+        invalid = [name for name, value in self.model_dump().items() if not HEX.match(str(value).strip())]
+        if invalid:
+            raise ValueError("Palette values must be six-digit hex colors: " + ", ".join(invalid))
+        return self
 
 
 class DesignDirection(BaseModel):
@@ -87,6 +121,10 @@ class ScreenSpec(BaseModel):
     )
     rules: list[str] = Field(default_factory=list, max_length=15, description="Business rules (BR-xx: …) the UI must reflect")
     imagery: list[ImageNeed] = Field(default_factory=list, max_length=4)
+    visual_asset_role: Literal["none", "hero", "background"] = Field(
+        default="none",
+        description="Use the selected local style illustration only where it supports this task; keep it separate from the logo.",
+    )
     ux_query: str = Field("", description="3-6 English keywords for the screen's UI concerns")
 
     @model_validator(mode="after")
@@ -103,6 +141,10 @@ class ScreenSpec(BaseModel):
 class UiSpec(BaseModel):
     schema_version: Literal["html-1"] = "html-1"
     style_direction: str = ""
+    selected_style_key: str = ""
+    style_name: str = ""
+    visual_contract: dict[str, Any] = Field(default_factory=dict)
+    approved_brief_screens: dict[str, dict[str, Any]] = Field(default_factory=dict)
     design: DesignDirection = Field(default_factory=DesignDirection)
     screens: list[ScreenSpec] = Field(min_length=1, max_length=20)
 

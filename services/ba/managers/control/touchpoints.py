@@ -182,4 +182,10 @@ def replace_touchpoints(state: dict[str, Any], items: list[dict[str, Any]]) -> l
     artifacts = dict(state.get("artifacts") or {})
     artifacts["ui_touchpoints"] = normalized
     state["artifacts"] = artifacts
+    sections = dict(state.get("sections_status") or {})
+    sections["ui_touchpoints"] = "completed"
+    state["sections_status"] = sections
+    from agents.ba_agent.section_gate import record_package_change_review
+
+    record_package_change_review(state, "ui_touchpoints")
     return normalized

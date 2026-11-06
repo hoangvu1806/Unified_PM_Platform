@@ -181,10 +181,14 @@ export async function getChatHistory(sessionId, selectSection = 'feature_definit
  * @returns {Promise<void>}
  */
 export async function sendChatMessage(sessionId, message, sectionId, options = {}, handlers = {}) {
-  const { action = null, assets = [], timeoutMs = 330000 } = options;
+  const { action = null, assets = [] } = options;
+  // OQ sync runs one artifact update per question, so a batch of answers may
+  // legitimately take longer than the normal chat request timeout.
+  const timeoutMs = options.timeoutMs ?? (sectionId === 'open_questions' ? 960000 : 330000);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   let streamDone = false;
+  let receivedAgentMessage = false;
   try {
     const body = {
       user_id: 'ba-user',
@@ -252,6 +256,9 @@ export async function sendChatMessage(sessionId, message, sectionId, options = {
 
           switch (eventType) {
             case 'chat.message':
+              if (typeof parsed.text === 'string' && parsed.text.trim()) {
+                receivedAgentMessage = true;
+              }
               handlers.onMessage?.(parsed);
               break;
             case 'state.update':
@@ -259,10 +266,14 @@ export async function sendChatMessage(sessionId, message, sectionId, options = {
               break;
             case 'chat.done':
               streamDone = true;
-              try {
-                await handlers.onDone?.();
-              } catch (handlerErr) {
-                console.warn('onDone handler failed:', handlerErr);
+              if (receivedAgentMessage) {
+                try {
+                  await handlers.onDone?.();
+                } catch (handlerErr) {
+                  console.warn('onDone handler failed:', handlerErr);
+                }
+              } else {
+                await handlers.onError?.(new Error('BA Agent completed without sending a reply. Please retry.'));
               }
               break;
             case 'chat.error':
@@ -291,19 +302,27 @@ export async function sendChatMessage(sessionId, message, sectionId, options = {
       }
       if (eventType === 'chat.done') {
         streamDone = true;
-        try {
-          await handlers.onDone?.();
-        } catch (handlerErr) {
-          console.warn('onDone handler failed:', handlerErr);
+        if (receivedAgentMessage) {
+          try {
+            await handlers.onDone?.();
+          } catch (handlerErr) {
+            console.warn('onDone handler failed:', handlerErr);
+          }
+        } else {
+          await handlers.onError?.(new Error('BA Agent completed without sending a reply. Please retry.'));
         }
       }
     }
 
     if (!streamDone) {
-      try {
-        await handlers.onDone?.();
-      } catch (handlerErr) {
-        console.warn('onDone handler failed:', handlerErr);
+      if (receivedAgentMessage) {
+        try {
+          await handlers.onDone?.();
+        } catch (handlerErr) {
+          console.warn('onDone handler failed:', handlerErr);
+        }
+      } else {
+        await handlers.onError?.(new Error('BA Agent stream ended without a reply. Please retry.'));
       }
     }
 

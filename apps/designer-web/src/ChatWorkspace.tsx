@@ -43,6 +43,90 @@ interface CanvasSelection {
     element: { id: string; tag: string; text: string; html: string };
 }
 
+interface StylePreviewOption {
+    key: string;
+    name: string;
+    tagline: string;
+    recommended: boolean;
+    image: string;
+    asset_credit?: string;
+    asset_source_url?: string;
+}
+
+function StylePreviewGallery({
+    event,
+    busy,
+    onSelect,
+}: {
+    event: WorkflowEvent;
+    busy: boolean;
+    onSelect: (option: StylePreviewOption) => void;
+}) {
+    const options = Array.isArray(event.payload.options)
+        ? (event.payload.options as StylePreviewOption[])
+        : [];
+    const screenName = String(event.payload.screen_name || "Màn hình đại diện");
+    const screenPurpose = String(event.payload.screen_purpose || "");
+    const platform = String(event.payload.platform || "mobile");
+    if (!options.length) return null;
+    return (
+        <section className="style-preview-gallery" aria-label="Chọn hướng thiết kế giao diện">
+            <div className="style-preview-heading">
+                <div className="style-preview-heading-icon"><Sparkles size={17} /></div>
+                <div>
+                    <strong>Chọn hướng thiết kế</strong>
+                    <p>Ba bản xem trước được tạo theo nội dung và mục đích của dự án.</p>
+                </div>
+            </div>
+            <div className="style-preview-context">
+                <span className="style-preview-context-dot" />
+                <span>{screenName}</span>
+                {screenPurpose && <span className="style-preview-purpose">{screenPurpose}</span>}
+                <small>{platform === "mobile" ? "MOBILE APP" : platform.toUpperCase()}</small>
+            </div>
+            <div className="style-preview-grid">
+                {options.map((option, index) => (
+                    <article className={`style-preview-card${option.recommended ? " is-recommended" : ""}`} key={option.key}>
+                        <div className="style-preview-card-head">
+                            <span className="style-preview-index">{String.fromCharCode(65 + index)}</span>
+                            <div className="style-preview-title">
+                                <strong>{option.name}</strong>
+                                {option.recommended && <span>Đề xuất</span>}
+                            </div>
+                        </div>
+                        <p className="style-preview-tagline">{option.tagline}</p>
+                        {option.asset_credit && option.asset_source_url && (
+                            <a className="style-preview-credit" href={option.asset_source_url} target="_blank" rel="noreferrer">
+                                Minh hoạ: {option.asset_credit}
+                            </a>
+                        )}
+                        <button
+                            className={`style-preview-image-button${platform === "mobile" ? " is-mobile" : " is-desktop"}`}
+                            onClick={() => onSelect(option)}
+                            type="button"
+                            disabled={busy}
+                            aria-label={`Xem và chọn phong cách ${option.name}`}
+                        >
+                            <span className="style-preview-device">
+                                <img src={option.image} alt={`${screenName}, thiết kế theo phong cách ${option.name}`} />
+                            </span>
+                        </button>
+                        <button
+                            className="style-preview-select"
+                            onClick={() => onSelect(option)}
+                            type="button"
+                            disabled={busy}
+                        >
+                            Chọn hướng này
+                        </button>
+                    </article>
+                ))}
+            </div>
+            <p className="style-preview-note">Cùng một màn hình và chức năng đã chốt; mỗi lựa chọn thể hiện một ngôn ngữ thị giác riêng.</p>
+        </section>
+    );
+}
+
 interface Props {
     run?: Run;
     runs: Run[];
@@ -357,12 +441,12 @@ export function ChatWorkspace({
         .reverse();
     const visibleEvents =
         run?.intent === "chat" || run?.intent === "gather"
-            ? events.filter((event) => event.type === "assistant.message")
+            ? events.filter((event) => event.type === "assistant.message" || event.type === "style.previews")
             : events.filter(
                   (event) => !HIDDEN_CONVERSATION_EVENTS.has(event.type),
               );
     const conversationEvents = visibleEvents.filter(
-        (event) => event.type === "assistant.message",
+        (event) => event.type === "assistant.message" || event.type === "style.previews",
     );
     const activityEvents = visibleEvents.filter(
         (event) => event.type !== "assistant.message",
@@ -585,20 +669,33 @@ export function ChatWorkspace({
                 )}
 
                 {conversationEvents.map((event) =>
-                    event.type === "assistant.message" ? (
-                        <article
-                            className="message assistant-message"
-                            key={event.id}
-                        >
+                    event.type === "style.previews" ? (
+                        <article className="message assistant-message style-preview-message" key={event.id}>
                             <AssistantAvatar />
                             <div className="assistant-body">
-                                <div className="assistant-header">
-                                    <small>Designer</small>
-                                </div>
+                                <div className="assistant-header"><small>Designer</small></div>
+                                <StylePreviewGallery
+                                    event={event}
+                                    busy={isAgentWorking}
+                                    onSelect={(option) => onSubmit({
+                                        prompt: `Mình chọn phong cách "${option.name}" trong preview. Áp dụng hướng này cho các screen đã chốt và tiếp tục tạo UI spec.`,
+                                        screenName: run?.screen_name || screenName || "Screen",
+                                        platform: run?.platform || platform,
+                                        styleName: option.key,
+                                        libraryIds: [],
+                                    })}
+                                />
+                            </div>
+                        </article>
+                    ) : (
+                        <article className="message assistant-message" key={event.id}>
+                            <AssistantAvatar />
+                            <div className="assistant-body">
+                                <div className="assistant-header"><small>Designer</small></div>
                                 <MarkdownRenderer content={eventText(event)} />
                             </div>
                         </article>
-                    ) : null,
+                    ),
                 )}
 
                 {activityEvents.length > 0 && (

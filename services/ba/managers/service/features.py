@@ -18,7 +18,8 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 from platform_core.fastapi import auth_disabled
 
-from agents.ba_agent.constants import TIER1_SECTIONS
+from agents.ba_agent.constants import SECTION_OPEN_QUESTIONS, TIER1_SECTIONS
+from agents.ba_agent.open_questions import format_open_questions_reply
 from factory_wiki.store import get_wiki_store
 from managers.control.bpmn import can_generate_bpmn, ensure_bpmn_artifact
 from managers.control.export import export_validated_package
@@ -233,6 +234,16 @@ async def get_feature(session_id: str):
             )
 
         control = await load_control_state(session_id)
+        control_section_status = control.get("sections_status") or {}
+        for section_id, section_status in control_section_status.items():
+            if section_id in sections:
+                sections[section_id].status = section_status
+            elif section_status == "needs_review":
+                sections[section_id] = SectionProgress(
+                    section_id=section_id,
+                    status=section_status,
+                    is_completable=False,
+                )
         status = normalize_feature_status(control.get("feature_status"))
         artifacts = control.get("artifacts") or {}
         bpmn = artifacts.get("bpmn_reference")
@@ -602,8 +613,11 @@ async def get_chat_history(
     section's discussion author (so BR does not re-render the whole FD chat).
     """
     from agents.ba_agent.constants import (
+        AUTHOR_BA_LOCKED,
+        AUTHOR_BA_NOT_READY,
         SECTION_DISCUSSION_AUTHOR,
         SECTION_VALIDATION,
+        STATE_ACTIVE_SECTION,
         VA_CHAT_AUTHORS,
     )
 
@@ -615,12 +629,24 @@ async def get_chat_history(
         session_id=session_id,
     )
 
-    allowed_author = SECTION_DISCUSSION_AUTHOR.get(section or "") if section else None
-
     messages: list[ChatMessageItem] = []
     pending_user: str | None = None
+    active_section = (
+        dict(session.state).get(STATE_ACTIVE_SECTION) if session else None
+    )
+    pending_section: str | None = None
+    section_by_author = {
+        author: section_id
+        for section_id, author in SECTION_DISCUSSION_AUTHOR.items()
+    }
     if session and session.events:
         for event in session.events:
+            # Reconstruct the section that was active for each historical turn.
+            actions = getattr(event, "actions", None)
+            state_delta = getattr(actions, "state_delta", None) or {}
+            if isinstance(state_delta, dict) and state_delta.get(STATE_ACTIVE_SECTION):
+                active_section = state_delta[STATE_ACTIVE_SECTION]
+
             if not event.content or not event.content.parts:
                 continue
 
@@ -632,28 +658,60 @@ async def get_chat_history(
 
             if event.content.role == "user":
                 pending_user = full_text
+                pending_section = active_section
                 continue
 
             if not is_user_facing_author(author):
                 continue
 
-            if section == SECTION_VALIDATION or allowed_author in VA_CHAT_AUTHORS:
-                if author not in VA_CHAT_AUTHORS:
-                    pending_user = None
-                    continue
-            elif allowed_author and author != allowed_author:
+            # Replies from the section's discussion node are definitive. Gate
+            # replies are generic, so associate them with the pending turn's
+            # section. This avoids hiding them while keeping histories isolated.
+            message_section = section_by_author.get(author)
+            if author in VA_CHAT_AUTHORS:
+                message_section = SECTION_VALIDATION
+            elif author in {AUTHOR_BA_LOCKED, AUTHOR_BA_NOT_READY}:
+                message_section = pending_section
+            elif message_section is None:
+                message_section = pending_section
+
+            if section and message_section != section:
                 pending_user = None
+                pending_section = None
                 continue
 
             if pending_user is not None:
                 messages.append(ChatMessageItem(sender="user", text=pending_user))
                 pending_user = None
+                pending_section = None
             messages.append(ChatMessageItem(sender="agent", text=full_text))
 
     # Keep the last user turn even when the agent/API errored before a reply.
     # Otherwise a failed turn drops that message (and a reload looks like a wipe).
-    if pending_user is not None:
+    pending_belongs_to_section = (
+        not section
+        or session is None
+        or (pending_section or dict(session.state).get(STATE_ACTIVE_SECTION)) == section
+    )
+    if pending_user is not None and pending_belongs_to_section:
         messages.append(ChatMessageItem(sender="user", text=pending_user))
+        if section == SECTION_OPEN_QUESTIONS and session is not None:
+            state = dict(session.state)
+            current_turn = state.get("current_turn")
+            active_turn = state.get("_oq_stream_active_turn")
+            result_turn = (state.get("_oq_sync_result") or {}).get("turn")
+            completed_turn = state.get("_oq_stream_completed_turn")
+            active = active_turn is not None and int(active_turn) >= int(current_turn or 0)
+            completed = completed_turn == current_turn or (
+                completed_turn is None and result_turn == current_turn
+            )
+            if completed and not active:
+                messages.append(
+                    ChatMessageItem(
+                        sender="agent",
+                        text=format_open_questions_reply(state),
+                    )
+                )
 
     return ChatHistoryResponse(
         session_id=session_id,

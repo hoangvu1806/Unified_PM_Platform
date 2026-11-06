@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 from agents.ba_agent.constants import (
     AUTHOR_FD_DISCUSSION,
+    AUTHOR_OPEN_QUESTIONS,
     ROUTE_BR,
     ROUTE_LOCKED,
     SECTION_BUSINESS_RULES,
@@ -18,6 +19,8 @@ from agents.ba_agent.constants import (
     TICKET_NEW_FEATURE,
 )
 from agents.ba_agent.router import route_ba_turn
+from agents.ba_agent.open_questions import ROUTE_DETECT, ROUTE_SYNC, route_open_questions_state
+from agents.ba_agent.constants import SECTION_DISCUSSION_AUTHOR, SECTION_OPEN_QUESTIONS
 from agents.ba_agent.section_gate import (
     can_access_section,
     can_proceed_to_validation,
@@ -136,7 +139,7 @@ def _all_tier1_pass_flags() -> dict:
     }
 
 
-def test_critical_open_oq_blocks_validation_until_resolved():
+def test_critical_open_oq_does_not_gate_validation_when_required_sections_pass():
     state = {
         "flags": _all_tier1_pass_flags(),
         "feature_status": "IN_PROGRESS",
@@ -151,9 +154,50 @@ def test_critical_open_oq_blocks_validation_until_resolved():
         ],
     }
     assert has_critical_open_oq(state) is True
-    assert can_proceed_to_validation(state) is False
-    state["open_questions"][0]["status"] = "resolved"
-    state["open_questions"][0]["answer"] = "50 triệu VND"
+    assert can_proceed_to_validation(state) is True
+
+
+def test_oq_and_assumption_statuses_do_not_gate_validation():
+    state = {
+        "flags": _all_tier1_pass_flags(),
+        "sections_status": {"workflow": "needs_review", "ui_touchpoints": "needs_review"},
+        "open_questions": [
+            {"id": "OQ-001", "severity": "critical", "status": "open", "sync_status": "failed"}
+        ],
+        "assumptions": [],
+    }
+    assert can_proceed_to_validation(state) is True
+
+
+def test_required_sections_marked_needs_review_can_still_run_validation():
+    state = {
+        "sections_status": {
+            "feature_definition": "completed",
+            "business_rules": "completed",
+            "workflow": "needs_review",
+            "use_cases": "completed",
+        },
+        "open_questions": [],
+        "assumptions": [],
+    }
+    assert can_proceed_to_validation(state) is True
+
+
+def test_resolved_oq_with_pending_artifact_sync_warns_but_does_not_lock_validate():
+    state = {
+        "flags": _all_tier1_pass_flags(),
+        "feature_status": "IN_PROGRESS",
+        "current_turn": 4,
+        "open_questions": [
+            {
+                "id": "OQ-001",
+                "severity": "critical",
+                "status": "resolved",
+                "sync_status": "failed",
+                "answer": "Use existing account",
+            }
+        ],
+    }
     assert has_critical_open_oq(state) is False
     assert can_proceed_to_validation(state) is True
 
@@ -168,7 +212,7 @@ def test_exported_still_allows_validate_when_group1_clear():
     state["open_questions"] = [
         {"id": "OQ-001", "severity": "critical", "status": "open", "question": "Ngưỡng?"}
     ]
-    assert can_proceed_to_validation(state) is False
+    assert can_proceed_to_validation(state) is True
 
 
 def test_section_completable_vs_package_validation():
@@ -446,12 +490,123 @@ Done
 
 def test_history_author_filter():
     assert is_user_facing_author(AUTHOR_FD_DISCUSSION) is True
+    assert is_user_facing_author(AUTHOR_OPEN_QUESTIONS) is True
+    assert SECTION_DISCUSSION_AUTHOR[SECTION_OPEN_QUESTIONS] == AUTHOR_OPEN_QUESTIONS
     assert is_user_facing_author("va_discuss") is True
     assert is_user_facing_author("va_explain") is True
     assert is_user_facing_author("va_report") is True
     assert is_user_facing_author("fd_extractor") is False
     assert is_user_facing_author("fd_flags_checker") is False
     assert is_user_facing_author(None) is False
+
+
+def test_resolved_pending_oq_retries_sync_without_running_detector():
+    state = {
+        "open_questions": [
+            {
+                "id": "OQ-001",
+                "status": "resolved",
+                "sync_status": "pending",
+                "answer": "Giới hạn OTP là năm lần.",
+                "affected_artifacts": [
+                    {"artifact_type": "business_rules", "artifact_id": "BR-OTP-001"}
+                ],
+            }
+        ]
+    }
+
+    assert route_open_questions_state(state) == ROUTE_SYNC
+    assert state["_oq_sync_queue"][0]["id"] == "OQ-001"
+
+
+def test_oq_sync_targets_related_auth_artifacts_and_repairs_legacy_fd_refs():
+    from agents.sub_graph.feature_definition.nodes.oq_asm_detector.callback import (
+        ensure_oq_sync_queue,
+    )
+
+    state = {
+        "_oq_sync_version": 1,
+        "open_questions": [
+            {
+                "id": "OQ-001",
+                "question": "Cơ chế tài khoản Microsoft 365 SSO là gì?",
+                "answer": "Tài khoản GJU phải có trước; Microsoft chỉ xác thực SSO.",
+                "status": "resolved",
+                "sync_status": "verified",
+                "affected_artifacts": [
+                    {"artifact_type": "feature_definition", "artifact_id": "FD-AUTH-001"}
+                ],
+            },
+            {
+                "id": "OQ-002",
+                "question": "Chính sách mật khẩu đặt lại là gì?",
+                "answer": "Tối thiểu 8 ký tự, có hoa/thường/số/ký tự đặc biệt.",
+                "status": "resolved",
+                "sync_status": "verified",
+                "affected_artifacts": [],
+            },
+            {
+                "id": "OQ-003",
+                "question": "OTP hết hạn và giới hạn thử lại thế nào?",
+                "answer": "OTP hết hạn sau 5 phút, tối đa 5 lần thử.",
+                "status": "resolved",
+                "sync_status": "verified",
+                "affected_artifacts": [],
+            },
+        ],
+        "artifacts": {
+            "feature_definition": {"goal": "Đăng nhập GJU", "actors": []},
+            "business_rules": [
+                {"id": "BR-SSO-001", "statement": "Đăng nhập bằng Microsoft 365 SSO."},
+                {"id": "BR-PASSWORD-001", "statement": "Kiểm tra mật khẩu mới khi đặt lại."},
+                {"id": "BR-RECOVERY-001", "statement": "Khôi phục qua Email OTP và gửi lại mã."},
+            ],
+            "workflow": {
+                "workflow_md_content": (
+                    "## WF-SSO-001 — Microsoft SSO\nĐối chiếu tài khoản Microsoft.\n\n"
+                    "## WF-RESET-001 — Reset Password\nNhập mật khẩu mới.\n\n"
+                    "## WF-OTP-001 — OTP Recovery\nNhập OTP, hết hạn sau 5 phút."
+                )
+            },
+            "use_cases": [
+                {"id": "US-SSO-001", "statement": "Đăng nhập Microsoft SSO."},
+                {"id": "US-RESET-001", "statement": "Đặt lại mật khẩu mới."},
+                {"id": "US-OTP-001", "statement": "Khôi phục tài khoản bằng Email OTP."},
+            ],
+            "ui_touchpoints": [
+                {"id": "UIT-LOGIN", "screen": "Login Microsoft SSO"},
+                {"id": "UIT-RESET", "screen": "Reset Password"},
+                {"id": "UIT-OTP", "screen": "OTP Verification and Recovery"},
+            ],
+        },
+    }
+
+    queue = ensure_oq_sync_queue(state)
+    refs_by_id = {item["id"]: item["affected_artifacts"] for item in queue}
+    for oq_id in ("OQ-001", "OQ-002", "OQ-003"):
+        assert refs_by_id[oq_id]
+        assert all(ref["artifact_type"] != "feature_definition" for ref in refs_by_id[oq_id])
+        assert {ref["artifact_type"] for ref in refs_by_id[oq_id]} >= {
+            "business_rules",
+            "workflow",
+            "use_cases",
+            "ui_touchpoints",
+        }
+    assert {ref["artifact_id"] for ref in refs_by_id["OQ-001"] if ref["artifact_type"] == "business_rules"} == {"BR-SSO-001"}
+    assert {ref["artifact_id"] for ref in refs_by_id["OQ-002"] if ref["artifact_type"] == "business_rules"} == {"BR-PASSWORD-001"}
+    assert {ref["artifact_id"] for ref in refs_by_id["OQ-003"] if ref["artifact_type"] == "business_rules"} == {"BR-RECOVERY-001"}
+
+
+def test_open_oq_still_runs_detector_even_with_another_retry_pending():
+    state = {
+        "_oq_sync_queue": [{"id": "OQ-001", "answer": "answer"}],
+        "open_questions": [
+            {"id": "OQ-001", "status": "resolved", "sync_status": "pending"},
+            {"id": "OQ-002", "status": "open", "sync_status": None},
+        ],
+    }
+
+    assert route_open_questions_state(state) == ROUTE_DETECT
 
 
 def test_apply_semantic_flag_evaluations_no_tools():

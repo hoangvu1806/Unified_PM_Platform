@@ -15,12 +15,14 @@ from agents.ba_agent.constants import (
     ROUTE_BR,
     ROUTE_FD,
     ROUTE_LOCKED,
+    ROUTE_OPEN_QUESTIONS,
     ROUTE_STUB,
     ROUTE_UC,
     ROUTE_VALIDATE,
     ROUTE_WF,
 )
 from agents.ba_agent.nodes import ba_not_ready_node, ba_section_locked_node
+from agents.ba_agent.open_questions import open_questions_subgraph
 from agents.ba_agent.router import ba_router_node
 from agents.sub_graph.business_rules.agent import br_subgraph
 from agents.sub_graph.feature_definition.agent import fd_subgraph
@@ -43,6 +45,7 @@ def create_ba_agent() -> Workflow:
                     ROUTE_WF: wf_subgraph,
                     ROUTE_UC: uc_subgraph,
                     ROUTE_VALIDATE: va_subgraph,
+                    ROUTE_OPEN_QUESTIONS: open_questions_subgraph,
                     ROUTE_LOCKED: ba_section_locked_node,
                     ROUTE_STUB: ba_not_ready_node,
                 },

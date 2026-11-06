@@ -27,6 +27,7 @@ SECTION_USE_CASES: Final = "use_cases"
 SECTION_VALIDATION: Final = "validation"
 SECTION_BPMN: Final = "bpmn_reference"
 SECTION_UI_TOUCHPOINTS: Final = "ui_touchpoints"
+SECTION_OPEN_QUESTIONS: Final = "open_questions"
 
 TIER1_SECTIONS: Final[tuple[str, ...]] = (
     SECTION_FEATURE_DEFINITION,
@@ -35,7 +36,9 @@ TIER1_SECTIONS: Final[tuple[str, ...]] = (
     SECTION_USE_CASES,
 )
 
-IMPLEMENTED_SECTIONS: Final[frozenset[str]] = frozenset(TIER1_SECTIONS)
+IMPLEMENTED_SECTIONS: Final[frozenset[str]] = frozenset(
+    (*TIER1_SECTIONS, SECTION_OPEN_QUESTIONS)
+)
 
 DEFAULT_SECTION: Final = SECTION_FEATURE_DEFINITION
 DEFAULT_TICKET_TYPE: Final = TICKET_NEW_FEATURE
@@ -57,6 +60,7 @@ ROUTE_BR: Final = "br"
 ROUTE_WF: Final = "wf"
 ROUTE_UC: Final = "uc"
 ROUTE_VALIDATE: Final = "validate"
+ROUTE_OPEN_QUESTIONS: Final = "open_questions"
 ROUTE_LOCKED: Final = "locked"
 ROUTE_STUB: Final = "stub"
 
@@ -64,6 +68,7 @@ AUTHOR_FD_DISCUSSION: Final = "fd_discussion"
 AUTHOR_BR_DISCUSSION: Final = "br_discussion"
 AUTHOR_WF_DISCUSSION: Final = "wf_discussion"
 AUTHOR_UC_DISCUSSION: Final = "uc_discussion"
+AUTHOR_OPEN_QUESTIONS: Final = "open_questions_reply"
 AUTHOR_BA_NOT_READY: Final = "ba_not_ready"
 AUTHOR_BA_LOCKED: Final = "ba_section_locked"
 AUTHOR_VA_REPORT: Final = "va_report"
@@ -84,6 +89,7 @@ USER_FACING_AUTHORS: Final[frozenset[str]] = frozenset(
         AUTHOR_BR_DISCUSSION,
         AUTHOR_WF_DISCUSSION,
         AUTHOR_UC_DISCUSSION,
+        AUTHOR_OPEN_QUESTIONS,
         AUTHOR_BA_NOT_READY,
         AUTHOR_BA_LOCKED,
         AUTHOR_VA_REPORT,
@@ -97,6 +103,7 @@ SECTION_TO_ROUTE: Final[dict[str, str]] = {
     SECTION_BUSINESS_RULES: ROUTE_BR,
     SECTION_WORKFLOW: ROUTE_WF,
     SECTION_USE_CASES: ROUTE_UC,
+    SECTION_OPEN_QUESTIONS: ROUTE_OPEN_QUESTIONS,
 }
 
 SECTION_DISCUSSION_AUTHOR: Final[dict[str, str]] = {
@@ -104,6 +111,7 @@ SECTION_DISCUSSION_AUTHOR: Final[dict[str, str]] = {
     SECTION_BUSINESS_RULES: AUTHOR_BR_DISCUSSION,
     SECTION_WORKFLOW: AUTHOR_WF_DISCUSSION,
     SECTION_USE_CASES: AUTHOR_UC_DISCUSSION,
+    SECTION_OPEN_QUESTIONS: AUTHOR_OPEN_QUESTIONS,
     SECTION_VALIDATION: AUTHOR_VA_DISCUSS,
 }
 
@@ -112,6 +120,7 @@ SECTION_LABELS: Final[dict[str, str]] = {
     SECTION_BUSINESS_RULES: "Business Rules",
     SECTION_WORKFLOW: "Workflow",
     SECTION_USE_CASES: "User Stories",
+    SECTION_OPEN_QUESTIONS: "Open Questions",
 }
 
 TICKET_LABELS: Final[dict[str, str]] = {

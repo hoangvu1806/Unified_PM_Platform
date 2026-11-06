@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -42,6 +44,10 @@ class OpenQuestionItem(BaseModel):
     impact: str = Field(
         ..., description="Mô tả ảnh hưởng nếu câu hỏi không được làm rõ"
     )
+    affected_artifacts: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Existing BR/WF/US artifact IDs this question may affect, when identifiable.",
+    )
 
 
 class AssumptionItem(BaseModel):
@@ -53,6 +59,15 @@ class AssumptionItem(BaseModel):
     )
 
 
+class OQArtifactReference(BaseModel):
+    artifact_type: Literal[
+        "feature_definition", "business_rules", "workflow", "use_cases", "ui_touchpoints"
+    ]
+    artifact_id: str
+    reason: str = ""
+    oq_id: str | None = None
+
+
 class OpenQuestionResolution(BaseModel):
     """User answered an existing Open Question — do not invent a new OQ."""
 
@@ -61,6 +76,32 @@ class OpenQuestionResolution(BaseModel):
     status: str = Field(
         "resolved",
         description="resolved khi đã trả lời đủ; open nếu vẫn chưa đủ",
+    )
+    affected_artifacts: list["OQArtifactReference"] = Field(
+        default_factory=list,
+        description="Artifact IDs cần cập nhật vì câu trả lời này, ví dụ BR-RESET-001, WF-RESET-001, US-RESET-001.",
+    )
+
+
+class OQArtifactUpdate(BaseModel):
+    oq_id: str
+    artifact_type: Literal[
+        "feature_definition", "business_rules", "workflow", "use_cases", "ui_touchpoints"
+    ]
+    artifact_id: str
+    updated_value: str = Field(
+        ..., description="Updated one artifact: markdown for workflow, JSON object for business_rules/use_cases."
+    )
+
+
+class OQFollowThroughData(BaseModel):
+    """Artifact updates made after an OQ answer, before the BA reply is composed."""
+
+    reviewed_oq_ids: list[str] = Field(default_factory=list)
+    impacted_artifacts: list[OQArtifactReference] = Field(default_factory=list)
+    updates: list[OQArtifactUpdate] = Field(default_factory=list)
+    no_change_reason: str | None = Field(
+        None, description="Required when an answered OQ does not require artifact changes."
     )
 
 
@@ -87,4 +128,7 @@ __all__ = [
     "OQASMDetectionData",
     "OpenQuestionItem",
     "OpenQuestionResolution",
+    "OQArtifactReference",
+    "OQArtifactUpdate",
+    "OQFollowThroughData",
 ]

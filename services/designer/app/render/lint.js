@@ -1,7 +1,7 @@
 // Layout lint on the rendered DOM. Evaluated by Playwright after runtime.js:
 //   await page.evaluate(LINT_JS, {mobile, axe})  ->  {findings, text, height}
 // Accessibility and contrast come from axe-core; the geometry rules are ours.
-async ({ mobile, axe }) => {
+async ({ mobile, axe, strictTouchTargets = false }) => {
   const findings = [];
   const MAX = 5;
   const short = (el) => {
@@ -51,8 +51,11 @@ async ({ mobile, axe }) => {
     }
     return null;
   };
-  const leaves = all.filter((el) => el.matches("button,a,input,select,textarea,img,svg") ||
-    [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
+  const intentionalDecoration = (el) =>
+    (el.matches("img") && !(el.getAttribute("alt") || "").trim()) ||
+    (el.matches("svg") && (el.getAttribute("aria-hidden") === "true" || el.getAttribute("role") === "presentation"));
+  const leaves = all.filter((el) => !intentionalDecoration(el) && (el.matches("button,a,input,select,textarea,img,svg") ||
+    [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())));
   const cut = [], scrolled = [];
   for (const el of leaves) {
     const c = clipper(el);
@@ -104,9 +107,45 @@ async ({ mobile, axe }) => {
     const small = all.filter((el) => {
       if (!el.matches("a,button,input,select,textarea,[role=button],[onclick],[x-on\\:click],[\\@click]")) return false;
       const r = el.getBoundingClientRect();
-      return r.width < 32 || r.height < 32;
+      const target = el.matches("input[type=checkbox],input[type=radio]") ? (el.closest("label") || el) : el;
+      const box = target.getBoundingClientRect();
+      return box.width < 48 || box.height < 48;
     });
-    add("warning", "tap-target", "Touch target is smaller than 32×32px.", small);
+    add(strictTouchTargets ? "error" : "warning", "tap-target",
+      "Mobile touch target is smaller than 48×48 CSS px (cross-platform preview baseline).", small);
+
+    if (strictTouchTargets) {
+      const misaligned = [];
+      const fieldSelector = "input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select,textarea";
+      const forms = [...document.querySelectorAll("form")].filter(visible);
+      const groups = forms.map((form) => [...form.querySelectorAll(fieldSelector)].filter(visible));
+      if (!forms.length) {
+        // Generated previews sometimes use semantic divs rather than <form>. Group peer fields
+        // under their nearest shared ancestor that contains at least two text-entry controls.
+        const byAncestor = new Map();
+        for (const field of all.filter((el) => el.matches(fieldSelector))) {
+          for (let parent = field.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+            const peers = [...parent.querySelectorAll(fieldSelector)].filter(visible);
+            if (peers.length >= 2) {
+              byAncestor.set(parent, peers);
+              break;
+            }
+          }
+        }
+        groups.push(...byAncestor.values());
+      }
+      for (const fields of groups) {
+        if (fields.length < 2) continue;
+        const boxes = fields.map((el) => el.getBoundingClientRect());
+        const left = Math.min(...boxes.map((r) => r.left));
+        const right = Math.max(...boxes.map((r) => r.right));
+        fields.forEach((field, i) => {
+          if (Math.abs(boxes[i].left - left) > 8 || Math.abs(boxes[i].right - right) > 8) misaligned.push(field);
+        });
+      }
+      add("error", "form-field-alignment",
+        "Related form fields do not share consistent left and right edges (8px tolerance).", misaligned);
+    }
   }
 
   const sizes = new Set(

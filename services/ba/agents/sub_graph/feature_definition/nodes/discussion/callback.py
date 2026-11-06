@@ -7,6 +7,7 @@ from typing import Any
 
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_request import LlmRequest
+from google.adk.models.llm_response import LlmResponse
 
 from agents.sub_graph.feature_definition.constants import (
     FAIL,
@@ -108,6 +109,7 @@ async def fd_discussion_inject_callback(
         f"=== CHECKLIST ===\n{json.dumps(checklist, ensure_ascii=False, indent=2)}",
         f"=== OPEN QUESTIONS ===\n{json.dumps(oqs, ensure_ascii=False, indent=2)}",
         f"=== ASSUMPTIONS ===\n{json.dumps(asms, ensure_ascii=False, indent=2)}",
+        f"=== OQ ARTIFACT SYNC RESULT ===\n{json.dumps(state.get('_oq_sync_result') or {}, ensure_ascii=False, indent=2)}",
     ]
 
     context_prompt = "\n\n".join(context_blocks)
@@ -116,4 +118,74 @@ async def fd_discussion_inject_callback(
     logger.info(
         f"fd_discussion_inject_callback: [ARTIFACT STATE] FD Artifact = {current_artifact_data} | "
         f"CHECKLIST (count={len(checklist)}), OPEN QUESTIONS (count={len(oqs)}), ASSUMPTIONS (count={len(asms)})"
+    )
+
+
+async def oq_sync_report_after(
+    callback_context: CallbackContext, llm_response: LlmResponse
+) -> None:
+    """Report the actual OQ artifact synchronization result, not a model claim."""
+    result = callback_context.state.get("_oq_sync_result") or {}
+    if (
+        result.get("turn") != callback_context.state.get("current_turn")
+        or not llm_response.content
+        or not llm_response.content.parts
+    ):
+        return
+    pending = result.get("pending_oq_ids") or []
+    lines = ["\n\n**Đồng bộ sau khi chốt Open Question:**"]
+    if pending:
+        lines.append(
+            "Chưa đồng bộ xong các phần liên quan cho "
+            + ", ".join(f"`{item}`" for item in pending)
+            + "; chưa nên Validate. Cần làm rõ hoặc hoàn tất các cập nhật bên dưới."
+        )
+        oq_by_id = {
+            str(item.get("id") or "").upper(): item
+            for item in callback_context.state.get("open_questions") or []
+        }
+        for oq_id in pending:
+            refs = oq_by_id.get(str(oq_id).upper(), {}).get("affected_artifacts") or []
+            if refs:
+                ref_ids = [
+                    ref.get("artifact_id") if isinstance(ref, dict) else getattr(ref, "artifact_id", "")
+                    for ref in refs
+                ]
+                lines.append(f"- `{oq_id}` cần đồng bộ: " + ", ".join(f"`{item}`" for item in ref_ids if item))
+    else:
+        updated = result.get("updated_artifacts") or []
+        if updated:
+            lines.append("Đã cập nhật: " + ", ".join(f"`{item}`" for item in updated) + ".")
+        else:
+            lines.append("Đã rà artifact liên quan; không cần sửa artifact nào theo câu trả lời này.")
+        review = result.get("review") or {}
+        failed = review.get("failed_checks") or []
+        if failed:
+            lines.append("Rà soát package còn lỗi; chưa nên Validate:")
+            for finding in failed:
+                lines.append(
+                    f"- **{finding.get('check_id', '')} {finding.get('name', '')}:** "
+                    f"{finding.get('detail', '')}"
+                )
+        else:
+            lines.append(
+                "Rà soát package không thấy lỗi chặn; bạn có thể chạy Validate chính thức. "
+                "Đây chưa phải kết quả Validate."
+            )
+    for error in result.get("errors") or []:
+        lines.append(f"- {error}")
+    review = result.get("review") or {}
+    if pending:
+        for finding in review.get("failed_checks") or []:
+            lines.append(
+                f"- **{finding.get('check_id', '')} {finding.get('name', '')}:** "
+                f"{finding.get('detail', '')}"
+            )
+    for warning in review.get("warnings") or []:
+        lines.append(
+            f"- Cảnh báo {warning.get('check_id', '')} {warning.get('name', '')}: "
+            f"{warning.get('detail', '')}"
+        )
+    llm_response.content.parts[0].text = (
+        (llm_response.content.parts[0].text or "") + "\n".join(lines)
     )

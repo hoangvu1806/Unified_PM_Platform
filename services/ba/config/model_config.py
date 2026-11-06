@@ -22,7 +22,9 @@ base_model = LiteLlm(
     presence_penalty=settings.presence_penalty,
     frequency_penalty=settings.frequency_penalty,
     max_tokens=settings.max_tokens,
-    timeout=100,
+    # OQ artifact review is intentionally one question per LLM call; allow the
+    # model enough time to return a complete, schema-valid update for that item.
+    timeout=240,
     num_retries=0,
     chat_template_kwargs={"enable_thinking": False},
     # Models that reject top_p / penalties (e.g. OpenAI reasoning models) get them dropped.

@@ -15,12 +15,14 @@ from google.genai import types
 
 from agents.ba_agent.constants import (
     DEFAULT_SECTION,
+    SECTION_OPEN_QUESTIONS,
     STATE_ACTIVE_SECTION,
     STATE_TICKET_TYPE,
 )
+from agents.ba_agent.open_questions import format_open_questions_reply
 from managers.runner_context import APP_NAME, get_runner, get_session_service, sse_event
 from managers.service.schema import AgentChatRequest, AgentChatResponse, ChatAction
-from managers.control.session import load_control_state
+from managers.control.session import load_control_state, persist_control_delta
 from managers.control.status import is_chat_frozen, package_was_exported
 from managers.service.state_helpers import (
     apply_request_to_session_state,
@@ -36,6 +38,7 @@ logger = logging()
 
 router = APIRouter(prefix="/api/v1/chat", tags=["Unify AI Agent - V1"])
 TURN_TIMEOUT_SECONDS = 300
+OQ_TURN_TIMEOUT_SECONDS = 900
 
 
 def _validate_chat_input(session_id: str, req: AgentChatRequest) -> None:
@@ -100,7 +103,7 @@ async def _persist_latest_state(session_service, user_id: str, session_id: str) 
                     user_id=user_id,
                 )
             except Exception as e:  # noqa: BLE001
-                logger.warning("Failed to persist Group 2 artifacts: %s", e)
+                logger.warning(f"Failed to persist Group 2 artifacts: {e}")
     persist_session_artifacts(state, session_id)
     return state
 
@@ -151,7 +154,12 @@ async def chat_message_sync(session_id: str, req: AgentChatRequest):
     agent_text = ""
     state: dict = {}
     try:
-        async with asyncio.timeout(TURN_TIMEOUT_SECONDS):
+        turn_timeout = (
+            OQ_TURN_TIMEOUT_SECONDS
+            if req.active_section == SECTION_OPEN_QUESTIONS
+            else TURN_TIMEOUT_SECONDS
+        )
+        async with asyncio.timeout(turn_timeout):
             async for event in runner.run_async(
                 user_id=user_id,
                 session_id=session_id,
@@ -168,7 +176,7 @@ async def chat_message_sync(session_id: str, req: AgentChatRequest):
                     )
 
     except TimeoutError:
-        logger.error("V1 Sync Agent graph exceeded %ss", TURN_TIMEOUT_SECONDS)
+        logger.error(f"V1 Sync Agent graph exceeded {turn_timeout}s")
         raise HTTPException(status_code=504, detail="BA workflow timed out")
     except Exception as e:  # noqa: BLE001
         logger.error(f"V1 Sync Agent graph pipeline error: {e}")
@@ -179,7 +187,7 @@ async def chat_message_sync(session_id: str, req: AgentChatRequest):
                 _persist_latest_state(session_service, user_id, session_id)
             )
         except Exception as e:  # noqa: BLE001
-            logger.warning("Failed to persist session artifacts: %s", e)
+            logger.warning(f"Failed to persist session artifacts: {e}")
 
     section_status, extra_data = build_section_status(state)
     if not agent_text:
@@ -229,6 +237,18 @@ async def chat_message_stream(session_id: str, req: AgentChatRequest):
 
     apply_request_to_session_state(session.state, req)
     state_delta = request_state_delta(req)
+    if req.active_section == SECTION_OPEN_QUESTIONS:
+        expected_turn = int(session.state.get("current_turn", 0)) + 1
+        # Persist before returning the stream so history polling knows this turn
+        # is active and does not synthesize a premature completion message.
+        await persist_control_delta(
+            session_id,
+            {
+                "_oq_stream_active_turn": expected_turn,
+                "_oq_stream_completed_turn": None,
+            },
+            user_id=user_id,
+        )
 
     content = types.Content(
         role="user",
@@ -239,8 +259,14 @@ async def chat_message_stream(session_id: str, req: AgentChatRequest):
         state: dict = {}
         error_message: str | None = None
         emitted_text = False
+        stream_ended = False
         try:
-            async with asyncio.timeout(TURN_TIMEOUT_SECONDS):
+            turn_timeout = (
+                OQ_TURN_TIMEOUT_SECONDS
+                if req.active_section == SECTION_OPEN_QUESTIONS
+                else TURN_TIMEOUT_SECONDS
+            )
+            async with asyncio.timeout(turn_timeout):
                 async for event in runner.run_async(
                     user_id=user_id,
                     session_id=session_id,
@@ -259,28 +285,95 @@ async def chat_message_stream(session_id: str, req: AgentChatRequest):
                                     "chat.message",
                                     {"sender": "agent", "text": part.text},
                                 )
+            stream_ended = True
         except TimeoutError:
-            error_message = f"BA workflow exceeded {TURN_TIMEOUT_SECONDS} seconds"
+            error_message = f"BA workflow exceeded {turn_timeout} seconds"
+            stream_ended = True
             logger.error("V1 Stream Agent graph timed out")
         except asyncio.CancelledError:
             logger.warning("V1 Stream client disconnected; preserving partial state")
+            stream_ended = True
             raise
         except Exception as e:  # noqa: BLE001
             error_message = str(e)
+            stream_ended = True
             logger.error(f"V1 Stream Agent graph pipeline error: {e}")
         finally:
             try:
                 state = await asyncio.shield(
                     _persist_latest_state(session_service, user_id, session_id)
                 )
+                if req.active_section == SECTION_OPEN_QUESTIONS and stream_ended:
+                    state = await persist_control_delta(
+                        session_id,
+                        {
+                            "_oq_stream_completed_turn": state.get("current_turn"),
+                            "_oq_stream_active_turn": None,
+                        },
+                        user_id=user_id,
+                    )
+                if error_message and req.active_section == SECTION_OPEN_QUESTIONS:
+                    questions = list(state.get("open_questions") or [])
+                    current_oq_id = str(state.get("_oq_sync_current_id") or "").upper()
+                    for question in questions:
+                        if (
+                            str(question.get("id") or "").upper() == current_oq_id
+                            and current_oq_id
+                            and question.get("status") == "resolved"
+                            and question.get("sync_status") == "pending"
+                        ):
+                            question["sync_status"] = "failed"
+                    pending_ids = [
+                        str(question.get("id") or "OQ")
+                        for question in questions
+                        if question.get("status") == "resolved"
+                        and question.get("sync_status") in {"pending", "failed"}
+                    ]
+                    if pending_ids:
+                        state["open_questions"] = questions
+                        prior_result = state.get("_oq_sync_result") or {}
+                        if prior_result.get("turn") != state.get("current_turn"):
+                            prior_result = {}
+                        errors = list(prior_result.get("errors") or [])
+                        if error_message not in errors:
+                            errors.append(error_message)
+                        state["_oq_sync_result"] = {
+                            "turn": state.get("current_turn"),
+                            "pending_oq_ids": pending_ids,
+                            "errors": errors,
+                            "updated_artifacts": list(prior_result.get("updated_artifacts") or []),
+                            "review": prior_result.get("review") or state.get("_ba_change_review") or {},
+                        }
+                        try:
+                            state = await persist_control_delta(
+                                session_id,
+                                {
+                                    "open_questions": questions,
+                                    "_oq_sync_queue": state.get("_oq_sync_queue") or [],
+                                    "_oq_sync_result": state["_oq_sync_result"],
+                                },
+                                user_id=user_id,
+                            )
+                        except Exception as persist_error:  # noqa: BLE001
+                            logger.warning(
+                                f"Failed to persist OQ sync failure state: {persist_error}"
+                            )
             except Exception as e:  # noqa: BLE001
-                logger.warning("Failed to persist session artifacts: %s", e)
+                logger.warning(f"Failed to persist session artifacts: {e}")
 
         if not emitted_text:
-            last = (state or {}).get("last_validation") or (state or {}).get("_va_result") or {}
-            report = str(last.get("agent_response") or "")
+            if req.active_section == SECTION_OPEN_QUESTIONS:
+                report = format_open_questions_reply(state or {})
+            else:
+                last = (state or {}).get("last_validation") or (state or {}).get("_va_result") or {}
+                report = str(last.get("agent_response") or "")
             if report:
                 yield sse_event("chat.message", {"sender": "agent", "text": report})
+            else:
+                logger.warning(
+                    f"V1 Stream completed without a user-facing reply: "
+                    f"session={session_id} section={req.active_section}"
+                )
         if state:
             yield sse_event("state.update", build_state_update_payload(state))
         if error_message:

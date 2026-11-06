@@ -148,12 +148,24 @@ function buildReadinessHint(feature) {
     lines.push(`- \`${sec.id}\`: ${done}`);
   }
   const critical = (feature.open_questions || []).filter(
-    (oq) => oq.severity === 'critical' && (oq.status || 'open') === 'open',
+    (oq) => oq.severity === 'critical' && (
+      (oq.status || 'open') !== 'resolved' || ['pending', 'failed'].includes(oq.sync_status)
+    ),
+  );
+  const pendingSync = (feature.open_questions || []).filter(
+    (oq) => ['pending', 'failed'].includes(oq.sync_status),
   );
   if (critical.length) {
     lines.push('');
     lines.push('Open questions **critical** còn mở (trả lời trong BA chat bằng `OQ-00N:`):');
     for (const oq of critical) {
+      lines.push(`- \`${oq.id || 'OQ'}\`: ${oq.question || ''}`);
+    }
+  }
+  if (pendingSync.some((oq) => oq.severity !== 'critical')) {
+    lines.push('');
+    lines.push('Open Questions đã trả lời nhưng chưa đồng bộ artifact:');
+    for (const oq of pendingSync.filter((item) => item.severity !== 'critical')) {
       lines.push(`- \`${oq.id || 'OQ'}\`: ${oq.question || ''}`);
     }
   }
@@ -295,7 +307,7 @@ function renderNav() {
 function renderReadiness() {
   const grid = document.getElementById('checklistGrid');
   const items = [
-    { ok: canValidate, label: 'FD → BR → WF → UC complete + no critical OQ' },
+    { ok: canValidate, label: 'FD → BR → WF → UC complete + no critical OQ + OQ artifact sync complete' },
     { ok: true, label: 'VA chat can discuss findings even after BA Export' },
     { ok: Boolean(lastValidation && lastValidation.agent_response), label: 'Last validation report available' },
   ];

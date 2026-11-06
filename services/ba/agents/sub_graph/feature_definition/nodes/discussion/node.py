@@ -10,7 +10,7 @@ from agents.sub_graph.shared.discussion_tools import discussion_tools
 from callbacks.filter_history import create_history_filter
 from config.model_config import base_model
 
-from .callback import fd_discussion_inject_callback
+from .callback import fd_discussion_inject_callback, oq_sync_report_after
 
 _TOOLS_HINT = (
     "\n\n# TOOLS\n"
@@ -46,4 +46,5 @@ def create_fd_discussion_node():
             create_history_filter(visible_authors=["fd_discussion"], max_turns=5),
             fd_discussion_inject_callback,
         ],
+        after_model_callback=oq_sync_report_after,
     )

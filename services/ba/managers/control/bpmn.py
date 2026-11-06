@@ -808,6 +808,8 @@ def ensure_bpmn_artifact(state: dict[str, Any], *, force: bool = False) -> dict[
     """Write bpmn_by_story[active] + bpmn_reference when Group 2 is unlocked."""
     if not can_generate_bpmn(state):
         return None
+    if (state.get("sections_status") or {}).get("bpmn_reference") == "needs_review":
+        force = True
     artifacts = dict(state.get("artifacts") or {})
     story_id = resolve_active_story_id(state)
     by_story = dict(artifacts.get("bpmn_by_story") or {})
@@ -849,4 +851,7 @@ def ensure_bpmn_artifact(state: dict[str, Any], *, force: bool = False) -> dict[
     sections = dict(state.get("sections_status") or {})
     sections["bpmn_reference"] = "completed"
     state["sections_status"] = sections
+    from agents.ba_agent.section_gate import record_package_change_review
+
+    record_package_change_review(state, "bpmn_reference")
     return artifact

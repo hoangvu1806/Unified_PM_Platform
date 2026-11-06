@@ -154,7 +154,19 @@ def run_snapshot_check(
     wiki_fp = wiki_approved_fingerprint(store, project_id) if store is not None else []
     digest = hashlib.sha256(
         json.dumps(
-            {"artifacts": payload.get("artifacts", {}), "wiki": wiki_fp},
+            {
+                "artifacts": payload.get("artifacts", {}),
+                "wiki": wiki_fp,
+                "open_questions": [
+                    {
+                        "id": item.get("id"),
+                        "status": item.get("status"),
+                        "sync_status": item.get("sync_status"),
+                        "answer": item.get("answer"),
+                    }
+                    for item in (state.get("open_questions") or [])
+                ],
+            },
             sort_keys=True,
         ).encode()
     ).hexdigest()
@@ -378,6 +390,26 @@ def run_validation(state: dict[str, Any], store: WikiStore) -> str:
     state["_va_evidence"] = evidence
     state["_va_failed"] = failed
     warnings = list(warnings) + list(wiki_warnings)
+    for oq in state.get("open_questions") or []:
+        is_open = str(oq.get("status") or "open").lower() != "resolved"
+        sync_pending = oq.get("sync_status") in {"pending", "failed"}
+        if is_open or sync_pending:
+            warnings.append(
+                {
+                    "check_id": "OQ-REFERENCE",
+                    "name": "Open Question tham khảo",
+                    "detail": (
+                        f"{oq.get('id') or 'OQ'}: "
+                        + (
+                            "chưa được trả lời."
+                            if is_open
+                            else "đã trả lời nhưng artifact liên quan chưa xác nhận đồng bộ."
+                        )
+                        + " Validate không bị chặn bởi OQ và chỉ đánh giá artifact hiện tại."
+                    ),
+                    "suggestion": "Đối chiếu thông tin này với BR/WF/US trước khi bàn giao Designer.",
+                }
+            )
     state["_va_warnings"] = warnings
 
     result = build_validation_report(state, failed, warnings, evidence, passed_checks)
@@ -405,11 +437,23 @@ def validation_not_ready_message(state: dict[str, Any]) -> str:
     for sec in TIER1_SECTIONS:
         done = "completed" if section_is_complete(state, sec) else "incomplete"
         lines.append(f"- `{sec}`: {done}")
+    needs_review = [
+        section
+        for section, section_status in (state.get("sections_status") or {}).items()
+        if section_status == "needs_review"
+    ]
+    if needs_review:
+        lines.append("")
+        lines.append("**Sections cần rà soát/cập nhật lại trước Validate:**")
+        lines.extend(f"- `{section}`" for section in needs_review)
     if has_critical_open_oq(state):
         lines.append("")
-        lines.append("**Open questions critical còn mở** (trả lời trong BA chat bằng `OQ-00N:`):")
+        lines.append("**Open Questions critical chưa được trả lời:**")
         for oq in state.get("open_questions") or []:
-            if oq.get("status", "open") == "open" and oq.get("severity") == "critical":
+            if (
+                str(oq.get("severity") or "").lower() == "critical"
+                and str(oq.get("status") or "open").lower() != "resolved"
+            ):
                 oid = oq.get("id") or "OQ"
                 q = oq.get("question") or ""
                 lines.append(f"- `{oid}`: {q}")

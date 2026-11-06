@@ -94,6 +94,7 @@ const SECTIONS = [
 // ── State ────────────────────────────────────────────────────
 
 let activeSectionIndex = 0;
+const activeSectionStorageKey = (id) => `ba.active-section.${id}`;
 let sessionId = '';
 let featureTitle = '';
 let chatHistories = {};    // { sectionId: [{ sender, text }] }
@@ -256,16 +257,20 @@ function applyStateUpdate(stateData, fallbackSectionId) {
   }
 
   if (stateData.sections_status) {
-    for (const sid of TIER1_IDS) {
-      const st = stateData.sections_status[sid];
+    for (const [sid, st] of Object.entries(stateData.sections_status)) {
       if (!sectionStates[sid] || st == null) continue;
-      if (st === 'completed') {
+      if (st === 'needs_review') {
+        sectionStates[sid].is_completable = false;
+        sectionStates[sid].status = 'needs_review';
+      } else if (st === 'completed') {
         applyCompletable(sid, true);
-      } else {
+      } else if (TIER1_IDS.includes(sid)) {
         applyCompletable(sid, false);
         if (st === 'in_progress' && sectionStates[sid].status === 'locked') {
           sectionStates[sid].status = 'in_progress';
         }
+      } else {
+        sectionStates[sid].status = st;
       }
     }
   }
@@ -394,7 +399,9 @@ function syncControlButtons(stateData = {}) {
     canGenerateBpmn = Boolean(stateData.can_generate_bpmn) || hasBpmnXml();
   }
   const hasBpmn = hasBpmnXml();
-  const canValidateBtn = !isSending && VALIDATE_STATUSES.includes(featureStatus);
+  const canValidateBtn = !isSending && (
+    canProceedToValidation || VALIDATE_STATUSES.includes(featureStatus)
+  );
   const canExportPkg = !isSending && (
     featureStatus === 'VALIDATED'
     || (featureStatus === 'EXPORTED' && lastValidationPassed())
@@ -996,7 +1003,86 @@ function truncateChatError(message, maxLen = 480) {
   return `${compact.slice(0, maxLen - 1)}…`;
 }
 
-async function loadSectionHistory(sectionId, initialPitch = '') {
+function buildOpenQuestionsIntro() {
+  const questions = Array.isArray(openQuestions) ? openQuestions : [];
+  const unresolved = questions.filter((item) =>
+    String(item.status || 'open').toLowerCase() !== 'resolved',
+  );
+  const pendingSync = questions.filter((item) =>
+    ['pending', 'failed'].includes(String(item.sync_status || '').toLowerCase()),
+  );
+  const formatQuestion = (item) => {
+    const id = item.id || 'OQ';
+    const severity = item.severity ? ` (${item.severity})` : '';
+    const question = item.question || 'Cần làm rõ quyết định nghiệp vụ.';
+    let prompt = 'Hãy chốt quyết định cụ thể cho mục này.';
+    if (/sso|đồng bộ tài khoản/i.test(question)) {
+      prompt = 'Chốt tài khoản phải có sẵn hay được tạo khi đăng nhập lần đầu; nêu thêm điều kiện liên kết nếu có.';
+    } else if (/mật khẩu|password/i.test(question)) {
+      prompt = 'Chốt độ dài, nhóm ký tự bắt buộc và các giới hạn/lịch đổi mật khẩu.';
+    } else if (/otp|mã xác thực/i.test(question)) {
+      prompt = 'Chốt thời hạn OTP, số lần nhập sai và thời gian chờ gửi lại.';
+    }
+    return `- **${id}${severity}:** ${question}${unresolved.includes(item) ? `\n  ${prompt}` : ''}`;
+  };
+
+  if (unresolved.length) {
+    return [
+      `Mình đã rà soát BA package. **SEC-07 có ${unresolved.length} câu hỏi cần bạn chốt trước khi Validate:**`,
+      unresolved.map(formatQuestion).join('\n'),
+      'Bạn có thể trả lời một hoặc nhiều câu trong cùng tin nhắn theo mã, ví dụ: `OQ-001: yêu cầu tài khoản GJU tồn tại trước khi đăng nhập SSO`. Sau đó mình sẽ cập nhật artifact liên quan, rà soát các bước bị ảnh hưởng và báo kết quả. Nếu đồng bộ chưa xong, mình sẽ nêu rõ và không báo hoàn tất.',
+    ].join('\n\n');
+  }
+
+  if (pendingSync.length) {
+    return [
+      `Bạn đã chốt ${questions.length} câu hỏi Open Questions. Các câu hỏi và câu trả lời hiện có ở panel bên phải; còn ${pendingSync.length} mục cần đồng bộ vào artifact.`,
+      questions.map(formatQuestion).join('\n'),
+      'Mình sẽ phản hồi tại đây sau khi thử cập nhật và rà soát các bước liên quan. Chưa nên Validate cho tới khi đồng bộ xong.',
+    ].join('\n\n');
+  }
+
+  if (questions.length) {
+    return [
+      'Mình đã rà soát các Open Questions; hiện không còn câu nào chờ bạn chốt.',
+      questions.map(formatQuestion).join('\n'),
+      'Nếu bạn sửa quyết định nghiệp vụ, hãy nêu mã OQ và nội dung mới để mình cập nhật, rà soát ảnh hưởng rồi báo lại.',
+    ].join('\n\n');
+  }
+
+  return 'Mình đã rà soát BA package và hiện chưa có Open Question cần chốt. Nếu bạn bổ sung hoặc sửa nghiệp vụ, hãy mô tả tại đây để mình rà soát các bước liên quan trước khi Validate.';
+}
+
+function ensureOpenQuestionsIntro(sectionId) {
+  if (sectionId !== 'open_questions') return;
+  const history = chatHistories[sectionId] || [];
+  const introPrefix = 'Mình đã rà soát BA package. **SEC-07';
+  const questionIds = (Array.isArray(openQuestions) ? openQuestions : [])
+    .map((item) => String(item.id || '').toUpperCase())
+    .filter(Boolean)
+    .sort();
+  const storageKey = `ba-open-questions-intro:${sessionId}`;
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+  } catch (_) {
+    saved = null;
+  }
+  if (!saved || saved.questionIds?.join('|') !== questionIds.join('|')) {
+    saved = { questionIds, text: buildOpenQuestionsIntro() };
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(saved));
+    } catch (_) {
+      // Keep the in-memory transcript usable when browser storage is unavailable.
+    }
+  }
+  if (!history.some((message) => message.sender === 'agent' && message.text?.startsWith(introPrefix))) {
+    history.unshift({ sender: 'agent', text: saved.text });
+  }
+  chatHistories[sectionId] = history;
+}
+
+async function loadSectionHistory(sectionId, initialPitch = '', { refresh = false } = {}) {
   const local = Array.isArray(chatHistories[sectionId]) ? chatHistories[sectionId] : [];
   try {
     const historyRes = await getChatHistory(sessionId, sectionId);
@@ -1005,8 +1091,11 @@ async function loadSectionHistory(sectionId, initialPitch = '') {
         sender: m.sender,
         text: m.text,
       }));
-      // Never shrink an in-memory transcript (e.g. failed turn not yet paired in ADK).
-      if (local.length > serverMessages.length) {
+      // On section navigation the persisted server transcript is authoritative;
+      // otherwise a cached transcript can hide updates made in another step/tab.
+      // Keep local-only messages during the initial load in case a just-sent turn
+      // has not been persisted yet.
+      if (!refresh && local.length > serverMessages.length) {
         chatHistories[sectionId] = local;
       } else {
         chatHistories[sectionId] = serverMessages;
@@ -1053,6 +1142,7 @@ async function loadSectionHistory(sectionId, initialPitch = '') {
       chatHistories[sectionId] = local;
     }
   } finally {
+    ensureOpenQuestionsIntro(sectionId);
     renderChatMessages();
   }
 }
@@ -1118,6 +1208,12 @@ async function init() {
     };
   });
 
+  try {
+    const savedId = localStorage.getItem(activeSectionStorageKey(sessionId));
+    const savedIndex = SECTIONS.findIndex((sec) => sec.id === savedId);
+    if (savedIndex >= 0) activeSectionIndex = savedIndex;
+  } catch { /* storage may be unavailable */ }
+
   let featureDescription = '';
   // Try to load existing data from DB
   try {
@@ -1145,6 +1241,10 @@ async function init() {
             sectionStates[secId].data = unwrapSectionData(secData.data || {}, secId);
             sectionStates[secId].flagValues = normalizeFlagMap(secData.flags || {});
             applyCompletable(secId, Boolean(secData.is_completable));
+            if (secData.status === 'needs_review') {
+              sectionStates[secId].is_completable = false;
+              sectionStates[secId].status = 'needs_review';
+            }
           }
         }
         unlockGroup2IfReady();
@@ -1162,7 +1262,7 @@ async function init() {
     vaLink.href = factoryPageHref('va.html');
   }
   syncFactoryDockLinks();
-  await loadSectionHistory('feature_definition', featureDescription);
+  await loadSectionHistory(SECTIONS[activeSectionIndex].id, featureDescription);
   if (canProceedToValidation) {
     await loadWikiDocuments();
   }
@@ -1332,7 +1432,14 @@ const REGISTER_IDS = new Set(['open_questions', 'assumptions']);
 function getRegisterStamp(sectionId) {
   if (sectionId === 'open_questions') {
     if (!openQuestions.length) return '<span class="stamp stamp-pending">Chưa có</span>';
-    const open = openQuestions.filter((oq) => (oq.status || 'open') !== 'resolved');
+    const open = openQuestions.filter((oq) =>
+      (oq.status || 'open') !== 'resolved' || ['pending', 'failed'].includes(oq.sync_status),
+    );
+    const syncing = open.filter((oq) => ['pending', 'failed'].includes(oq.sync_status)).length;
+    if (syncing) {
+      const label = open.some((oq) => oq.sync_status === 'failed') ? 'Cần đồng bộ lại' : 'Chờ đồng bộ';
+      return `<span class="stamp stamp-warning" title="Câu trả lời đã ghi nhận, artifact liên quan chưa đồng bộ xong">${label} ${syncing}</span>`;
+    }
     if (!open.length) return '<span class="stamp stamp-approved">Đã giải quyết</span>';
     const critical = open.filter((oq) => oq.severity === 'critical').length;
     const title = critical ? ` title="${critical} câu critical chặn bước Validate"` : '';
@@ -1348,6 +1455,7 @@ function getStatusStamp(status) {
     active: '<span class="stamp stamp-auto">Đang làm</span>',
     in_progress: '<span class="stamp stamp-draft">Đang xử lý</span>',
     completed: '<span class="stamp stamp-approved">Hoàn thành</span>',
+    needs_review: '<span class="stamp stamp-warning">Cần rà soát lại</span>',
   };
   return map[status] || map.active;
 }
@@ -1442,26 +1550,11 @@ async function watchServerTurn() {
     return;
   }
   const server = (res && res.messages) || [];
-  // The conversation already moved on (this section is done, the next one has messages): follow it.
-  const nextId = TIER1_IDS[TIER1_IDS.indexOf(sec.id) + 1];
-  if (sectionStates[sec.id].status === 'completed' && nextId && sectionStates[nextId]?.status !== 'locked') {
-    try {
-      const nextRes = await getChatHistory(sessionId, nextId);
-      if (nextRes?.messages?.length) {
-        const idx = SECTIONS.findIndex((x) => x.id === nextId);
-        if (idx >= 0) await selectSection(idx);
-        return;
-      }
-    } catch {
-      /* stay on this section */
-    }
-  }
   const last = server[server.length - 1];
   const pending = Boolean(last && last.sender === 'user');
   if (seenServerCount[sec.id] === undefined) seenServerCount[sec.id] = server.length;
   if (server.length !== seenServerCount[sec.id]) {
     seenServerCount[sec.id] = server.length;
-    const wasCompleted = sectionStates[sec.id].status === 'completed';
     chatHistories[sec.id] = server.map((m) => ({ sender: m.sender, text: m.text }));
     const reply = chatHistories[sec.id][chatHistories[sec.id].length - 1];
     remotePending = pending;
@@ -1481,7 +1574,6 @@ async function watchServerTurn() {
     } catch {
       /* next poll retries */
     }
-    followAgentToNextSection(sec.id, wasCompleted);
     return;
   }
   if (pending !== remotePending) {
@@ -1699,7 +1791,7 @@ function renderWorkspace() {
         <div class="ws-item-card">
           <div class="ws-item-header">
             <span class="ws-item-id">${escapeHtml(oq.id || 'OQ')}</span>
-            <span class="ws-item-meta">${escapeHtml(oq.severity || '')} · ${escapeHtml(oq.status || 'open')}</span>
+            <span class="ws-item-meta">${escapeHtml(oq.severity || '')} · ${escapeHtml(oq.status || 'open')}${oq.sync_status && oq.sync_status !== 'verified' ? ` · ${escapeHtml(oq.sync_status === 'pending' ? 'chờ đồng bộ' : 'cần đồng bộ lại')}` : ''}</span>
           </div>
           <div class="ws-item-body">${escapeHtml(oq.question || '')}</div>
           ${oq.answer ? `<div class="ws-ac-row"><strong>Answer</strong> ${escapeHtml(oq.answer)}</div>` : ''}
@@ -1758,9 +1850,8 @@ async function selectSection(idx) {
   if (sectionStates[sec.id].status === 'locked') return;
 
   activeSectionIndex = idx;
-  if (!chatHistories[sec.id] || chatHistories[sec.id].length === 0) {
-    await loadSectionHistory(sec.id);
-  }
+  try { localStorage.setItem(activeSectionStorageKey(sessionId), sec.id); } catch { /* storage may be unavailable */ }
+  await loadSectionHistory(sec.id, '', { refresh: true });
   renderAll();
 }
 
@@ -1768,7 +1859,7 @@ async function selectSection(idx) {
 
 async function handleValidate() {
   if (isSending) return;
-  if (!VALIDATE_STATUSES.includes(featureStatus)) return;
+  if (!canProceedToValidation && !VALIDATE_STATUSES.includes(featureStatus)) return;
   chatInput.value = '[VALIDATE] Validate BA package';
   await handleSendWithAction('validate');
 }

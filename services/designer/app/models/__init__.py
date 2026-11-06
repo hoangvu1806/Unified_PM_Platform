@@ -45,6 +45,27 @@ class ScreenBrief(BaseModel):
     purpose: str = Field(default="", max_length=1_000)
     platforms: list[Platform] = Field(default_factory=list)
     source_ui_ids: list[str] = Field(default_factory=list)
+    # Screen-level content decisions gathered with the scope, before UI spec generation.
+    content_outline: list[str] = Field(
+        default_factory=list, max_length=30,
+        description="Proposed/confirmed visible regions and content, tagged BA, user, or suggestion.",
+    )
+    actions: list[str] = Field(
+        default_factory=list, max_length=20,
+        description="Proposed/confirmed user actions and controls on this screen.",
+    )
+    states: list[str] = Field(
+        default_factory=list, max_length=20,
+        description="Relevant proposed/confirmed screen states such as loading, error, or success.",
+    )
+    open_questions: list[str] = Field(
+        default_factory=list, max_length=12,
+        description="Decisions still needed from the user for this screen; clear only when answered.",
+    )
+    confirmed: bool = Field(
+        default=False,
+        description="True only after the user confirms this screen's proposed content and actions.",
+    )
 
     @model_validator(mode="after")
     def ensure_id(self) -> "ScreenBrief":
@@ -58,6 +79,26 @@ class ScreenBrief(BaseModel):
         return self
 
 
+class StyleCandidate(BaseModel):
+    key: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=120)
+    tagline: str = Field(default="", max_length=240)
+    direction: str = Field(default="", max_length=2_000)
+    recommended: bool = False
+    # Optional project-matched decorative illustration selected from the local catalog.
+    preview_asset_id: str = Field(default="", max_length=120)
+    # A reproducible design contract, shared by the preview, UI spec, builder and reviewer.
+    palette: dict[str, str] = Field(default_factory=dict)
+    heading_font: str = ""
+    body_font: str = ""
+    radius: str = "lg"
+    density: str = "comfortable"
+    composition: str = ""
+    surface_language: str = ""
+    shape_language: str = ""
+    hero_placement: str = ""
+
+
 class DesignBrief(BaseModel):
     product_name: str = ""
     product_description: str = ""
@@ -68,6 +109,11 @@ class DesignBrief(BaseModel):
     scope_confirmed: bool = False
     # English keywords (product type, industry, audience, platform) to retrieve design knowledge.
     design_query: str = ""
+    style_candidates: list[StyleCandidate] = Field(default_factory=list, max_length=5)
+    selected_style_key: str = ""
+    style_direction: str = ""
+    selected_style_contract: dict[str, Any] = Field(default_factory=dict)
+    style_preview_shown: bool = False
 
     def missing_fields(self) -> list[str]:
         missing: list[str] = []
@@ -79,6 +125,8 @@ class DesignBrief(BaseModel):
             missing.append("screens")
         if not self.scope_confirmed:
             missing.append("scope_confirmation")
+        if any(not screen.confirmed or screen.open_questions for screen in self.screens):
+            missing.append("screen_content_confirmation")
         return missing
 
 

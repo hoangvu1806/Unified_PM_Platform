@@ -15,6 +15,7 @@ from agents.ba_agent.constants import (
     ROUTE_BR,
     ROUTE_FD,
     ROUTE_LOCKED,
+    ROUTE_OPEN_QUESTIONS,
     ROUTE_STUB,
     ROUTE_UC,
     ROUTE_VALIDATE,
@@ -25,8 +26,13 @@ from agents.ba_agent.constants import (
     STATE_VALIDATE_ACTION,
     VALIDATE_MESSAGE_PREFIX,
     SECTION_VALIDATION,
+    SECTION_OPEN_QUESTIONS,
 )
 from agents.ba_agent.section_gate import can_access_section, sync_sections_status_from_flags
+from agents.sub_graph.feature_definition.nodes.oq_asm_detector.callback import (
+    apply_oq_resolutions,
+    resolutions_from_user_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +85,21 @@ def route_ba_turn(ctx: Context) -> str:
     if active_section == SECTION_VALIDATION:
         ctx.route = ROUTE_VALIDATE
         logger.info("BA Router: validation page → VA subgraph (discuss)")
+        return user_input
+
+    # Open Questions is a conversational resolution step. It is deliberately
+    # outside the sequential FD -> BR -> WF -> UC completion gate.
+    if active_section == SECTION_OPEN_QUESTIONS:
+        # Apply an explicitly addressed answer before the LLM runs so its
+        # response sees the updated blocker state and can guide the user to
+        # Validate immediately when the last critical OQ is resolved.
+        changed = apply_oq_resolutions(
+            state, resolutions_from_user_message(user_input)
+        )
+        if changed:
+            sync_sections_status_from_flags(state)
+        ctx.route = ROUTE_OPEN_QUESTIONS
+        logger.info("BA Router: section=open_questions route=open_questions")
         return user_input
 
     if active_section not in IMPLEMENTED_SECTIONS:
