@@ -11,7 +11,7 @@ Selected local illustration for this screen (if applicable):
 
 Must show (exact texts): {{must_show}}
 Business rules to reflect: {{rules}}
-Photos to use (slot → URL): {{images}}
+Images: use only the supplied local illustration or user-provided assets. Do not fetch, search for, or add external images.
 Other screens (for `data-goto`): {{others}}
 
 UX guidelines for this screen (UI/UX knowledge base):

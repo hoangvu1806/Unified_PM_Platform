@@ -51,6 +51,7 @@ interface StylePreviewOption {
     image: string;
     asset_credit?: string;
     asset_source_url?: string;
+    review_notes?: string[];
 }
 
 function StylePreviewGallery({
@@ -119,6 +120,12 @@ function StylePreviewGallery({
                         >
                             Chọn hướng này
                         </button>
+                        {option.review_notes?.length ? (
+                            <div className="style-preview-review-notes" role="note">
+                                <strong>Gợi ý hoàn thiện</strong>
+                                <ul>{option.review_notes.map((note, noteIndex) => <li key={noteIndex}>{note}</li>)}</ul>
+                            </div>
+                        ) : null}
                     </article>
                 ))}
             </div>

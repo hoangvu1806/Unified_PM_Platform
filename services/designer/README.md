@@ -14,8 +14,7 @@ UI at `/designer/`, API at `/designer/api/v1/` behind the gateway; data in Postg
   is kept only if it does not make the checks worse. The first screen sets the shell, the others are built in
   parallel (`DESIGNER_PARALLEL_SCREENS`). Chat edits go straight to a review call with the user's instruction.
 - Context per call is small and specific: the art direction (palette, fonts, radius, do/don't) applied as the
-  session theme, the design system's relevant components, the screen's spec, business rules, photos found by
-  `find_images` (Unsplash with a key, else Openverse + Wikimedia), and design knowledge retrieved for this
+  session theme, the design system's relevant components, the screen's spec, business rules, approved local illustrations or user-provided assets, and design knowledge retrieved for this
   product and screen from `knowledge/` (vendored skills: ui-ux-pro-max data + Anthropic's frontend-design;
   see `knowledge/README.md`). Nothing domain- or platform-specific is hard-coded in the prompts.
 - `app/designsystem/`: `.fig` → tokens (Tailwind `@theme`) + component HTML snippets; gallery.
@@ -84,7 +83,7 @@ Screen conventions for the agent and the design page:
 ```text
 message / BA handoff
   -> router (intent, brief, design_query)
-  -> spec: art direction + screens (sections, states, must_show, rules, imagery, ux_query)
+  -> spec: art direction + screens (sections, states, must_show, rules, ux_query)
        knowledge: product profile (style, palette, fonts, anti-patterns) + frontend-design skill
   -> human spec review
   -> per screen: draft -> render + lint + must_show check -> review (OK / edits), ≤ 2 rounds

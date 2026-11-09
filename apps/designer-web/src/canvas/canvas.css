@@ -133,13 +133,23 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
 .canvas-zoom-bar .canvas-icon { width: 28px; height: 28px; color: var(--text-muted); }
 .canvas-zoom-bar .canvas-icon:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
 .canvas-zoom-bar .canvas-icon:disabled { opacity: 0.35; pointer-events: none; }
+.canvas-zoom-divider { width: 1px; height: 18px; margin: 0 3px; background: var(--border-strong); }
+.canvas-fit-button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; border: 0;
+  border-radius: 8px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px;
+  font-weight: 650; cursor: pointer; white-space: nowrap; }
+.canvas-fit-button:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
 /* position the wrap relative so the zoom-bar can use position:absolute */
 .canvas-multi-wrap { position: relative; }
 .canvas-multi { flex: 1; display: flex; flex-direction: row; align-items: flex-start;
-  gap: 32px; padding: 40px 32px; overflow: auto; }
-.canvas-multi-frame { display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer;
-  transition: transform 0.15s ease; flex-shrink: 0; }
+  gap: 24px; padding: 32px 32px 72px; overflow: auto; }
+.canvas-multi-frame, .canvas-multi-loading-card { display: flex; flex-direction: column; align-items: stretch; gap: 12px;
+  width: max-content; padding: 10px; border: 1px solid var(--border-strong); border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-surface) 86%, transparent); color: var(--text-primary); text-align: left;
+  flex-shrink: 0; }
+.canvas-multi-frame { cursor: pointer; font: inherit; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+.canvas-multi-frame:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 3px; }
 .canvas-multi-frame:hover { transform: translateY(-3px); }
+.canvas-multi-frame:hover { border-color: var(--violet); }
 .canvas-multi-frame:hover .canvas-multi-viewport { box-shadow: var(--shadow-lg), 0 0 0 2px var(--violet); }
 .canvas-multi-viewport { border-radius: 12px; overflow: hidden; background: #fff; box-shadow: var(--shadow-md);
   transition: box-shadow 0.15s ease; }
@@ -147,13 +157,68 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
 .canvas-multi-loading { width: 100%; height: 100%; display: grid; place-items: center;
   background: var(--bg-surface-raised); animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
-.canvas-multi-label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650;
-  color: var(--text-secondary); }
-.canvas-multi-label small { color: var(--text-muted); font-weight: 500; }
+.canvas-multi-label { display: flex; align-items: center; gap: 8px; min-height: 28px; max-width: 100%;
+  font-size: 13px; font-weight: 650; color: var(--text-secondary); }
+.canvas-multi-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.canvas-multi-index { display: inline-grid; place-items: center; width: 26px; height: 24px; flex: 0 0 26px;
+  border-radius: 8px; background: var(--violet-soft); color: var(--violet); font-size: 11px; font-weight: 750; }
+.canvas-multi-loading-card { width: max-content; }
+.canvas-multi-loading-card .canvas-multi-viewport { width: 280px; }
+
+/* Flow overview: screen index at left, ordered phone previews across the canvas. */
+.flow-overview .canvas-rail { width: 194px; padding: 14px 10px; }
+.flow-overview .canvas-rail-top { align-items: center; margin-bottom: 22px; }
+.flow-overview .canvas-brand strong { font-size: 13px; }
+.flow-overview .canvas-brand small { font-size: 10.5px; }
+.flow-overview .canvas-rail-label-flow { display: none; }
+.canvas-flow-nav { display: flex; flex-direction: column; gap: 12px; margin: 0 0 10px; }
+.canvas-flow-nav-overview { display: flex; align-items: center; gap: 9px; min-height: 36px; padding: 0 10px; border: 0;
+  border-radius: 9px; background: var(--violet-soft); color: var(--violet); font: inherit; font-size: 12px; font-weight: 700; text-align: left; }
+.canvas-flow-nav-heading { display: flex; justify-content: space-between; padding: 0 8px; color: var(--text-muted); font-size: 11px; font-weight: 700; }
+.canvas-screens-flow { gap: 2px; }
+.canvas-screens-flow .canvas-screen { gap: 8px; padding: 5px 7px; border-radius: 8px; }
+.canvas-screens-flow .canvas-screen-icon { width: 22px; height: 22px; flex-basis: 22px; border-radius: 6px; font-size: 11px; }
+.canvas-flow-screen-number { color: currentColor; font-size: 11px; font-weight: 750; }
+.canvas-screens-flow .canvas-screen.active .canvas-screen-icon { background: var(--violet); }
+.canvas-screens-flow .canvas-screen-text strong { font-size: 11.5px; font-weight: 600; }
+.canvas-screens-flow .canvas-screen-text small { display: none; }
+.canvas-flow-crumb { overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.canvas-flow-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+  background: #15151b; color: #f5f5f7; }
+.canvas-flow-toolbar { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,.08); background: #1b1b22; }
+.canvas-flow-device { display: inline-flex; align-items: center; gap: 8px; color: #c5c5d0; font-size: 11.5px; font-weight: 600; }
+.canvas-flow-device svg { color: #aaaaba; }
+.canvas-flow-toolbar .canvas-zoom-bar { position: static; transform: none; padding: 2px 5px; border: 1px solid rgba(255,255,255,.1);
+  background: #22222b; box-shadow: none; }
+.canvas-flow-toolbar .canvas-icon { color: #d4d4dc; }
+.canvas-flow-toolbar .canvas-fit-button { color: #d4d4dc; }
+.canvas-flow-scroll { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; }
+.canvas-flow-scroll::-webkit-scrollbar { height: 8px; }
+.canvas-flow-scroll::-webkit-scrollbar-thumb { border-radius: 8px; background: #43434f; }
+.canvas-flow-scroll { scrollbar-color: #43434f transparent; scrollbar-width: thin; }
+.canvas-flow-scroll .canvas-multi { width: max-content; min-width: 100%; flex: 0 0 auto; align-items: center; gap: 0;
+  padding: 26px 24px 42px; overflow: visible; }
+.canvas-flow-step { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
+.canvas-flow-step:last-child { margin-right: 24px; }
+.canvas-flow-connector { width: 21px; flex: 0 0 21px; display: grid; place-items: center; color: #8b5cf6; }
+.canvas-flow-connector svg { stroke-width: 2.5; }
+.canvas-flow-scroll .canvas-multi-frame, .canvas-flow-scroll .canvas-multi-loading-card { width: max-content; gap: 9px; padding: 0;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.canvas-flow-scroll .canvas-multi-frame:hover { transform: none; }
+.canvas-flow-scroll .canvas-multi-frame.active .canvas-multi-index { background: #7c3aed; color: #fff; }
+.canvas-flow-scroll .canvas-multi-label { min-height: 25px; gap: 7px; color: #ededf3; font-size: 11.5px; }
+.canvas-flow-scroll .canvas-multi-label strong { max-width: 155px; }
+.canvas-flow-scroll .canvas-multi-index { width: 19px; height: 19px; flex-basis: 19px; border-radius: 5px; background: #6d39d6;
+  color: #fff; font-size: 10.5px; }
+.canvas-flow-scroll .canvas-multi-viewport { box-sizing: border-box; border: 2px solid #55545e; border-radius: 21px;
+  background: #0e0e12; box-shadow: 0 6px 22px rgba(0,0,0,.3); }
+.canvas-flow-scroll .canvas-multi-viewport iframe { border-radius: 17px; }
+.canvas-flow-scroll .canvas-multi-loading { border-radius: 17px; }
+.canvas-flow-scroll .canvas-multi-frame:focus-visible { outline: 2px solid #a78bfa; outline-offset: 4px; }
+.canvas-flow-scroll .canvas-multi-frame:hover .canvas-multi-viewport { box-shadow: 0 0 0 2px #8b5cf6, 0 8px 24px rgba(0,0,0,.35); }
 
 /* ── View-mode toggle ─────────────────────────────── */
-.canvas-view-toggle { margin-left: auto; }
-.canvas-view-toggle.active { background: var(--violet-soft); color: var(--violet); }
 
 /* ── Code panel ───────────────────────────────────── */
 .canvas-code { width: 44%; min-width: 360px; display: flex; flex-direction: column; gap: 10px; padding: 12px;

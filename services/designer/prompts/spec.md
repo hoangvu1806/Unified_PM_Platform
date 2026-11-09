@@ -25,7 +25,6 @@ For each screen:
 - `data`: realistic sample data in the product's language and domain;
 - `must_show`: the exact visible texts the screen must contain (labels, buttons, column headers, key messages) — taken from the source requirements, in the user's language;
 - `rules`: business rules from the source (keep their ids, e.g. `BR-02: …`) that the UI must reflect;
-- `imagery`: optional imagery only when it serves the screen purpose or is required by the brief/design system; default to none for task-focused forms and utility screens. In strict Figma-source mode, use only supplied assets;
 - `navigation`: ids of screens it links to; `source_ui_ids`: source touchpoints covered;
 - `ux_query`: 3-6 English keywords describing the screen's UI concerns (e.g. "login form password validation"), used to retrieve UX guidelines.
 
@@ -34,7 +33,7 @@ Use the confirmed screen-level content in the brief as the source of truth for e
 User-selected visual direction: {{style_selection}}
 Selected visual contract (authoritative for preview and final screens): {{visual_contract}}
 Apply this contract consistently across screens. Preserve its exact palette, font pair, radius, density, composition language, surfaces, and shape language unless an imported design system is authoritative. Do not substitute a different style from the product profile when the user selected a style.
-For each screen, set `visual_asset_role` to `hero` or `background` only when the selected local illustration supports that task; otherwise set `none`. The selected illustration is decorative and must never replace the wordmark. Set `imagery` to none by default for task-focused forms and utility screens; use external photos only when the approved brief explicitly requires them or the screen task clearly depends on a real photo.
+For each screen, set `visual_asset_role` to `hero` or `background` only when the selected local illustration supports that task; otherwise set `none`. The selected illustration is decorative and must never replace the wordmark. Use only user-provided assets or selected local illustrations; never source external photos or remote image URLs.
 
 Design system: {{design_system}}
 

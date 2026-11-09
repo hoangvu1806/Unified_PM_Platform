@@ -98,12 +98,6 @@ class DesignDirection(BaseModel):
     dont: list[str] = Field(default_factory=list, max_length=6)
 
 
-class ImageNeed(BaseModel):
-    slot: str = Field(description="Where it goes, e.g. 'hero background', 'course card cover'")
-    query: str = Field(description="2-4 English keywords for a real photo")
-    orientation: Literal["landscape", "portrait", "squarish"] = "landscape"
-
-
 class ScreenSpec(BaseModel):
     id: str
     name: str = Field(min_length=1, max_length=120)
@@ -120,7 +114,6 @@ class ScreenSpec(BaseModel):
         description="Exact visible texts the screen must contain: field labels, buttons, column headers, messages",
     )
     rules: list[str] = Field(default_factory=list, max_length=15, description="Business rules (BR-xx: …) the UI must reflect")
-    imagery: list[ImageNeed] = Field(default_factory=list, max_length=4)
     visual_asset_role: Literal["none", "hero", "background"] = Field(
         default="none",
         description="Use the selected local style illustration only where it supports this task; keep it separate from the logo.",

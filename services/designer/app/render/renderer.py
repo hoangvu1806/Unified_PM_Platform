@@ -149,6 +149,8 @@ class Renderer:
         lint: bool = True,
         axe: bool = True,
         strict_touch_targets: bool = False,
+        strict_visual_quality: bool = False,
+        required_texts: list[str] | None = None,
         max_height: int = 6000,
     ) -> RenderResult:
         console: list[str] = []
@@ -161,7 +163,9 @@ class Renderer:
             result.css = await page.evaluate(CSS_JS)
             if lint:
                 report = await page.evaluate(LINT_JS, {"mobile": width <= 480, "axe": axe,
-                                                       "strictTouchTargets": strict_touch_targets})
+                                                       "strictTouchTargets": strict_touch_targets,
+                                                       "strictVisualQuality": strict_visual_quality,
+                                                       "requiredTexts": required_texts or []})
                 result.findings, result.text, result.height = report["findings"], report["text"], report["height"]
             else:
                 result.text = await page.evaluate("() => document.body.innerText")

@@ -47,7 +47,23 @@ async def _screen(request: Request, session_id: UUID, screen_id: str, version: i
 
 
 def vendor_base(request: Request) -> str:
-    return request.app.state.settings.platform_public_url.rstrip("/") + "/designer/api/v1/render/vendor/"
+    # Screen documents run in a sandboxed iframe, so their vendor scripts need
+    # an absolute URL. Prefer the public origin forwarded by the gateway (this
+    # matters when ngrok terminates HTTPS); retain the configured URL for direct
+    # service calls that did not pass through the gateway.
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+    # ngrok terminates TLS before forwarding to the local HTTP gateway. Some
+    # gateway/tunnel combinations still forward ``http`` here even though the
+    # browser is on the public HTTPS URL. Using that value creates mixed-content
+    # script URLs inside the sandboxed screen iframe, so Tailwind never loads.
+    if forwarded_host.lower().endswith((".ngrok-free.dev", ".ngrok-free.app", ".ngrok.io")):
+        forwarded_proto = "https"
+    if forwarded_host and forwarded_proto in {"http", "https"}:
+        public_origin = f"{forwarded_proto}://{forwarded_host}"
+    else:
+        public_origin = request.app.state.settings.platform_public_url.rstrip("/")
+    return public_origin + "/designer/api/v1/render/vendor/"
 
 
 @router.get("/render/vendor/{name}")

@@ -29,7 +29,6 @@ from ..designsystem.service import DesignContext, design_context
 from ..models import DEFAULT_DESIGN_SYSTEM, SCREEN_WIDTHS, RunStage, RunStatus, RunView, ScreenWrite, SessionView, StyleCandidate
 from ..render import fragment_of
 from ..render.assets import inline_assets
-from ..render.images import find_images
 from .preview_assets import asset_by_id, inline_svg, relevant_assets
 from .patches import apply_reply, extract_html
 from .schemas import DesignDecision, Palette, ScreenSpec, StylePreviewPlan, UiSpec
@@ -68,6 +67,20 @@ def _clip(text: str, limit: int) -> str:
 
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _preview_required_texts(screen) -> list[str]:
+    """Collect literal UI copy explicitly quoted in the confirmed screen contract."""
+    quoted = re.compile(r"""[“\"]([^”\"]{2,60})[”\"]|[‘']([^’']{2,60})[’']""")
+    source_lines = [*(screen.content_outline or []), *(screen.actions or [])]
+    required: list[str] = []
+    for line in source_lines:
+        for match in quoted.finditer(str(line)):
+            value = next((part for part in match.groups() if part), "").strip()
+            # Exclude long quoted prose; literal control labels and concise headings remain.
+            if value and len(value.split()) <= 8 and not value.endswith((".", "!", "?")):
+                required.append(value)
+    return list(dict.fromkeys(required))
 
 
 def _representative_preview_screen(screens):
@@ -288,12 +301,14 @@ class HtmlDesigner:
         height = 900 if platform == "mobile" else 920
         design = await design_context(self.store, session)
         query = screen.name + " " + screen.purpose
+        required_visible_text = _preview_required_texts(screen)
         screen_context = json.dumps({
             "screen_name": screen.name,
             "purpose": screen.purpose,
             "platform": platform,
             "confirmed_visible_regions": screen.content_outline,
             "confirmed_actions": screen.actions,
+            "required_visible_text_exact": required_visible_text,
             "behavioral_states_reference_only": screen.states,
         }, ensure_ascii=False)
         settings = self.service.settings
@@ -409,7 +424,8 @@ class HtmlDesigner:
             result = await self.service.renderer.render(
                 render_html, width=width, height=height,
                 theme_css=option_theme_css or preview_theme, fonts=option_fonts or preview_fonts, screenshot="jpeg",
-                scale=0.7, lint=True, axe=True, strict_touch_targets=(platform == "mobile"), max_height=1200,
+                scale=0.7, lint=True, axe=True, strict_touch_targets=(platform == "mobile"),
+                strict_visual_quality=True, required_texts=required_visible_text, max_height=1200,
             )
             add_usage(usage)
             return {
@@ -438,8 +454,17 @@ class HtmlDesigner:
                                     str(node.get("html") or "").strip(),
                                 ) if part)
                                 for node in finding.get("elements", [])[:3]
-                            ) + ". Keep all text and interactive controls inside their visible content container; "
-                            "only decorative imagery may intentionally crop inside a dedicated background region. Rerender."
+                            ) + ". " + (
+                                "Set the actual text/password input hit box to at least 48px high (for example min-h-12), "
+                                "and make its field row at least 48px high; do not enlarge only a non-interactive outer card. "
+                                "Keep any eye/clear icon button at least 48×48px."
+                                if finding.get("rule") == "tap-target" else
+                                "Align the visible bordered/surfaced field rows to the same left and right edges; "
+                                "a password input may be narrower inside its row to make room for the visibility button."
+                                if finding.get("rule") == "form-field-alignment" else
+                                "Keep all text and interactive controls inside their visible content container; "
+                                "only decorative imagery may intentionally crop inside a dedicated background region."
+                            ) + " Rerender."
                         )
                         for finding in item["qa_errors"]
                     ]
@@ -450,8 +475,12 @@ class HtmlDesigner:
             try:
                 response = await self.llm.generate(
                     system=self.prompts.render("style-preview-review"),
-                    text=("Approved screen data:\n" + screen_context + "\n\nStyle options in screenshot order:\n" +
+                    text=("Approved screen data and exact-content contract:\n" + screen_context +
+                          "\n\nCompare the three screenshots as one gallery. Style options in screenshot order:\n" +
                           json.dumps([{"key": item.key, "name": item.name, "direction": item.direction or item.tagline,
+                                       "palette": item.palette, "composition": item.composition,
+                                       "surface_language": item.surface_language, "shape_language": item.shape_language,
+                                       "hero_placement": item.hero_placement,
                                        "preview_asset_id": item.preview_asset_id}
                                       for item in candidates], ensure_ascii=False)),
                     images=[item["rendered_image"] for item in previews if item.get("rendered_image")],
@@ -460,9 +489,7 @@ class HtmlDesigner:
                 )
             except Exception as error:
                 logger.warning("Style preview visual review skipped: %s", error)
-                raise AppError("STYLE_PREVIEW_REVIEW_FAILED", "Could not complete preview quality review",
-                               "The preview gallery was withheld because its final visual review did not complete. Retry to render and review it again.",
-                               502, True, action="Retry the style preview.") from error
+                return None
             add_usage(usage)
             parsed = _style_preview_reviews(response, candidates)
             if parsed is not None:
@@ -501,65 +528,84 @@ class HtmlDesigner:
                 logger.warning("Style preview review schema normalization failed: %s", error)
                 return None
 
-        review_issues = await critique_previews()
-        if review_issues is None:
-            raise AppError("STYLE_PREVIEW_REVIEW_FAILED", "Could not read preview quality review",
-                           "The preview gallery was withheld because the visual review returned an invalid result. Retry to render and review it again.",
-                           502, True, action="Retry the style preview.")
-        issues = static_issues(previews)
-        for key, notes in review_issues.items():
-            issues.setdefault(key, []).extend(notes)
-
-        max_repair_rounds = 2
-        for repair_round in range(max_repair_rounds):
-            if not issues:
+        # Deterministic browser checks are the hard gate. They detect missing
+        # approved labels, overflow/clipping, broken assets, insufficient contrast,
+        # overlapping controls, and strict mobile tap-target/alignment errors.
+        # Vision-model critiques are useful guidance but are probabilistic; they
+        # must never suppress an otherwise renderable gallery after repeating the
+        # same subjective observation.
+        max_static_repairs = 3
+        static_findings = static_issues(previews)
+        for repair_round in range(max_static_repairs):
+            if not static_findings:
                 break
+            repair_keys = set(static_findings)
             revised = await asyncio.gather(*(
                 render_candidate(
                     candidate,
                     review_feedback=(
-                        f"BLOCKING REPAIR ROUND {repair_round + 1}/{max_repair_rounds}. Fix every issue below "
-                        "in the visible rendered result. Remove unsupported factual labels/claims; retain restrained decorative footer treatment when it adds no facts and does not crowd the screen. "
-                        "Do not preserve a faulty layout just because it appears in the previous HTML. "
-                        "Do not add copy to fill empty space. Recompose the affected areas if needed.\n"
-                        + "\n".join(issues[candidate.key])
+                        f"MEASURABLE LAYOUT REPAIR {repair_round + 1}/{max_static_repairs}. Fix each browser QA error below. "
+                        "Keep all approved content and controls visible; do not add unsupported copy. "
+                        "For mobile, maintain consistent form-field alignment and touch targets of at least 48 by 48 CSS px.\n"
+                        + "\n".join(static_findings[candidate.key])
                     ),
                     previous_html=next(item["html"] for item in previews if item["key"] == candidate.key),
                 )
-                for candidate in candidates if candidate.key in issues
+                for candidate in candidates if candidate.key in repair_keys
             ), return_exceptions=True)
             for candidate, result in zip(
-                (candidate for candidate in candidates if candidate.key in issues), revised
+                (candidate for candidate in candidates if candidate.key in repair_keys), revised
             ):
                 if isinstance(result, Exception):
                     raise AppError("STYLE_PREVIEW_REPAIR_FAILED", "Could not repair a style preview",
-                                   f"Preview option '{candidate.name}' could not be repaired after quality review. The gallery was withheld; retry to generate it again.",
+                                   f"Preview option '{candidate.name}' could not pass browser layout checks. The gallery was withheld to avoid showing a broken screen.",
                                    502, True, action="Retry the style preview.") from result
                 old = next(i for i, item in enumerate(previews) if item["key"] == candidate.key)
                 previews[old] = result
+            static_findings = static_issues(previews)
 
-            # Re-run deterministic layout lint and visual review after each targeted repair.
-            issues = static_issues(previews)
-            if issues:
-                continue
-            review_issues = await critique_previews()
-            if review_issues is None:
-                raise AppError("STYLE_PREVIEW_REVIEW_FAILED", "Could not read final preview review",
-                               "The preview gallery was withheld because the final visual review returned an invalid result. Retry to render and review it again.",
-                               502, True, action="Retry the style preview.")
-            issues = static_issues(previews)
-            for key, notes in review_issues.items():
-                issues.setdefault(key, []).extend(notes)
+        if static_findings:
+            details = "; ".join(f"{key}: {', '.join(notes)}" for key, notes in static_findings.items())
+            raise AppError("STYLE_PREVIEW_QA_FAILED", "Style preview did not pass layout checks",
+                           f"The gallery was withheld because measurable browser checks still fail after {max_static_repairs} targeted repairs: {details}",
+                           422, True, action="Retry the style preview after updating the screen or design direction.")
 
-        if issues:
-            details = "; ".join(f"{key}: {', '.join(notes)}" for key, notes in issues.items())
-            if static_issues(previews):
-                raise AppError("STYLE_PREVIEW_QA_FAILED", "Style preview did not pass layout checks",
-                               f"The gallery was withheld because mobile layout checks still fail after {max_repair_rounds} targeted repairs: {details}",
-                               422, True, action="Retry the style preview after updating the screen or design direction.")
-            raise AppError("STYLE_PREVIEW_REVIEW_FAILED", "Style preview did not pass visual review",
-                           f"The gallery was withheld because visual review still found issues after {max_repair_rounds} targeted repairs: {details}",
-                           422, True, action="Retry the style preview after adjusting the art direction.")
+        # Attempt one focused visual polish pass. Keep the last browser-QA-clean
+        # render if the repair fails or introduces a measurable regression.
+        review_issues = await critique_previews()
+        visual_notes: dict[str, list[str]] = {
+            key: list(notes) for key, notes in (review_issues or {}).items() if notes
+        }
+        if review_issues:
+            originals = {item["key"]: item for item in previews}
+            repair_candidates = [candidate for candidate in candidates if candidate.key in review_issues]
+            revised = await asyncio.gather(*(
+                render_candidate(
+                    candidate,
+                    review_feedback=(
+                        "ONE FOCUSED VISUAL POLISH PASS. Apply these concrete observations where visibly valid. "
+                        "Preserve approved content, use a coherent type system, and do not add new copy.\n"
+                        + "\n".join(review_issues[candidate.key])
+                    ),
+                    previous_html=originals[candidate.key]["html"],
+                )
+                for candidate in repair_candidates
+            ), return_exceptions=True)
+            for candidate, result in zip(repair_candidates, revised):
+                if isinstance(result, Exception):
+                    logger.warning("Optional visual polish failed for style preview %s: %s", candidate.key, result)
+                    continue
+                if result.get("qa_errors"):
+                    logger.warning("Optional visual polish introduced browser QA errors for %s; keeping prior render", candidate.key)
+                    continue
+                old = next(i for i, item in enumerate(previews) if item["key"] == candidate.key)
+                previews[old] = result
+            final_review = await critique_previews()
+            if final_review is not None:
+                visual_notes = {key: list(notes) for key, notes in final_review.items() if notes}
+
+        for item in previews:
+            item["review_notes"] = visual_notes.get(item["key"], [])
 
         await self._usage(run, total_usage, "style_previews")
         message = (f"Mình chọn **{screen.name}** làm màn hình đại diện vì nó thể hiện rõ nội dung và trải nghiệm của sản phẩm. "
@@ -712,13 +758,6 @@ class HtmlDesigner:
                 lines.append(f"{label}: {contract[key]}")
         return "\n".join(lines)
 
-    async def _images(self, screen: ScreenSpec) -> str:
-        key = self.service.settings.unsplash_access_key
-        found = await asyncio.gather(*(find_images(n.query, n.orientation, key) for n in screen.imagery))
-        lines = [f"- {need.slot}: {imgs[0]['url']}" + (f" (alternative: {imgs[1]['url']})" if len(imgs) > 1 else "")
-                 for need, imgs in zip(screen.imagery, found) if imgs]
-        return "\n".join(lines) or "(none — use no photography)"
-
     async def _check(self, html: str, screen: ScreenSpec, width: int, design: DesignContext,
                      project_id: str | None):
         result = await self.service.renderer.render(
@@ -785,10 +824,10 @@ class HtmlDesigner:
                 system=system,
                 text=self.prompts.render(
                     "draft", screen_id=screen.id,
-                    screen=screen.model_dump_json(exclude_defaults=True, exclude={"must_show", "rules", "imagery", "ux_query", "states"}),
+                    screen=screen.model_dump_json(exclude_defaults=True, exclude={"must_show", "rules", "ux_query", "states"}),
                     states="; ".join(screen.states) or "(none)",
                     must_show="; ".join(screen.must_show) or "(none)", rules="; ".join(screen.rules) or "(none)",
-                    images=await self._images(screen), style_asset=style_asset, others=others,
+                    style_asset=style_asset, others=others,
                     ux="\n".join(f"- {u}" for u in ux), reference=ref,
                 ),
                 usage=usage, model=model, timeout_seconds=timeout,

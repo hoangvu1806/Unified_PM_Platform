@@ -1,5 +1,6 @@
 import {
     ArrowLeft,
+    ArrowRight,
     Check,
     ChevronDown,
     Code2,
@@ -11,6 +12,7 @@ import {
     History,
     Image,
     Layers,
+    Maximize2,
     Minus,
     Monitor,
     Moon,
@@ -20,7 +22,6 @@ import {
     Save,
     Search,
     Smartphone,
-    Square,
     Sun,
     Tablet,
     X,
@@ -280,39 +281,29 @@ function ExportMenu({ screen, state }: { screen?: Screen; state: string }) {
     );
 }
 
-/** Parse state names out of screen HTML — same attribute used by runtime.js. */
-function parseStates(html: string): string[] {
-    const found = new Set<string>();
-    for (const m of html.matchAll(/data-state(?:-hide)?="([^"]+)"/g))
-        for (const s of m[1].split(/\s+/)) found.add(s.trim());
-    return Array.from(found).sort();
-}
-
 /** Hide scrollbars without overflow:hidden so scrollHeight stays accurate. */
 function noScrollDoc(doc: string): string {
     const tag = "<style>html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important}html,body{scrollbar-width:none!important}</style>";
     return doc.includes("</head>") ? doc.replace("</head>", `${tag}</head>`) : tag + doc;
 }
 
-/** One iframe card that activates a specific state after load and auto-sizes to content height. */
+/** One screen preview in the sequence overview. */
 function StateFrame({
-    doc, w, h: defaultH, state, screenName, zoom, onClick,
-}: { doc: string; w: number; h: number; state: string; screenName: string; zoom: number; onClick: () => void }) {
+    doc, w, h: defaultH, index, screenId, screenName, zoom, active, onClick,
+}: { doc: string; w: number; h: number; index: number; screenId: string; screenName: string; zoom: number; active: boolean; onClick: () => void }) {
     const ref = useRef<HTMLIFrameElement>(null);
     const [h, setH] = useState(defaultH);
     const baseScale = Math.min(1, 300 / w);
     const scale = baseScale * zoom;
 
-    // Post state after load; runtime.js replies with a "ready" message that includes scrollHeight.
-    const handleLoad = () => ref.current?.contentWindow?.postMessage({ type: "designer:state", state }, "*");
-
-    // Listen for "ready" (initial load) and "resize" (after state switch) from THIS iframe.
+    // Use the default state and keep the preview height in sync with the rendered screen.
+    const handleLoad = () => ref.current?.contentWindow?.postMessage({ type: "designer:state", state: "" }, "*");
     useEffect(() => {
         const onMsg = (e: MessageEvent) => {
             if (e.source !== ref.current?.contentWindow) return;
             const d = e.data as { source?: string; type?: string; height?: number };
             if ((d?.type === "ready" || d?.type === "resize") && d.height) {
-                setH((prev) => Math.max(prev, d.height!));
+                setH(d.height!);
             }
         };
         window.addEventListener("message", onMsg);
@@ -320,26 +311,31 @@ function StateFrame({
     }, []);
 
     return (
-        <div className="canvas-multi-frame" onClick={onClick}>
+        <div className={`canvas-multi-frame ${active ? "active" : ""}`} data-screen-id={screenId} onClick={onClick} role="button" tabIndex={0}
+            aria-label={`Mở màn hình ${screenName}`} onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onClick(); }
+            }}>
+            <div className="canvas-multi-label">
+            <span className="canvas-multi-index">{index}</span>
+                <strong>{screenName}</strong>
+            </div>
             <div className="canvas-multi-viewport" style={{ width: w * scale, height: h * scale }}>
-                <iframe ref={ref} title={state || screenName} sandbox="allow-scripts allow-forms"
+                <iframe ref={ref} title={screenName} sandbox="allow-scripts allow-forms"
                     srcDoc={noScrollDoc(doc)} onLoad={handleLoad}
                     style={{ width: w, height: h, transform: `scale(${scale})`, transformOrigin: "0 0", pointerEvents: "none", border: 0 }} />
-            </div>
-            <div className="canvas-multi-label">
-                <strong>{screenName}</strong>
-                <small>{state || "Mặc định"}</small>
             </div>
         </div>
     );
 }
 
-const ZOOM_MIN = 0.3, ZOOM_MAX = 2.0, ZOOM_STEP = 0.15;
+const ZOOM_MIN = 0.25, ZOOM_MAX = 2.0, ZOOM_STEP = 0.15;
+const OVERVIEW_CARD_WIDTH = 280;
+const OVERVIEW_GAP = 24;
 
-/** Horizontal overview — one card per screen × state. */
-function MultiView({ screens, onSelect }: { screens: Screen[]; onSelect: (id: string, state: string) => void }) {
+/** Horizontal overview — one numbered card per screen, in flow order. */
+function MultiView({ screens, selectedId, onSelect }: { screens: Screen[]; selectedId: string; onSelect: (id: string) => void }) {
     const [docs, setDocs] = useState<Record<string, string>>({});
-    const [zoom, setZoom] = useState(1.0);
+    const [zoom, setZoom] = useState(0.42);
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -365,36 +361,55 @@ function MultiView({ screens, onSelect }: { screens: Screen[]; onSelect: (id: st
     const changeZoom = (delta: number) =>
         setZoom((z) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((z + delta) * 100) / 100)));
 
-    type Card = { s: Screen; doc: string | null; state: string };
-    const cards: Card[] = screens.flatMap((s): Card[] => {
-        const doc = docs[s.id] ?? null;
-        if (!doc) return [{ s, doc: null, state: "" }];
-        return ["", ...parseStates(doc)].map((st) => ({ s, doc, state: st }));
-    });
+    const fitAll = () => {
+        const viewport = containerRef.current?.querySelector(".canvas-multi") as HTMLDivElement | null;
+        if (!viewport || !screens.length) return;
+        const available = Math.max(240, viewport.clientWidth - 40);
+        const baseWidths = orderedScreens.map((screen) => Math.min(screen.width || 390, 300));
+        const connectorWidth = 22;
+        const fit = (available - (OVERVIEW_GAP + connectorWidth) * (screens.length - 1)) / baseWidths.reduce((sum, width) => sum + width, 0);
+        setZoom(Math.max(ZOOM_MIN, Math.min(1, Math.round(fit * 100) / 100)));
+    };
+
+    const orderedScreens = [...screens].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
     return (
-        <div className="canvas-multi-wrap" ref={containerRef}>
-            <div className="canvas-zoom-bar">
+        <div className="canvas-flow-wrap" ref={containerRef}>
+            <div className="canvas-flow-toolbar">
+                <div className="canvas-flow-device"><Smartphone size={15} /><span>{PLATFORMS[orderedScreens[0]?.platform ?? "mobile"]?.label ?? "Mobile"} · {orderedScreens[0]?.width ?? 390} × {orderedScreens[0]?.platform === "mobile" ? 844 : 900}</span></div>
+                <div className="canvas-zoom-bar">
                 <button className="canvas-icon" onClick={() => changeZoom(-ZOOM_STEP)} disabled={zoom <= ZOOM_MIN} type="button" title="Thu nhỏ (Ctrl+scroll)"><Minus size={14} /></button>
                 <span className="canvas-zoom-label">{Math.round(zoom * 100)}%</span>
                 <button className="canvas-icon" onClick={() => changeZoom(ZOOM_STEP)} disabled={zoom >= ZOOM_MAX} type="button" title="Phóng to (Ctrl+scroll)"><Plus size={14} /></button>
+                <span className="canvas-zoom-divider" aria-hidden="true" />
+                <button className="canvas-fit-button" onClick={fitAll} type="button" title="Thu phóng để thấy tất cả màn hình">
+                    <Maximize2 size={13} /> Vừa khung
+                </button>
+                </div>
             </div>
+            <div className="canvas-flow-scroll">
             <div className="canvas-multi">
-                {cards.map(({ s, doc, state }) => {
-                    const w = s.width ?? 1440;
+                {orderedScreens.map((s, index) => {
+                    const doc = docs[s.id] ?? null;
+                    const w = s.width ?? (s.platform === "mobile" ? 390 : 1440);
                     const h = s.platform === "mobile" ? 844 : s.platform === "tablet" ? 1024 : 900;
-                    const baseScale = Math.min(1, 300 / w);
-                    const scale = baseScale * zoom;
-                    return doc
-                        ? <StateFrame key={`${s.id}-${state}`} doc={doc} w={w} h={h} state={state}
-                            screenName={s.name} zoom={zoom} onClick={() => onSelect(s.id, state)} />
-                        : <div key={s.id} className="canvas-multi-frame">
-                            <div className="canvas-multi-viewport" style={{ width: w * scale, height: h * scale }}>
-                                <div className="canvas-multi-loading" />
-                            </div>
-                            <div className="canvas-multi-label"><strong>{s.name}</strong><small>Đang tải…</small></div>
-                          </div>;
+                    return <div className="canvas-flow-step" key={s.id}>
+                        {doc
+                            ? <StateFrame doc={doc} w={w} h={h} index={index + 1} screenId={s.id}
+                                screenName={s.name} zoom={zoom} active={selectedId === s.id} onClick={() => onSelect(s.id)} />
+                            : <div className="canvas-multi-frame canvas-multi-loading-card" data-screen-id={s.id}>
+                                <div className="canvas-multi-label">
+                                    <span className="canvas-multi-index">{index + 1}</span>
+                                    <strong>{s.name}</strong>
+                                </div>
+                                <div className="canvas-multi-viewport" style={{ width: OVERVIEW_CARD_WIDTH * zoom, height: h * Math.min(1, 300 / w) * zoom }}>
+                                    <div className="canvas-multi-loading" />
+                                </div>
+                              </div>}
+                        {index < orderedScreens.length - 1 && <div className="canvas-flow-connector" aria-hidden="true"><ArrowRight size={16} /></div>}
+                    </div>;
                 })}
+            </div>
             </div>
         </div>
     );
@@ -526,36 +541,39 @@ function ScreensCanvas() {
                         <ArrowLeft size={15} />
                     </a>
                 </div>
-                <div className="canvas-rail-label">
+                <div className={`canvas-rail-label ${viewMode === "multi" ? "canvas-rail-label-flow" : ""}`}>
                     <span>Màn hình</span>
                     <span className="canvas-count">{screens.length}</span>
-                    <button
-                        className={`canvas-icon canvas-view-toggle ${viewMode === "multi" ? "active" : ""}`}
-                        onClick={() => setViewMode((m) => m === "single" ? "multi" : "single")}
-                        title={viewMode === "single" ? "Xem tất cả frames ngang" : "Xem từng màn"}
-                        type="button"
-                    >
-                        {viewMode === "single" ? <Columns2 size={15} /> : <Square size={15} />}
-                    </button>
                 </div>
-                <nav className="canvas-screens" aria-label="Màn hình">
-                    {screens.map((s) => {
+                {viewMode === "multi" && <nav className="canvas-flow-nav" aria-label="Điều hướng flow">
+                    <button className="canvas-flow-nav-overview active" type="button" aria-current="page">
+                        <Columns2 size={15} /><span>Flow overview</span>
+                    </button>
+                    <div className="canvas-flow-nav-heading"><span>All screens</span><span>{screens.length}</span></div>
+                </nav>}
+                <nav className={`canvas-screens ${viewMode === "multi" ? "canvas-screens-flow" : ""}`} aria-label="Màn hình">
+                    {[...screens].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((s, index) => {
                         const p = PLATFORMS[s.platform] ?? PLATFORMS.desktop;
                         return (
                             <button
                                 key={s.id}
-                                className={`canvas-screen ${s.id === screen?.id ? "active" : ""}`}
-                                onClick={() => setCurrent(s.id)}
+                                className={`canvas-screen ${s.id === screen?.id ? "active" : ""} ${viewMode === "multi" ? "canvas-flow-screen-link" : ""}`}
+                                onClick={() => {
+                                    setCurrent(s.id);
+                                    if (viewMode === "multi") {
+                                        const target = Array.from(document.querySelectorAll<HTMLElement>("[data-screen-id]"))
+                                            .find((item) => item.dataset.screenId === s.id);
+                                        target?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+                                    }
+                                }}
                                 aria-current={s.id === screen?.id ? "page" : undefined}
                                 type="button"
                             >
-                                <span className="canvas-screen-icon">
-                                    <p.icon size={16} />
-                                </span>
+                                <span className="canvas-screen-icon">{viewMode === "multi" ? <span className="canvas-flow-screen-number">{index + 1}</span> : <p.icon size={16} />}</span>
                                 <span className="canvas-screen-text">
                                     <strong>{s.name}</strong>
                                     <small>
-                                        {p.label} · v{s.version}
+                                        {viewMode === "multi" ? p.label : `${p.label} · v${s.version}`}
                                     </small>
                                 </span>
                             </button>
@@ -568,11 +586,25 @@ function ScreensCanvas() {
                 <header className="canvas-toolbar">
                     <div className="canvas-title">
                         {viewMode === "multi"
-                            ? <><h2>Tất cả màn hình</h2><span className="canvas-chip"><Columns2 size={13} /> {screens.length} frames</span></>
+                            ? <><h2>Flow overview</h2><span className="canvas-flow-crumb">/ {screens.length} màn hình · {screen?.name}</span></>
                             : <><h2>{screen?.name}</h2><span className="canvas-chip"><platform.icon size={13} /> {platform.label} · {width}px</span></>
                         }
                     </div>
                     <div className="canvas-tools">
+                        <button
+                            className={`canvas-tool ${viewMode === "multi" ? "active" : ""}`}
+                            onClick={() => {
+                                setViewMode((mode) => mode === "single" ? "multi" : "single");
+                                setCodeOpen(false);
+                                setSelecting(false);
+                                setTestPanelOpen(false);
+                            }}
+                            type="button"
+                            aria-pressed={viewMode === "multi"}
+                            title={viewMode === "single" ? "Xem toàn bộ màn hình theo thứ tự" : "Quay lại chỉnh sửa một màn hình"}
+                        >
+                            <Columns2 size={15} /> {viewMode === "multi" ? "Màn đơn" : "Tổng quan"}
+                        </button>
                         {viewMode === "single" && <>
                             {states.length > 0 && (
                                 <div className="canvas-test-menu">
@@ -637,7 +669,7 @@ function ScreensCanvas() {
                 </header>
                 <div className={`canvas-body ${codeOpen && viewMode === "single" ? "with-code" : ""}`}>
                     {viewMode === "multi"
-                        ? <MultiView screens={screens} onSelect={(id, st) => { setCurrent(id); setState(st); setViewMode("single"); }} />
+                        ? <MultiView screens={screens} selectedId={screen?.id ?? ""} onSelect={(id) => { setCurrent(id); setState(""); setVersion(undefined); setViewMode("single"); }} />
                         : doc && <Frame doc={doc} width={width} onMessage={onMessage} frameRef={frameRef} />
                     }
                     {codeOpen && (

@@ -1,7 +1,7 @@
 // Layout lint on the rendered DOM. Evaluated by Playwright after runtime.js:
 //   await page.evaluate(LINT_JS, {mobile, axe})  ->  {findings, text, height}
 // Accessibility and contrast come from axe-core; the geometry rules are ours.
-async ({ mobile, axe, strictTouchTargets = false }) => {
+async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, requiredTexts = [] }) => {
   const findings = [];
   const MAX = 5;
   const short = (el) => {
@@ -24,6 +24,18 @@ async ({ mobile, axe, strictTouchTargets = false }) => {
     (el) => !["SCRIPT", "STYLE", "TEMPLATE"].includes(el.tagName) && visible(el),
   );
   const vw = window.innerWidth;
+
+  // Preview content contract: explicit quoted UI copy from the approved screen
+  // must survive every visual direction unchanged.
+  const normalizeCopy = (value) => (value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
+  const visibleCopy = normalizeCopy(document.body.innerText);
+  const missingCopy = requiredTexts.filter((value) => value && !visibleCopy.includes(normalizeCopy(value)));
+  if (missingCopy.length) {
+    findings.push({
+      severity: "error", rule: "required-content", count: missingCopy.length, elements: [],
+      message: `Approved UI text is missing: ${missingCopy.join("; ")}. Preserve all confirmed labels and actions.`,
+    });
+  }
 
   // Page wider than the viewport: horizontal scroll on the real device.
   if (document.documentElement.scrollWidth > vw + 1) {
@@ -93,30 +105,65 @@ async ({ mobile, axe, strictTouchTargets = false }) => {
   });
   add("warning", "empty-region", "Large empty box: fill it with content or remove it.", empty);
 
-  const photos = [...document.images].filter((img) => img.naturalWidth > 0).length +
-    all.filter((el) => /url\(/.test(getComputedStyle(el).backgroundImage)).length;
-  if (!photos) {
-    findings.push({ severity: "warning", rule: "no-imagery", count: 0, elements: [],
-      message: "The screen has no photo or illustration: add one with find_images (background, hero, cards)." });
-  }
-
   const broken = [...document.images].filter((img) => img.complete && img.naturalWidth === 0);
   add("error", "broken-image", "Image failed to load.", broken);
+
+  // Two independent controls must not occupy the same tap area. Ignore nested
+  // descendants such as an icon or label inside its owning button.
+  const interactiveSelector = "a,button,input:not([type=hidden]),select,textarea,[role=button],[onclick],[x-on\\:click],[\\@click]";
+  const controls = [...document.querySelectorAll(interactiveSelector)].filter(visible).filter((el) =>
+    !el.parentElement?.closest(interactiveSelector),
+  );
+  const overlapping = [];
+  for (let i = 0; i < controls.length; i++) {
+    const a = controls[i].getBoundingClientRect();
+    for (let j = i + 1; j < controls.length; j++) {
+      const b = controls[j].getBoundingClientRect();
+      const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (overlapX > 2 && overlapY > 2) overlapping.push(controls[i], controls[j]);
+    }
+  }
+  add("error", "interactive-overlap", "Interactive controls overlap and may block one another.", [...new Set(overlapping)]);
 
   if (mobile) {
     const small = all.filter((el) => {
       if (!el.matches("a,button,input,select,textarea,[role=button],[onclick],[x-on\\:click],[\\@click]")) return false;
-      const r = el.getBoundingClientRect();
       const target = el.matches("input[type=checkbox],input[type=radio]") ? (el.closest("label") || el) : el;
       const box = target.getBoundingClientRect();
       return box.width < 48 || box.height < 48;
     });
+    const measuredSmall = small.slice(0, MAX).map((el) => {
+      const target = el.matches("input[type=checkbox],input[type=radio]") ? (el.closest("label") || el) : el;
+      const box = target.getBoundingClientRect();
+      return `${el.tagName.toLowerCase()} ${Math.round(box.width)}×${Math.round(box.height)} CSS px`;
+    });
     add(strictTouchTargets ? "error" : "warning", "tap-target",
-      "Mobile touch target is smaller than 48×48 CSS px (cross-platform preview baseline).", small);
+      `Mobile touch target is smaller than 48×48 CSS px (cross-platform preview baseline). Measured: ${measuredSmall.join(", ")}. Enlarge the interactive element itself, not only its decorative wrapper.`, small);
 
     if (strictTouchTargets) {
       const misaligned = [];
       const fieldSelector = "input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select,textarea";
+      // Compare the visible field shell, not a borderless input child. Password
+      // inputs commonly share a row with a visibility button, making the input
+      // narrower even though the actual bordered field aligns with its peers.
+      const fieldBox = (field) => {
+        const isFieldSurface = (node) => {
+          const style = getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          const hasBorder = ["Top", "Right", "Bottom", "Left"].some((side) =>
+            parseFloat(style[`border${side}Width`]) > 0,
+          );
+          const hasSurface = style.backgroundColor !== "rgba(0, 0, 0, 0)" || style.boxShadow !== "none";
+          return hasBorder || hasSurface
+            ? rect.width >= Math.min(window.innerWidth * 0.5, 240) && rect.height >= 32 && rect.height <= 96
+            : false;
+        };
+        for (let parent = field.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+          if (isFieldSurface(parent)) return parent;
+        }
+        return field;
+      };
       const forms = [...document.querySelectorAll("form")].filter(visible);
       const groups = forms.map((form) => [...form.querySelectorAll(fieldSelector)].filter(visible));
       if (!forms.length) {
@@ -136,7 +183,7 @@ async ({ mobile, axe, strictTouchTargets = false }) => {
       }
       for (const fields of groups) {
         if (fields.length < 2) continue;
-        const boxes = fields.map((el) => el.getBoundingClientRect());
+        const boxes = fields.map((el) => fieldBox(el).getBoundingClientRect());
         const left = Math.min(...boxes.map((r) => r.left));
         const right = Math.max(...boxes.map((r) => r.right));
         fields.forEach((field, i) => {
@@ -144,7 +191,7 @@ async ({ mobile, axe, strictTouchTargets = false }) => {
         });
       }
       add("error", "form-field-alignment",
-        "Related form fields do not share consistent left and right edges (8px tolerance).", misaligned);
+        "Visible field shells for related form fields do not share consistent left and right edges (8px tolerance).", misaligned);
     }
   }
 
@@ -167,7 +214,7 @@ async ({ mobile, axe, strictTouchTargets = false }) => {
     });
     for (const v of result.violations) {
       const els = v.nodes.map((n) => document.querySelector(n.target[0])).filter(Boolean);
-      add(v.id === "color-contrast" ? "warning" : "info", v.id, v.help, els);
+      add(v.id === "color-contrast" ? (strictVisualQuality ? "error" : "warning") : "info", v.id, v.help, els);
     }
   }
 
