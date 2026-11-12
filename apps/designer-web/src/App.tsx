@@ -73,6 +73,25 @@ export default function App() {
         return () => source.close();
     }, [activeRun?.id, applyRun]);
 
+    // Rehydrate persisted conversation events on page reload. The SSE stream
+    // is intended for live updates; the gallery itself must also survive
+    // reopening a completed run when its original event has already passed.
+    useEffect(() => {
+        if (!activeRun) return;
+        let alive = true;
+        api.eventHistory(activeRun.id)
+            .then((persisted) => {
+                if (!alive) return;
+                setEvents((current) => {
+                    const byId = new Map(persisted.map((event) => [event.id, event]));
+                    for (const event of current) byId.set(event.id, event);
+                    return [...byId.values()].sort((left, right) => left.sequence - right.sequence);
+                });
+            })
+            .catch(() => undefined);
+        return () => { alive = false; };
+    }, [activeRun?.id]);
+
     useEffect(() => {
         if (!activeRun) {
             setArtifacts(undefined);

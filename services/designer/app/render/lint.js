@@ -4,12 +4,49 @@
 async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, requiredTexts = [], forbiddenTexts = [] }) => {
   const findings = [];
   const MAX = 5;
+  const visibleBounds = (el) => {
+    const rect = el.getBoundingClientRect();
+    const box = { left: Math.max(0, rect.left), right: Math.min(window.innerWidth, rect.right),
+      top: Math.max(0, rect.top), bottom: Math.min(window.innerHeight, rect.bottom) };
+    for (let parent = el.parentElement; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      const clipX = /(hidden|clip|auto|scroll)/.test(style.overflowX);
+      const clipY = /(hidden|clip|auto|scroll)/.test(style.overflowY);
+      if (!clipX && !clipY) continue;
+      const clip = parent.getBoundingClientRect();
+      if (clipX) { box.left = Math.max(box.left, clip.left); box.right = Math.min(box.right, clip.right); }
+      if (clipY) { box.top = Math.max(box.top, clip.top); box.bottom = Math.min(box.bottom, clip.bottom); }
+    }
+    return box.right - box.left > 0 && box.bottom - box.top > 0 ? box : null;
+  };
   const short = (el) => {
     const html = el.outerHTML.replace(/\sdata-d="[^"]*"/g, "");
+    const foreground = getComputedStyle(el).color;
+    const surfaces = [];
+    let parent = el;
+    while (parent && surfaces.length < 6) {
+      const style = getComputedStyle(parent);
+      const background = style.backgroundColor;
+      if (background && background !== "rgba(0, 0, 0, 0)" && background !== "transparent") {
+        surfaces.push({
+          tag: parent.tagName.toLowerCase(),
+          className: String(parent.className || "").slice(0, 180),
+          background,
+        });
+      }
+      parent = parent.parentElement;
+    }
     return {
       id: el.getAttribute("data-d"),
       text: (el.innerText || el.getAttribute("aria-label") || "").trim().slice(0, 80),
       html: html.length > 200 ? html.slice(0, 200) + "…" : html,
+      bounds: (() => {
+        const rect = visibleBounds(el) || el.getBoundingClientRect();
+        return { x: Math.round(rect.x ?? rect.left), y: Math.round(rect.y ?? rect.top),
+          width: Math.round(rect.width ?? rect.right - rect.left), height: Math.round(rect.height ?? rect.bottom - rect.top) };
+      })(),
+      foreground,
+      surfaces,
     };
   };
   const add = (severity, rule, message, els) => {
@@ -36,7 +73,18 @@ async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, r
     const endsWithWord = /[\p{L}\p{N}]$/u.test(phrase);
     return new RegExp(`${startsWithWord ? "(?:^|[^\\p{L}\\p{N}])" : ""}${escaped}${endsWithWord ? "(?![\\p{L}\\p{N}])" : ""}`, "iu").test(haystack);
   };
-  const visibleCopy = normalizeCopy(document.body.innerText);
+  // Placeholder/accessible-name copy is visible UI text too, even though the
+  // browser does not include input placeholders in document.body.innerText.
+  const controlCopy = all
+    .filter((el) => el.matches("input,textarea,select,[role=combobox]"))
+    .flatMap((el) => [
+      el.getAttribute("placeholder"),
+      el.getAttribute("aria-label"),
+      el.matches("select") ? el.selectedOptions?.[0]?.textContent : "",
+    ])
+    .filter(Boolean);
+  const visibleText = [document.body.innerText, ...controlCopy].filter(Boolean).join("\n");
+  const visibleCopy = normalizeCopy(visibleText);
   const missingCopy = requiredTexts.filter((value) => value && !visibleCopy.includes(normalizeCopy(value)));
   if (missingCopy.length) {
     findings.push({
@@ -135,15 +183,26 @@ async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, r
 
   // Two independent controls must not occupy the same tap area. Ignore nested
   // descendants such as an icon or label inside its owning button.
-  const interactiveSelector = "a,button,input:not([type=hidden]),select,textarea,[role=button],[onclick],[x-on\\:click],[\\@click]";
-  const controls = [...document.querySelectorAll(interactiveSelector)].filter(visible).filter((el) =>
-    !el.parentElement?.closest(interactiveSelector),
-  );
+  const semanticInteractiveRoles = new Set(["button", "link", "radio", "checkbox", "switch", "tab", "option", "menuitem"]);
+  const isInteractive = (el) => el.matches("a,button,input:not([type=hidden]),select,textarea") ||
+    semanticInteractiveRoles.has((el.getAttribute("role") || "").toLowerCase()) ||
+    el.hasAttribute("onclick") || [...el.attributes].some((attr) =>
+      attr.name === "@click" || attr.name.startsWith("x-on:") || attr.name.startsWith("@"));
+  // Inspect attributes in JS instead of putting Alpine's @click spelling in a
+  // CSS selector; CSS selectors cannot parse [@click] as a valid attribute name.
+  const controls = all.filter(isInteractive).filter((el) => {
+    for (let parent = el.parentElement; parent; parent = parent.parentElement) {
+      if (isInteractive(parent)) return false;
+    }
+    return true;
+  });
   const overlapping = [];
   for (let i = 0; i < controls.length; i++) {
-    const a = controls[i].getBoundingClientRect();
+      const a = visibleBounds(controls[i]);
+      if (!a) continue;
     for (let j = i + 1; j < controls.length; j++) {
-      const b = controls[j].getBoundingClientRect();
+      const b = visibleBounds(controls[j]);
+      if (!b) continue;
       const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left);
       const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
       if (overlapX > 2 && overlapY > 2) overlapping.push(controls[i], controls[j]);
@@ -163,13 +222,17 @@ async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, r
   const footerOverlaps = new Set();
   for (const footer of bottomPinned) {
     const footerRect = footer.getBoundingClientRect();
-    const scrollRoots = [...document.querySelectorAll("*")].filter((el) => {
+    const documentScrolls = document.documentElement.scrollHeight > document.documentElement.clientHeight + 8;
+    const scrollRoots = [
+      ...(documentScrolls ? [document.documentElement] : []),
+      ...[...document.querySelectorAll("*")].filter((el) => {
       if (el === footer || el.contains(footer)) return false;
       const style = getComputedStyle(el);
       const rect = el.getBoundingClientRect();
       return /(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 8 &&
         rect.top < footerRect.bottom && rect.bottom > footerRect.top;
-    });
+      }),
+    ];
     for (const scrollRoot of scrollRoots) {
       for (const content of all) {
         if (footer.contains(content) || content.contains(footer) || !scrollRoot.contains(content)) continue;
@@ -347,5 +410,8 @@ async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, r
     }
   }
 
-  return { findings, text: document.body.innerText, height: document.documentElement.scrollHeight };
+  // Inputs render placeholders visually, but innerText omits them. Return the
+  // same visible-copy surface used by required-content QA so later build gates
+  // do not reject a correct repair for preserving an approved placeholder.
+  return { findings, text: visibleText, height: document.documentElement.scrollHeight };
 };

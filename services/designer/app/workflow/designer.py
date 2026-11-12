@@ -382,7 +382,9 @@ def _validate_preview_content_contract(screen, contract) -> tuple[list[str], lis
 
     default_source = _norm(" ".join([
         str(getattr(screen, "name", "")), str(getattr(screen, "purpose", "")),
-        *(str(item) for item in (screen.content_outline or [])), *default_actions,
+        *(str(item) for item in (screen.content_outline or [])),
+        *(str(item) for item in (getattr(screen, "visible_copy", None) or [])),
+        *default_actions,
     ]))
     # States describe behavior, not evidence that an exact phrase belongs in a
     # hidden UI region. Only explicitly conditional content/actions may create
@@ -460,17 +462,50 @@ def _style_preview_reviews(response: str, candidates: list[StyleCandidate]) -> d
     return issues
 
 
-def _candidate_theme(candidate: StyleCandidate) -> dict[str, Any] | None:
+def _candidate_theme(candidate: StyleCandidate, *, preserve_system_type: bool = False) -> dict[str, Any] | None:
     """Build renderer tokens from the exact palette/font contract shown in this option."""
     if not candidate.palette:
         return None
     palette = Palette.model_validate(candidate.palette)
-    return direction_theme({
+    theme = direction_theme({
         "palette": palette.model_dump(),
         "heading_font": candidate.heading_font,
         "body_font": candidate.body_font,
         "radius": candidate.radius,
     })
+    if theme and preserve_system_type:
+        # Imported systems keep their typography and geometry, while each preview
+        # receives the semantic color roles from its selected palette.
+        theme["css"] = re.sub(r"^\s*--(?:font-[^:]+|radius-[^:]+):[^\n]*\n?", "", theme["css"], flags=re.MULTILINE)
+        theme["fonts"] = []
+    return theme
+
+
+def _bind_primary_button_foreground(fragment: str, candidate: StyleCandidate) -> str:
+    """Use the validated on-primary token on primary buttons instead of hard-coded foreground classes."""
+    palette = Palette.model_validate(candidate.palette)
+    primary = palette.primary.lower()
+    button = re.compile(r"<button\b[^>]*>.*?</button\s*>", re.IGNORECASE | re.DOTALL)
+    token = re.compile(r"(?<![\w-])text-white(?![\w-])")
+
+    def replace_foreground(match: re.Match[str]) -> str:
+        block = match.group(0)
+        lower = block.lower()
+        is_primary = "bg-primary" in lower or primary in lower
+        if is_primary and token.search(block):
+            return token.sub("text-primary-foreground", block)
+        return block
+
+    return button.sub(replace_foreground, fragment)
+
+
+def _normalize_malformed_text_color_classes(fragment: str) -> str:
+    """Repair a common LLM typo without changing the selected color."""
+    return re.sub(
+        r"(?<![\w-])text-text-(\[#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})\])",
+        r"text-\1",
+        fragment,
+    )
 
 
 class HtmlDesigner:
@@ -812,7 +847,7 @@ class HtmlDesigner:
             })
             usage: dict[str, int] = {}
             assigned_asset = asset_by_id(candidate.preview_asset_id, preview_assets) if candidate.preview_asset_id else None
-            option_theme = _candidate_theme(candidate) if design.id == DEFAULT_DESIGN_SYSTEM else None
+            option_theme = _candidate_theme(candidate, preserve_system_type=(design.id != DEFAULT_DESIGN_SYSTEM))
             option_theme_css = "\n".join(part for part in (
                 design.theme_css if design.id != DEFAULT_DESIGN_SYSTEM else "",
                 option_theme.get("css") if option_theme else "",
@@ -832,7 +867,8 @@ class HtmlDesigner:
                 asset_data = inline_svg(assigned_asset)
             system = self.prompts.render(
                 "builder", width=width,
-                direction=(f"Style option '{candidate.name}' is the visual authority for this preview. "
+                direction=(f"Gallery palette exploration policy: {plan.palette_exploration}. "
+                           f"Style option '{candidate.name}' is the visual authority for this preview. "
                            f"Direction: {candidate.direction or candidate.tagline}. "
                            f"Visual contract: {candidate.model_dump_json(exclude={'key', 'name', 'tagline', 'direction', 'recommended'})}. "
                            "Make its composition, typography, surfaces, color balance and product-specific visual motif unmistakable; "
@@ -857,7 +893,9 @@ class HtmlDesigner:
                 usage=usage, model=settings.effective_designer_model,
                 timeout_seconds=settings.designer_page_timeout_seconds,
             )
-            html = fragment_of(extract_html(fragment))
+            html = _normalize_malformed_text_color_classes(
+                _bind_primary_button_foreground(fragment_of(extract_html(fragment)), candidate)
+            )
             render_html = html
             asset_included = False
             if assigned_asset and asset_data:
@@ -902,9 +940,15 @@ class HtmlDesigner:
                         (
                             f"{finding.get('rule')}: {finding.get('message')} "
                             "Affected visible nodes: " + "; ".join(
-                                " / ".join(part for part in (
+                            " / ".join(part for part in (
                                     str(node.get("text") or "").strip(),
                                     str(node.get("html") or "").strip(),
+                                    (
+                                        "foreground=" + str(node.get("foreground")) + "; surfaces=" + " over ".join(
+                                            f"{surface.get('tag')}.{surface.get('className')} [{surface.get('background')}]"
+                                            for surface in node.get("surfaces", [])
+                                        )
+                                    ) if finding.get("rule") == "color-contrast" and node.get("surfaces") else "",
                                 ) if part)
                                 for node in finding.get("elements", [])[:3]
                             ) + ". " + (
@@ -912,10 +956,17 @@ class HtmlDesigner:
                                 "and make its field row at least 48px high; do not enlarge only a non-interactive outer card. "
                                 "Keep any eye/clear icon button at least 48×48px."
                                 if finding.get("rule") == "tap-target" else
-                                "Align the visible bordered/surfaced field rows to the same left and right edges; "
-                                "an approved input adornment may use remaining row space without shrinking the shared field container."
+                                "Separate the reported interactive elements so their rendered hit areas do not intersect. "
+                                "If a fixed or sticky action bar covers a selectable card, input, or other control, keep the action "
+                                "in normal flow or provide sufficient scrollable bottom space for the covered content. Preserve every approved control."
+                                if finding.get("rule") in {"interactive-overlap", "sticky-footer-overlap"} else
+                                "Put the related input and its trailing icon button inside one full-width field row. "
+                                "Put the border, background, and radius on the full-width outer row; make the input "
+                                "borderless with flex-1 min-w-0, and keep the icon button inside that row at 48×48px. "
+                                "Align this outer row's left and right edges with its sibling field shells; do not "
+                                "let the input itself become a narrower bordered shell."
                                 if finding.get("rule") == "form-field-alignment" else
-                                "Correct the foreground/background pair on the reported text using the option's existing semantic palette: darken muted text or strengthen the badge/surface tint until small text reaches at least 4.5:1 contrast (large text at least 3:1). Preserve the palette roles and do not introduce a new accent hue."
+                                "Use the reported foreground and rendered surface stack to fix only each failing text element. Remove its existing text-color utility before adding exactly one valid color utility; never produce malformed classes such as `text-text-[#HEX]`. For a small label over a translucent dark overlay, use a high-contrast light foreground only if it reaches 4.5:1 on the composited surface; otherwise move the label onto an opaque light chip and use the palette's dark foreground. On a solid bright primary surface, use the palette's dark foreground when that is the passing pair. For text inside a primary button, use `text-primary-foreground`. Do not darken the whole card or alter other text. Preserve the palette and verify the actual pair reaches 4.5:1 (3:1 for large text)."
                                 if finding.get("rule") == "color-contrast" else
                                 "Keep this conditional-state text and its controls out of the initial preview; show them only after the approved trigger. Preserve the interaction in the downstream screen spec."
                                 if finding.get("rule") == "conditional-content-on-first-paint" else
@@ -937,6 +988,7 @@ class HtmlDesigner:
                     text=("Approved screen data and exact-content contract:\n" + screen_context +
                           "\n\nCompare the three screenshots as one gallery. Style options in screenshot order:\n" +
                           json.dumps([{"key": item.key, "name": item.name, "direction": item.direction or item.tagline,
+                                       "palette_exploration": plan.palette_exploration,
                                        "palette": item.palette, "composition": item.composition,
                                        "surface_language": item.surface_language, "shape_language": item.shape_language,
                                        "hero_placement": item.hero_placement,
@@ -1329,8 +1381,16 @@ class HtmlDesigner:
                     "Remove the conditional element; keep only approved default-screen content."
                 )
                 continue
-            lines.append(f"- {finding['severity'].upper()} {finding['rule']}: {finding['message']}"
-                         + (f" e.g. {finding['elements'][0]['html'][:140]}" if finding.get("elements") else ""))
+            examples = finding.get("elements", [])
+            if finding.get("rule") in {"interactive-overlap", "sticky-footer-overlap"} and examples:
+                details = "; ".join(
+                    f"{node.get('html', '')[:180]} at {node.get('bounds', {})}"
+                    for node in examples[:3]
+                )
+                lines.append(f"- {finding['severity'].upper()} {finding['rule']}: {finding['message']} Overlapping rendered elements: {details}")
+            else:
+                lines.append(f"- {finding['severity'].upper()} {finding['rule']}: {finding['message']}"
+                             + (f" e.g. {examples[0]['html'][:140]}" if examples else ""))
         if missing:
             lines.insert(0, "- ERROR missing-text: required texts not on the screen: " + "; ".join(missing))
         blocking = bool(missing) or bool(result.blocking)
@@ -1522,8 +1582,10 @@ class HtmlDesigner:
                         "Fix every listed issue in the visible rendered result, including its actual default-state "
                         "behavior and geometry. Delete unsupported factual claims. Remove any control absent from "
                         "the approved default action list; error-recovery actions must not be visible or active "
-                        "in the initial loading view. Preserve approved default content and do not add anything "
-                        "outside the approved screen specification.\n" + audit_notes
+                        "in the initial loading view. For a duplicated input placeholder, preserve the approved "
+                        "native placeholder and remove only the overlay text element that repeats it; do not remove "
+                        "the placeholder to satisfy the visual repair. Preserve approved default content and do not "
+                        "add anything outside the approved screen specification.\n" + audit_notes
                     ),
                     width=width,
                     checks="- Scope/style audit failed:\n" + audit_notes,

@@ -665,19 +665,6 @@
     box-shadow: 0 10px 26px rgba(22, 34, 54, 0.2), 0 0 0 4px rgba(22, 34, 54, 0.055);
 }
 
-.style-preview-device::before {
-    position: absolute;
-    z-index: 1;
-    top: 5px;
-    left: 50%;
-    width: 22%;
-    height: 8px;
-    border-radius: 999px;
-    background: #11131a;
-    content: "";
-    transform: translateX(-50%);
-}
-
 .style-preview-device img {
     display: block;
     width: auto;

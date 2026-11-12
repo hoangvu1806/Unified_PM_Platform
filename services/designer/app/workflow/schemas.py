@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Literal
 
@@ -48,6 +49,10 @@ class StylePreviewPlan(BaseModel):
     """Three project-specific art directions for the style-preview gallery."""
 
     options: list[StyleCandidate] = Field(min_length=3, max_length=3)
+    palette_exploration: Literal["explorable", "brand_limited"] = Field(
+        default="explorable",
+        description="Use brand_limited only when explicit fixed brand tokens leave fewer than three suitable background color families.",
+    )
     content_contract: PreviewContentContract = Field(
         description="Required classification of approved screen content by first-paint visibility before generating the gallery.",
     )
@@ -64,7 +69,43 @@ class StylePreviewPlan(BaseModel):
         for item in self.options:
             if not palette_roles.issubset(item.palette):
                 raise ValueError(f"Style option {item.key} must define every shared palette role")
-            Palette.model_validate(item.palette)
+            palette = Palette.model_validate(item.palette)
+            if _contrast_ratio(palette.primary, palette.primary_foreground) < 4.5:
+                safe_foreground = _derive_contrast_foreground(
+                    palette.primary,
+                    preferred=palette.primary_foreground,
+                    sources=(palette.foreground, palette.muted_foreground),
+                )
+                if safe_foreground is None:
+                    raise ValueError(
+                        f"Primary color {palette.primary} cannot support 4.5:1 text contrast; "
+                        "choose a darker or lighter shade within this palette."
+                    )
+                # The semantic on-primary role is derived deterministically so
+                # a bright domain CTA uses a shade from its own palette roles.
+                item.palette["primary_foreground"] = safe_foreground
+        if self.palette_exploration == "explorable":
+            for left in range(len(self.options)):
+                for right in range(left + 1, len(self.options)):
+                    left_palette = self.options[left].palette
+                    right_palette = self.options[right].palette
+                    background_delta = _delta_e(
+                        _hex_to_lab(left_palette["background"]),
+                        _hex_to_lab(right_palette["background"]),
+                    )
+                    primary_delta = _delta_e(
+                        _hex_to_lab(left_palette["primary"]),
+                        _hex_to_lab(right_palette["primary"]),
+                    )
+                    if max(background_delta, primary_delta) < 16:
+                        raise ValueError(
+                            "Explorable style options must differ clearly in either background or primary color "
+                            "(CIE76 ΔE >= 16). "
+                            f"Options {self.options[left].key} and {self.options[right].key} use backgrounds "
+                            f"{left_palette['background']} / {right_palette['background']} (ΔE {background_delta:.1f}) "
+                            f"and primaries {left_palette['primary']} / {right_palette['primary']} "
+                            f"(ΔE {primary_delta:.1f}); change at least one pair to a more distinct domain palette."
+                        )
         asset_ids = [item.preview_asset_id for item in self.options if item.preview_asset_id]
         if len(set(asset_ids)) != len(asset_ids):
             raise ValueError("Style preview options must use distinct illustration assets")
@@ -72,6 +113,79 @@ class StylePreviewPlan(BaseModel):
             for index, item in enumerate(self.options):
                 item.recommended = index == 0
         return self
+
+
+def _hex_to_lab(value: str) -> tuple[float, float, float]:
+    """Convert a six-digit sRGB hex color to CIE Lab for palette comparison."""
+    value = value.strip().lstrip("#")
+    rgb = [int(value[index:index + 2], 16) / 255 for index in (0, 2, 4)]
+    linear = [channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+              for channel in rgb]
+    x = (linear[0] * 0.4124564 + linear[1] * 0.3575761 + linear[2] * 0.1804375) / 0.95047
+    y = (linear[0] * 0.2126729 + linear[1] * 0.7151522 + linear[2] * 0.0721750)
+    z = (linear[0] * 0.0193339 + linear[1] * 0.1191920 + linear[2] * 0.9503041) / 1.08883
+
+    def pivot(channel: float) -> float:
+        return channel ** (1 / 3) if channel > 0.008856 else 7.787 * channel + 16 / 116
+
+    fx, fy, fz = pivot(x), pivot(y), pivot(z)
+    return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
+
+
+def _delta_e(left: tuple[float, float, float], right: tuple[float, float, float]) -> float:
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(left, right)))
+
+
+def _relative_luminance(value: str) -> float:
+    value = value.strip().lstrip("#")
+    channels = [int(value[index:index + 2], 16) / 255 for index in (0, 2, 4)]
+    linear = [channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+              for channel in channels]
+    return sum(weight * channel for weight, channel in zip((0.2126, 0.7152, 0.0722), linear))
+
+
+def _contrast_ratio(left: str, right: str) -> float:
+    light, dark = sorted((_relative_luminance(left), _relative_luminance(right)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+def _derive_contrast_foreground(
+    background: str,
+    *,
+    preferred: str,
+    sources: tuple[str, ...],
+) -> str | None:
+    """Reuse a semantic text role, or adjust its shade while preserving its hue family."""
+    source_colors = list(dict.fromkeys((preferred, *sources)))
+    for color in source_colors:
+        if _contrast_ratio(background, color) >= 4.5:
+            return color
+
+    background_rgb = _hex_rgb(background)
+    options: list[tuple[float, str]] = []
+    for source in source_colors:
+        source_rgb = _hex_rgb(source)
+        for step in range(1, 101):
+            factor = 1 - step / 100
+            for channels in (
+                tuple(round(channel * factor) for channel in source_rgb),
+                tuple(round(255 - (255 - channel) * factor) for channel in source_rgb),
+            ):
+                shade = _rgb_hex(channels)
+                if _contrast_ratio(background, shade) < 4.5:
+                    continue
+                distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(source_rgb, channels)))
+                options.append((distance, shade))
+    return min(options, default=(0, ""), key=lambda item: item[0])[1] or None
+
+
+def _hex_rgb(value: str) -> tuple[int, int, int]:
+    value = value.strip().lstrip("#")
+    return tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
+
+
+def _rgb_hex(value: tuple[int, int, int]) -> str:
+    return "#" + "".join(f"{channel:02x}" for channel in value)
 
 
 class Palette(BaseModel):
