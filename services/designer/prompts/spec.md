@@ -17,18 +17,16 @@ Required screen design knowledge (follow these rules):
 {{design_rules}}
 
 ## Screens
-For each screen:
-- `id`, `name`, `platform` as in the brief; `purpose` (who, to do what);
-- `layout`: the composition in 1-2 sentences;
-- `sections`: ordered regions with their real content (fields + types, columns, figures, actions);
-- `states`: non-default states worth designing, as short ids (`error`, `empty`, `loading` …);
-- `data`: realistic sample data in the product's language and domain;
-- `must_show`: the exact visible texts the screen must contain (labels, buttons, column headers, key messages) — taken from the source requirements, in the user's language;
-- `rules`: business rules from the source (keep their ids, e.g. `BR-02: …`) that the UI must reflect;
-- `navigation`: ids of screens it links to; `source_ui_ids`: source touchpoints covered;
-- `ux_query`: 3-6 English keywords describing the screen's UI concerns (e.g. "login form password validation"), used to retrieve UX guidelines.
+For each `screens[]` item, create only the initial/default UI contract:
+- `id`, `name`, `platform`, `purpose`, `layout`, default-only `sections`, `data`, `must_show`, `navigation`, `source_ui_ids`, `visual_asset_role`, and a default-layout-only `ux_query`.
+- Treat `content_outline` as semantic descriptions of regions/components, not strings to print. Use only `visible_copy` as exact user-facing text; `must_show` contains only those exact strings. Use `default_actions` as the approved control/action inventory, translating its intent into concise user-facing labels where no exact text was supplied.
+- Do not put state fields, conditional copy/actions, state rules, triggers, conditional regions, or state scenarios inside a `screens[]` item.
 
-Use the confirmed screen-level content in the brief as the source of truth for each screen's regions, content, actions and states. Preserve BA and user-confirmed requirements. Suggestions become requirements only after the user confirms them. Do not reintroduce unresolved options or invent extra authentication methods, links, device controls, or product behavior.
+`state_specs` is maintained separately by the BA workflow. Leave it empty in this response; do not infer or generate state data from the default brief. The backend preserves the BA's separate state references. The screen builder receives `screens[]` only and never receives `state_specs`.
+
+Use the confirmed default screen-level content in the brief as the source of truth for the screen build. Preserve state and conditional data only as reference metadata for later use. Suggestions become requirements only after the user confirms them. Do not reintroduce unresolved options or invent extra authentication methods, links, device controls, or product behavior.
+
+Keep the product screen a normal app screen at its approved platform and viewport. Build only the initial/default view; exclude conditional branches, loading/error/success variants, and QA simulators from its markup. Navigation to another task is another screen. Use responsive flow and scrolling for long forms, with a non-overlapping action area. Do not enlarge cards, add unrelated sections, or shrink controls/text just to display more content at once.
 
 User-selected visual direction: {{style_selection}}
 Selected visual contract (authoritative for preview and final screens): {{visual_contract}}

@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 from uuid import UUID
@@ -11,7 +12,7 @@ from ..core.prompts import PromptLibrary
 from ..models import ReviewCreate, RunStage, RunStatus
 from ..render import Renderer
 from ..storage.store import Store
-from .designer import HtmlDesigner
+from .designer import HtmlDesigner, _trace_async_method
 from .publish import publish_design
 
 
@@ -33,6 +34,16 @@ class RunService:
         self.renderer = renderer
         self.tasks: dict[UUID, asyncio.Task[None]] = {}
         self.designer = HtmlDesigner(self)
+
+    async def _trace_decision(self, run_id: UUID, revision: int, name: str, condition: str,
+                              chosen: str, details: dict[str, Any] | None = None) -> None:
+        await self.events.emit(run_id, revision, "debug.decision", {
+            "phase": "run orchestration",
+            "function": f"decision.{name}",
+            "condition": condition,
+            "chosen": chosen,
+            "details": details or {},
+        })
 
     def _spawn(
         self, run_id: UUID, operation: Coroutine[Any, Any, None], name: str
@@ -67,8 +78,15 @@ class RunService:
                 action="Retry the run.",
             )
             if app_error.code in {"LLM_NOT_CONFIGURED"}:
+                await self._trace_decision(run_id, run.revision, "run.error_classification", "error code == LLM_NOT_CONFIGURED", "block_for_configuration", {
+                    "error_code": app_error.code, "stage": run.stage.value,
+                })
                 await self._block(run_id, run.revision, app_error)
             else:
+                await self._trace_decision(run_id, run.revision, "run.error_classification", "error code != LLM_NOT_CONFIGURED", "mark_failed_and_retryable", {
+                    "error_code": app_error.code, "stage": run.stage.value,
+                    "error_type": type(error).__name__, "error": str(error)[:1000],
+                })
                 await self._fail(run_id, run.revision, app_error)
 
     def _run(self, run_id: UUID, step: Callable[[], Awaitable[None]], name: str) -> None:
@@ -79,46 +97,70 @@ class RunService:
 
     async def review(self, run_id: UUID, request: ReviewCreate) -> None:
         run = await self._require_run(run_id)
+        await self._trace_decision(run_id, run.revision, "review.revision_check", "request.revision == current revision", "accept" if request.revision == run.revision else "reject", {
+            "request_revision": request.revision, "current_revision": run.revision,
+        })
         if request.revision != run.revision:
             raise AppError("REVISION_CONFLICT", "Review is for an older revision", f"Current revision is {run.revision}.", 409)
         expected = {"specification": RunStage.REVIEW_SPEC, "final": RunStage.REVIEW_FINAL}[request.checkpoint]
+        await self._trace_decision(run_id, run.revision, "review.stage_check", "run is waiting at requested checkpoint", "accept" if run.status == RunStatus.WAITING_REVIEW and run.stage == expected else "reject", {
+            "checkpoint": request.checkpoint, "expected_stage": expected.value,
+            "actual_stage": run.stage.value, "actual_status": run.status.value,
+        })
         if run.status != RunStatus.WAITING_REVIEW or run.stage != expected:
             raise AppError("REVIEW_NOT_EXPECTED", "Nothing to review", f"Run is {run.stage}/{run.status}.", 409)
         await self.store.add_review(run_id, run.revision, request.checkpoint, request.decision, request.feedback)
         await self.events.emit(run_id, run.revision, "review.recorded", request.model_dump(mode="json"))
         if request.decision == "rejected":
+            await self._trace_decision(run_id, run.revision, "review.decision", "decision == rejected", "cancel_run", request.model_dump(mode="json"))
             await self.store.update_run(run_id, stage=RunStage.FINISHED, status=RunStatus.CANCELLED,
                                         assistant_message="Đã dừng theo yêu cầu.")
             return
         if request.checkpoint == "specification":
             if request.decision == "approved":
+                await self._trace_decision(run_id, run.revision, "review.next_stage", "checkpoint == specification and decision == approved", "build_screens")
                 self._run(run_id, lambda: self.designer.build(run_id), "build")
             else:
+                await self._trace_decision(run_id, run.revision, "review.next_stage", "checkpoint == specification and decision == changes_requested", "rewrite_specification", {"feedback": request.feedback})
                 self._run(run_id, lambda: self.designer.write_spec(run_id, request.feedback or "Revise it."), "spec")
             return
         if request.decision == "approved":
+            await self._trace_decision(run_id, run.revision, "review.next_stage", "checkpoint == final and decision == approved", "complete_run")
             await self.store.update_run(run_id, stage=RunStage.FINISHED, status=RunStatus.COMPLETED)
             await self.events.emit(run_id, run.revision, "stage.changed", {"stage": "finished", "status": "completed"})
             asyncio.get_running_loop().create_task(publish_design(self, run_id))
             return
         targets = await self.designer.targets_for(run, request.feedback)
+        await self._trace_decision(run_id, run.revision, "review.next_stage", "checkpoint == final and decision == changes_requested", "rebuild_selected_screens", {
+            "feedback": request.feedback, "selected_targets": targets,
+        })
         self._run(run_id, lambda: self.designer.build(run_id, targets, instruction=request.feedback, review=True), "rebuild")
 
     async def retry(self, run_id: UUID) -> None:
         run = await self._require_run(run_id)
+        await self._trace_decision(run_id, run.revision, "retry.status_check", "run status is blocked / failed / cancelled", "accept" if run.status in {RunStatus.BLOCKED, RunStatus.FAILED, RunStatus.CANCELLED} else "reject", {
+            "status": run.status.value,
+        })
         if run.status not in {RunStatus.BLOCKED, RunStatus.FAILED, RunStatus.CANCELLED}:
             raise AppError("RUN_NOT_RETRYABLE", "Run is not retryable", f"Run status is {run.status}.", 409)
         failed_at = (run.error or {}).get("stage") or ""
         if run.specification and failed_at in {"assembly", "review_final"}:
+            await self._trace_decision(run_id, run.revision, "retry.resume_point", "spec exists and failure stage is assembly / review_final", "resume_build", {"failed_at": failed_at})
             self._run(run_id, lambda: self.designer.build(run_id, review=run.intent != "design"), "build")
         elif failed_at in {"specification", "review_spec"}:
+            await self._trace_decision(run_id, run.revision, "retry.resume_point", "failure stage is specification / review_spec", "rewrite_spec", {"failed_at": failed_at})
             self._run(run_id, lambda: self.designer.write_spec(run_id), "spec")
         else:
+            await self._trace_decision(run_id, run.revision, "retry.resume_point", "no stage-specific resume rule matched", "restart_analysis", {"failed_at": failed_at})
             self.start(run_id)
 
     async def cancel(self, run_id: UUID) -> None:
         run = await self._require_run(run_id)
         task = self.tasks.pop(run_id, None)
+        await self._trace_decision(run_id, run.revision, "cancel.active_task", "task exists and is not done", "cancel_task" if task and not task.done() else "no_active_task", {
+            "task_found": task is not None, "task_done": task.done() if task else None,
+            "stage": run.stage.value, "status": run.status.value,
+        })
         if task and not task.done():
             task.cancel()
         await self.store.update_run(run_id, status=RunStatus.CANCELLED)
@@ -179,3 +221,9 @@ class RunService:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+
+
+# Record run orchestration methods as well as the Designer's internal helpers.
+for _method_name, _method in tuple(vars(RunService).items()):
+    if inspect.iscoroutinefunction(_method) and _method_name not in {"_trace_decision", "shutdown"}:
+        setattr(RunService, _method_name, _trace_async_method(_method))

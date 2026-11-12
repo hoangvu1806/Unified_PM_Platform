@@ -789,6 +789,20 @@ export function ChatWorkspace({
                     </article>
                 )}
 
+                {run?.stage === "review_final" && run.assistant_message && (
+                    <article className="message assistant-message">
+                        <AssistantAvatar />
+                        <div className="assistant-body">
+                            <div className="assistant-header">
+                                <small>Designer</small>
+                            </div>
+                            <MarkdownRenderer
+                                content={`${run.assistant_message}\n\nĐã hoàn tất tạo các màn hình. Mở trang thiết kế để kiểm tra, sau đó chọn Approve Design để hoàn tất.`}
+                            />
+                        </div>
+                    </article>
+                )}
+
                 {canReview && run && (
                     <article
                         className="message assistant-message chat-review-message"

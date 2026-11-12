@@ -6,6 +6,8 @@ const EVENT_TYPES = [
   "assistant.message", "style.previews", "specification.ready", "review.required", "review.accepted",
   "review.changes_requested", "review.recorded", "action.required", "run.retrying",
   "screen.started", "screen.saved", "screen.finished", "screen.warning", "llm.usage",
+  "debug.step.started", "debug.step.completed", "debug.step.failed",
+  "debug.function.started", "debug.function.completed", "debug.function.failed", "debug.decision",
 ];
 
 export function openRunStream(runId: string, onEvent: (event: WorkflowEvent) => void) {

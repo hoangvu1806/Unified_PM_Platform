@@ -1,7 +1,7 @@
 // Layout lint on the rendered DOM. Evaluated by Playwright after runtime.js:
 //   await page.evaluate(LINT_JS, {mobile, axe})  ->  {findings, text, height}
 // Accessibility and contrast come from axe-core; the geometry rules are ours.
-async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, requiredTexts = [] }) => {
+async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, requiredTexts = [], forbiddenTexts = [] }) => {
   const findings = [];
   const MAX = 5;
   const short = (el) => {
@@ -28,12 +28,29 @@ async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, r
   // Preview content contract: explicit quoted UI copy from the approved screen
   // must survive every visual direction unchanged.
   const normalizeCopy = (value) => (value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
+  const containsCopyPhrase = (haystack, value) => {
+    const phrase = normalizeCopy(value);
+    if (!phrase) return false;
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    const startsWithWord = /^[\p{L}\p{N}]/u.test(phrase);
+    const endsWithWord = /[\p{L}\p{N}]$/u.test(phrase);
+    return new RegExp(`${startsWithWord ? "(?:^|[^\\p{L}\\p{N}])" : ""}${escaped}${endsWithWord ? "(?![\\p{L}\\p{N}])" : ""}`, "iu").test(haystack);
+  };
   const visibleCopy = normalizeCopy(document.body.innerText);
   const missingCopy = requiredTexts.filter((value) => value && !visibleCopy.includes(normalizeCopy(value)));
   if (missingCopy.length) {
     findings.push({
       severity: "error", rule: "required-content", count: missingCopy.length, elements: [],
       message: `Approved UI text is missing: ${missingCopy.join("; ")}. Preserve all confirmed labels and actions.`,
+    });
+  }
+  // Match whole text tokens/phrases. A plain substring check incorrectly
+  // treats the reward label "+100 Xu" as the unavailable-balance state "0 Xu".
+  const prematureConditionalCopy = forbiddenTexts.filter((value) => value && containsCopyPhrase(visibleCopy, value));
+  if (prematureConditionalCopy.length) {
+    findings.push({
+      severity: "error", rule: "conditional-content-on-first-paint", count: prematureConditionalCopy.length, elements: [],
+      message: `Conditional-state UI is visible before its trigger: ${prematureConditionalCopy.join("; ")}. Keep conditional regions closed/hidden in the initial preview.`,
     });
   }
 
@@ -48,6 +65,14 @@ async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, r
   const clipped = all.filter((el) => {
     if (!el.childNodes.length || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) return false;
     const s = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    // Detect visually hidden accessibility text from its CSS geometry rather
+    // than relying on an application-specific class name.
+    const accessibilityOnly = s.position === "absolute" && (
+      s.clip !== "auto" || s.clipPath !== "none" ||
+      (rect.width <= 1 && rect.height <= 1 && /(hidden|clip)/.test(s.overflowX + s.overflowY) && s.whiteSpace === "nowrap")
+    );
+    if (accessibilityOnly) return false;
     const clips = /(hidden|clip)/.test(s.overflowX + s.overflowY);
     if (!clips || s.textOverflow === "ellipsis" || s.webkitLineClamp !== "none") return false;
     return el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
@@ -125,6 +150,110 @@ async ({ mobile, axe, strictTouchTargets = false, strictVisualQuality = false, r
     }
   }
   add("error", "interactive-overlap", "Interactive controls overlap and may block one another.", [...new Set(overlapping)]);
+
+  // A bottom-pinned action bar must not cover the initial viewport's scrollable
+  // form/list content. Detect the actual rendered geometry, rather than relying
+  // on prompts to remember a bottom padding workaround.
+  const bottomPinned = all.filter((el) => {
+    const style = getComputedStyle(el);
+    if (!(style.position === "fixed" || style.position === "sticky")) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.height >= 32 && rect.bottom >= window.innerHeight - 4 && rect.top < window.innerHeight;
+  });
+  const footerOverlaps = new Set();
+  for (const footer of bottomPinned) {
+    const footerRect = footer.getBoundingClientRect();
+    const scrollRoots = [...document.querySelectorAll("*")].filter((el) => {
+      if (el === footer || el.contains(footer)) return false;
+      const style = getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return /(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 8 &&
+        rect.top < footerRect.bottom && rect.bottom > footerRect.top;
+    });
+    for (const scrollRoot of scrollRoots) {
+      for (const content of all) {
+        if (footer.contains(content) || content.contains(footer) || !scrollRoot.contains(content)) continue;
+        if (!(content.matches("a,button,input,select,textarea,img,svg,canvas,video,[role=button],[data-state-target]") ||
+        [...content.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()))) continue;
+        const rect = content.getBoundingClientRect();
+        const overlapX = Math.min(rect.right, footerRect.right) - Math.max(rect.left, footerRect.left);
+        const overlapY = Math.min(rect.bottom, footerRect.bottom) - Math.max(rect.top, footerRect.top);
+        if (overlapX > 12 && overlapY > 8) footerOverlaps.add(content);
+      }
+    }
+  }
+  add("error", "sticky-footer-overlap",
+    "A fixed/sticky bottom action bar covers content in the initial scroll viewport. Put the footer in normal flow or in a non-overlapping flex layout with a separately scrollable content region.",
+    [...footerOverlaps]);
+
+  // The screen canvas represents app content, not a device frame. Catch the
+  // common fake Dynamic Island/notch rendered as a tiny dark pill at top-center.
+  // This is a blocking defect because it can cover the page title and is never
+  // needed to reserve safe-area space in a web preview.
+  const isNotchShape = (rect, style, hasPaint = true) => {
+    if (!hasPaint || rect.top < -1 || rect.top > Math.min(96, window.innerHeight * 0.12)) return false;
+    if (rect.width < 18 || rect.width > Math.min(180, vw * 0.48) || rect.height < 5 || rect.height > 34) return false;
+    if (rect.width / rect.height < 2 || Math.abs((rect.left + rect.right) / 2 - vw / 2) > vw * 0.12) return false;
+    const color = style.backgroundColor.match(/rgba?\(([^)]+)\)/);
+    const gradient = /gradient/i.test(style.backgroundImage);
+    const channels = color ? color[1].split(/[,/ ]+/).filter(Boolean).map(Number) : [];
+    const alpha = channels.length > 3 ? channels[3] : 1;
+    const luminance = channels.length >= 3
+      ? (channels[0] * 299 + channels[1] * 587 + channels[2] * 114) / 1000
+      : 0;
+    const radius = parseFloat(style.borderTopLeftRadius);
+    const rounded = radius >= rect.height * 0.3 || /999|full|round/i.test(style.borderRadius);
+    return rounded && (gradient || (color && alpha > 0.05 && luminance < 72));
+  };
+  const pseudoRect = (el, pseudo, style) => {
+    const host = el.getBoundingClientRect();
+    const number = (value, base) => value?.endsWith("%")
+      ? parseFloat(value) * base / 100
+      : Number.parseFloat(value) || 0;
+    const width = number(style.width, host.width);
+    const height = number(style.height, host.height);
+    if (!width || !height) return null;
+    const leftValue = style.left !== "auto" ? number(style.left, host.width)
+      : style.right !== "auto" ? host.width - number(style.right, host.width) - width : 0;
+    const topValue = style.top !== "auto" ? number(style.top, host.height)
+      : style.bottom !== "auto" ? host.height - number(style.bottom, host.height) - height : 0;
+    let dx = 0, dy = 0;
+    try {
+      const matrix = new DOMMatrixReadOnly(style.transform);
+      dx = matrix.m41;
+      dy = matrix.m42;
+    } catch (_) { /* no transform */ }
+    const left = host.left + leftValue + dx;
+    const top = host.top + topValue + dy;
+    return { left, top, right: left + width, bottom: top + height, width, height };
+  };
+  const fakeNotches = new Set();
+  for (const el of all) {
+    if (el.matches("input,button,a,select,textarea,img,[role=button]")) continue;
+    const rect = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    if (isNotchShape(rect, style)) fakeNotches.add(el);
+    for (const pseudo of ["::before", "::after"]) {
+      const layer = getComputedStyle(el, pseudo);
+      if (layer.content === "none" || layer.content === "normal") continue;
+      const shape = pseudoRect(el, pseudo, layer);
+      if (shape && isNotchShape(shape, layer)) fakeNotches.add(el);
+    }
+    // Also catch an explicitly drawn rounded SVG bar without flagging the
+    // complete SVG illustration/logo as a notch.
+    if (el.tagName.toLowerCase() === "rect") {
+      const fill = style.fill || el.getAttribute("fill") || "";
+      const rx = Number.parseFloat(style.rx || el.getAttribute("rx") || "0");
+      const fillMatch = fill.match(/#([0-9a-f]{6})/i);
+      const darkFill = fillMatch ? Number.parseInt(fillMatch[1], 16) < 0x484848 : /black|rgb\(0,\s*0,\s*0\)/i.test(fill);
+      if (rx > 0 && darkFill && isNotchShape(rect, { backgroundColor: "rgb(0, 0, 0)", backgroundImage: "none", borderTopLeftRadius: `${rx}px`, borderRadius: `${rx}px` })) {
+        fakeNotches.add(el);
+      }
+    }
+  }
+  add("error", "fake-device-notch",
+    "A fake notch/Dynamic Island/camera pill is visible inside the app canvas and may cover the screen title. Remove it; represent safe area as spacing only, then rerender.",
+    [...fakeNotches]);
 
   if (mobile) {
     const small = all.filter((el) => {

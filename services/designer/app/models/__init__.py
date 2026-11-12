@@ -39,6 +39,15 @@ class RunStatus(StrEnum):
 Platform = Literal["mobile", "tablet", "desktop", "responsive"]
 
 
+class ScreenStateReference(BaseModel):
+    """A non-rendered state note retained for analysis and future state work."""
+
+    id: str = Field(min_length=1, max_length=80)
+    trigger: str = Field(min_length=1, max_length=500)
+    initial_visibility: Literal["hidden", "visible", "not_applicable"] = "hidden"
+    content: list[str] = Field(default_factory=list, max_length=20)
+
+
 class ScreenBrief(BaseModel):
     id: str = ""
     name: str = Field(min_length=1, max_length=120)
@@ -48,7 +57,23 @@ class ScreenBrief(BaseModel):
     # Screen-level content decisions gathered with the scope, before UI spec generation.
     content_outline: list[str] = Field(
         default_factory=list, max_length=30,
-        description="Proposed/confirmed visible regions and content, tagged BA, user, or suggestion.",
+        description="Structural descriptions of regions/components in the normal first-paint screen, tagged BA, user, or suggestion; not necessarily literal UI copy.",
+    )
+    visible_copy: list[str] = Field(
+        default_factory=list, max_length=40,
+        description="Exact user-facing copy approved for first paint, such as labels, button text, placeholders, and headings. Only these are verbatim text requirements.",
+    )
+    default_actions: list[str] | None = Field(
+        default=None, max_length=20,
+        description="Only controls/actions present in the normal first-paint screen, described by intent. Use concise user-facing labels from visible_copy when present; this is the only action inventory sent to UI generation.",
+    )
+    state_spec: list[ScreenStateReference] = Field(
+        default_factory=list, max_length=20,
+        description="Reference-only states with explicit trigger and initial visibility. Never send this field to default UI generation.",
+    )
+    conditional_content: list[str] = Field(
+        default_factory=list, max_length=20,
+        description="Approved regions and exact copy shown only after an interaction or condition, such as a dialog, validation error, branch, or success state.",
     )
     actions: list[str] = Field(
         default_factory=list, max_length=20,

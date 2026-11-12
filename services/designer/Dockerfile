@@ -21,6 +21,7 @@ RUN pip install --no-cache-dir playwright==1.60.0     && playwright install --wi
 COPY services/designer/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY app_domains_color_palettes_v2.md ./app_domains_color_palettes_v2.md
 COPY services/designer/ ./
 
 EXPOSE 8282

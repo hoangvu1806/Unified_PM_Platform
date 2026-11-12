@@ -8,9 +8,18 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..designsystem.scene import slug
-from ..models import DesignBrief, Platform, StyleCandidate
+from ..models import DesignBrief, Platform, ScreenStateReference, StyleCandidate
 
 HEX = re.compile(r"^#?([0-9a-fA-F]{6})$")
+
+
+def _unique_in_order(values: list[Any]) -> list[Any]:
+    """Deduplicate JSON values without requiring them to be hashable."""
+    result: list[Any] = []
+    for value in values:
+        if not any(value == existing for existing in result):
+            result.append(value)
+    return result
 
 
 class DesignDecision(BaseModel):
@@ -26,10 +35,22 @@ class DesignDecision(BaseModel):
         return [slug(v, "screen") for v in value]
 
 
+class PreviewContentContract(BaseModel):
+    """LLM analysis of exact visible copy and actions against the approved brief."""
+
+    default_visible_text_exact: list[str] = Field(default_factory=list, max_length=40)
+    conditional_text_exact: list[str] = Field(default_factory=list, max_length=40)
+    default_visible_actions: list[str] = Field(default_factory=list, max_length=20)
+    conditional_actions: list[str] = Field(default_factory=list, max_length=20)
+
+
 class StylePreviewPlan(BaseModel):
     """Three project-specific art directions for the style-preview gallery."""
 
     options: list[StyleCandidate] = Field(min_length=3, max_length=3)
+    content_contract: PreviewContentContract = Field(
+        description="Required classification of approved screen content by first-paint visibility before generating the gallery.",
+    )
 
     @model_validator(mode="after")
     def distinct_options(self) -> "StylePreviewPlan":
@@ -98,36 +119,201 @@ class DesignDirection(BaseModel):
     dont: list[str] = Field(default_factory=list, max_length=6)
 
 
+class ScenarioTargetCheck(BaseModel):
+    """Explicit link from an approved trigger to the UI region it governs."""
+
+    source_rule: str = Field(min_length=1, max_length=300)
+    phase: Literal["first_paint", "after_trigger"] = "after_trigger"
+    trigger_selectors: list[str] = Field(default_factory=list, max_length=12)
+    target_selector: str = Field(
+        min_length=1,
+        max_length=100,
+        pattern=r'^\[data-state-target="[a-z0-9][a-z0-9_-]{0,63}"\]$',
+        description='Exact stable target selector, for example [data-state-target="medical-proof"].',
+    )
+    visible: bool
+
+
+class StateScenario(BaseModel):
+    """Deterministic browser case for a BA-approved conditional screen state."""
+
+    name: str = Field(min_length=1, max_length=100)
+    initial_values: dict[str, str] = Field(default_factory=dict, max_length=12)
+    initial_checked: dict[str, bool] = Field(default_factory=dict, max_length=8)
+    initial_visible: list[str] = Field(default_factory=list, max_length=12)
+    initial_hidden: list[str] = Field(default_factory=list, max_length=12)
+    set_values: dict[str, str] = Field(default_factory=dict, max_length=12)
+    set_checked: dict[str, bool] = Field(default_factory=dict, max_length=8)
+    click_selectors: list[str] = Field(
+        default_factory=list, max_length=12,
+        description="Ordered click triggers, repeat a selector to model repeated submissions such as lockout thresholds.",
+    )
+    visible: list[str] = Field(default_factory=list, max_length=12)
+    hidden: list[str] = Field(default_factory=list, max_length=12)
+    target_checks: list[ScenarioTargetCheck] = Field(
+        default_factory=list, max_length=24,
+        description=("Explicit scenario→trigger→UI target mapping. Use stable trigger selectors from "
+                     "initial/set values, checked controls, or ordered clicks and exact data-state-target selectors."),
+    )
+
+    @model_validator(mode="after")
+    def has_assertions(self) -> "StateScenario":
+        if not any((self.visible, self.hidden, self.initial_visible, self.initial_hidden, self.target_checks)):
+            raise ValueError("A state scenario must assert at least one visible or hidden target")
+        trigger_selectors = set(self.set_values) | set(self.set_checked) | set(self.click_selectors)
+        for check in self.target_checks:
+            if check.phase == "after_trigger":
+                if not check.trigger_selectors:
+                    raise ValueError("An after-trigger target check must name the trigger selectors it depends on")
+                unknown = set(check.trigger_selectors) - trigger_selectors
+                if unknown:
+                    raise ValueError("Target check references undeclared scenario trigger(s): " + ", ".join(sorted(unknown)))
+            elif check.trigger_selectors:
+                raise ValueError("A first-paint target check cannot depend on post-paint triggers")
+        return self
+
+
+class ConditionalBranch(BaseModel):
+    """A browser-testable condition branch from an approved business rule."""
+
+    name: str = Field(min_length=1, max_length=100)
+    set_values: dict[str, str] = Field(default_factory=dict, max_length=12)
+    set_checked: dict[str, bool] = Field(default_factory=dict, max_length=8)
+    click_selectors: list[str] = Field(
+        default_factory=list, max_length=12,
+        description="Ordered click triggers for this branch; repeat a selector to model consecutive actions.",
+    )
+    visible: bool
+
+    @model_validator(mode="after")
+    def has_inputs(self) -> "ConditionalBranch":
+        if not self.set_values and not self.set_checked and not self.click_selectors:
+            raise ValueError("A conditional branch must set at least one control value")
+        return self
+
+
+class ConditionalRegion(BaseModel):
+    """A conditional region with an explicit default and approved alternative cases."""
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    rule: str = Field(min_length=1, max_length=300)
+    default_values: dict[str, str] = Field(default_factory=dict, max_length=12)
+    default_checked: dict[str, bool] = Field(default_factory=dict, max_length=8)
+    default_visible: bool
+    branches: list[ConditionalBranch] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode="after")
+    def has_default_inputs(self) -> "ConditionalRegion":
+        if not self.default_values and not self.default_checked:
+            raise ValueError("A conditional region must define the approved default control value")
+        return self
+
+
+class ScreenContentContract(BaseModel):
+    """Classifies product content separately from conditional and test-only behavior."""
+
+    persistent_regions: list[str] = Field(default_factory=list, max_length=20)
+    test_only_states: list[str] = Field(default_factory=list, max_length=20)
+
+
 class ScreenSpec(BaseModel):
+    """Only first-paint fields consumed by screen UI generation."""
+
     id: str
     name: str = Field(min_length=1, max_length=120)
     platform: Platform = "desktop"
     purpose: str = ""
     layout: str = ""
     sections: list[str] = Field(default_factory=list)
-    states: list[str] = Field(default_factory=list)
     data: list[str] = Field(default_factory=list)
     navigation: list[str] = Field(default_factory=list)
     source_ui_ids: list[str] = Field(default_factory=list)
     must_show: list[str] = Field(
         default_factory=list, max_length=30,
-        description="Exact visible texts the screen must contain: field labels, buttons, column headers, messages",
+        description="Verbatim first-paint copy only, sourced from the approved visible_copy list; never component descriptions.",
     )
-    rules: list[str] = Field(default_factory=list, max_length=15, description="Business rules (BR-xx: …) the UI must reflect")
-    visual_asset_role: Literal["none", "hero", "background"] = Field(
-        default="none",
-        description="Use the selected local style illustration only where it supports this task; keep it separate from the logo.",
-    )
-    ux_query: str = Field("", description="3-6 English keywords for the screen's UI concerns")
+    visual_asset_role: Literal["none", "hero", "background"] = "none"
+    ux_query: str = ""
 
     @model_validator(mode="after")
     def normalize(self) -> "ScreenSpec":
         self.id = slug(self.id or self.name, "screen")
         if self.platform == "responsive":
             self.platform = "desktop"
-        self.states = [slug(s, "state") for s in self.states]
         self.navigation = [slug(s, "screen") for s in self.navigation]
         self.must_show = [t.strip() for t in self.must_show if t and t.strip()]
+        return self
+
+
+class ScreenStateSpec(BaseModel):
+    """State-only references, triggers, and future test cases, stored outside ScreenSpec."""
+
+    states: list[str] = Field(default_factory=list)
+    state_spec: list[ScreenStateReference] = Field(default_factory=list)
+    conditional_content: list[str] = Field(default_factory=list)
+    rules: list[str] = Field(default_factory=list, max_length=15)
+    content_contract: ScreenContentContract = Field(default_factory=ScreenContentContract)
+    conditional_regions: list[ConditionalRegion] = Field(default_factory=list, max_length=12)
+    state_scenarios: list[StateScenario] = Field(default_factory=list, max_length=12)
+    conditional_actions: list[str] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def normalize_and_expand(self) -> "ScreenStateSpec":
+        self.states = [slug(state, "state") for state in self.states]
+        generated: list[StateScenario] = []
+        existing_names = {scenario.name for scenario in self.state_scenarios}
+        for region in self.conditional_regions:
+            target = f'[data-state-target="{region.id}"]'
+            default_name = f"{region.id}:approved-default"
+            if default_name not in existing_names:
+                generated.append(StateScenario(
+                    name=default_name,
+                    initial_values=region.default_values,
+                    initial_checked=region.default_checked,
+                    initial_visible=[target] if region.default_visible else [],
+                    initial_hidden=[] if region.default_visible else [target],
+                    set_values=region.default_values,
+                    set_checked=region.default_checked,
+                    visible=[target] if region.default_visible else [],
+                    hidden=[] if region.default_visible else [target],
+                    target_checks=[
+                        ScenarioTargetCheck(source_rule=region.rule, phase="first_paint", target_selector=target,
+                                            visible=region.default_visible),
+                        ScenarioTargetCheck(
+                            source_rule=region.rule, phase="after_trigger",
+                            trigger_selectors=list(dict.fromkeys([*region.default_values, *region.default_checked])),
+                            target_selector=target, visible=region.default_visible,
+                        ),
+                    ],
+                ))
+            for branch in region.branches:
+                name = f"{region.id}:{branch.name}"
+                if name in existing_names:
+                    continue
+                generated.append(StateScenario(
+                    name=name,
+                    initial_values=region.default_values,
+                    initial_checked=region.default_checked,
+                    initial_visible=[target] if region.default_visible else [],
+                    initial_hidden=[] if region.default_visible else [target],
+                    set_values=branch.set_values,
+                    set_checked=branch.set_checked,
+                    click_selectors=branch.click_selectors,
+                    visible=[target] if branch.visible else [],
+                    hidden=[] if branch.visible else [target],
+                    target_checks=[
+                        ScenarioTargetCheck(source_rule=region.rule, phase="first_paint", target_selector=target,
+                                            visible=region.default_visible),
+                        ScenarioTargetCheck(
+                            source_rule=region.rule, phase="after_trigger",
+                            trigger_selectors=list(dict.fromkeys([
+                                *branch.set_values, *branch.set_checked, *branch.click_selectors,
+                            ])),
+                            target_selector=target, visible=branch.visible,
+                        ),
+                    ],
+                ))
+        self.state_scenarios.extend(generated)
         return self
 
 
@@ -137,9 +323,79 @@ class UiSpec(BaseModel):
     selected_style_key: str = ""
     style_name: str = ""
     visual_contract: dict[str, Any] = Field(default_factory=dict)
-    approved_brief_screens: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # Approved default content and state analysis are persisted in separate maps.
+    approved_default_screens: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    state_reference_screens: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    state_specs: dict[str, ScreenStateSpec] = Field(default_factory=dict)
     design: DesignDirection = Field(default_factory=DesignDirection)
     screens: list[ScreenSpec] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="before")
+    @classmethod
+    def separate_legacy_state_data(cls, value):
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+        state_specs = {key: dict(item) if isinstance(item, dict) else item
+                       for key, item in (data.get("state_specs") or {}).items()}
+        legacy_state_fields = ("states", "state_spec", "conditional_regions", "content_contract",
+                               "state_scenarios", "rules", "conditional_content")
+        for raw_screen in data.get("screens") or []:
+            if not isinstance(raw_screen, dict):
+                continue
+            screen_id = slug(str(raw_screen.get("id") or raw_screen.get("name") or "screen"), "screen")
+            legacy = {field: raw_screen.pop(field) for field in legacy_state_fields if field in raw_screen}
+            if legacy:
+                state = dict(state_specs.get(screen_id) or {})
+                for field, item in legacy.items():
+                    if isinstance(item, list):
+                        state[field] = _unique_in_order([*(state.get(field) or []), *item])
+                    elif field not in state:
+                        state[field] = item
+                state_specs[screen_id] = state
+
+        approved_defaults = dict(data.get("approved_default_screens") or {})
+        state_references = dict(data.get("state_reference_screens") or {})
+        legacy_briefs = data.pop("approved_brief_screens", {})
+        for screen_id, brief in (legacy_briefs or {}).items():
+            if not isinstance(brief, dict):
+                continue
+            state_keys = {"conditional_content", "states", "state_spec", "open_questions", "rules"}
+            state_ref = {key: brief[key] for key in state_keys if key in brief}
+            outline = [str(item) for item in (brief.get("content_outline") or [])]
+            conditional = [
+                *(brief.get("conditional_content") or []),
+                *(brief.get("conditional_actions") or []),
+                *(brief.get("states") or []),
+                *(state.get("trigger", "") for state in (brief.get("state_spec") or []) if isinstance(state, dict)),
+                *(item for state in (brief.get("state_spec") or []) if isinstance(state, dict)
+                  for item in (state.get("content") or [])),
+            ]
+            key = lambda text: "".join(char for char in str(text).casefold() if char.isalnum())
+            default_outline = [item for item in outline if not any(
+                key(ref) and (key(ref) in key(item) or key(item) in key(ref)) for ref in conditional
+            )]
+            actions = [str(item) for item in (brief.get("actions") or [])]
+            default_actions = brief.get("default_actions")
+            if default_actions is None:
+                conditional_keys = [key(item) for item in conditional if len(key(item)) >= 8]
+                default_actions = [item for item in actions if not any(
+                    state_key in key(item) or key(item) in state_key
+                    for state_key in conditional_keys if key(item)
+                )]
+            state_ref["conditional_actions"] = [item for item in actions if item not in default_actions]
+            defaults = {key: item for key, item in brief.items()
+                        if key not in state_keys | {"actions", "default_actions"}}
+            defaults["content_outline"] = default_outline
+            defaults["default_actions"] = default_actions
+            approved_defaults.setdefault(screen_id, defaults)
+            state_references.setdefault(screen_id, state_ref)
+
+        data.pop("approved_brief_screens", None)
+        data["approved_default_screens"] = approved_defaults
+        data["state_reference_screens"] = state_references
+        data["state_specs"] = state_specs
+        return data
 
     @model_validator(mode="after")
     def unique_ids(self) -> "UiSpec":

@@ -178,6 +178,7 @@ export const api = {
         }),
 
     eventUrl: (runId: string) => `${API_BASE}/runs/${runId}/events`,
+    eventHistory: (runId: string) => request<import("./types").WorkflowEvent[]>(`/runs/${runId}/event-history`),
 };
 
 /** URL of the design page (canvas) for a session; one browser tab per session. */

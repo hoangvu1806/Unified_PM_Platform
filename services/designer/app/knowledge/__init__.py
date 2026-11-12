@@ -18,6 +18,15 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2] / "knowledge"
+_PALETTE_FILENAME = "app_domains_color_palettes_v2.md"
+PALETTE_GUIDE = next(
+    (
+        parent / _PALETTE_FILENAME
+        for parent in Path(__file__).resolve().parents
+        if (parent / _PALETTE_FILENAME).is_file()
+    ),
+    Path(__file__).resolve().parents[2] / _PALETTE_FILENAME,
+)
 UUPM = ROOT / "ui-ux-pro-max"
 _WORD = re.compile(r"[a-z0-9]+")
 DONT = "Don't"
@@ -228,15 +237,26 @@ def style_preview_skill() -> str:
 
 @lru_cache
 def ui_ux_design_rules() -> str:
-    """Required product-independent UI/UX rules for specifying, building, and reviewing screens."""
+    """Required UI/UX and domain palette rules for specifying, building, and reviewing screens."""
     files = (
         "material-ui-ux-knowledge-reference.md",
         "multi-screen-design-rules.md",
         "screen-sequence-identity-and-content.md",
     )
-    return "\n\n---\n\n".join(
-        (ROOT / name).read_text(encoding="utf-8").strip() for name in files
-    )
+    sources = [(ROOT / name).read_text(encoding="utf-8").strip() for name in files]
+    if PALETTE_GUIDE.is_file():
+        sources.append(PALETTE_GUIDE.read_text(encoding="utf-8").strip())
+    else:
+        raise FileNotFoundError(f"Required domain palette guide is missing: {PALETTE_GUIDE}")
+    return "\n\n---\n\n".join(sources)
+
+
+@lru_cache
+def domain_palette_guidance() -> str:
+    """Return the domain palette guide for the visual-direction planner."""
+    if not PALETTE_GUIDE.is_file():
+        raise FileNotFoundError(f"Required domain palette guide is missing: {PALETTE_GUIDE}")
+    return PALETTE_GUIDE.read_text(encoding="utf-8").strip()
 
 
 @lru_cache

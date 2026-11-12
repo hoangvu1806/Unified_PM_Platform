@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 from uuid import UUID
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Query, Request, Response, status
 
@@ -53,6 +54,8 @@ def vendor_base(request: Request) -> str:
     # service calls that did not pass through the gateway.
     forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
     forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+    configured_origin = request.app.state.settings.platform_public_url.rstrip("/")
+    configured = urlsplit(configured_origin)
     # ngrok terminates TLS before forwarding to the local HTTP gateway. Some
     # gateway/tunnel combinations still forward ``http`` here even though the
     # browser is on the public HTTPS URL. Using that value creates mixed-content
@@ -60,9 +63,20 @@ def vendor_base(request: Request) -> str:
     if forwarded_host.lower().endswith((".ngrok-free.dev", ".ngrok-free.app", ".ngrok.io")):
         forwarded_proto = "https"
     if forwarded_host and forwarded_proto in {"http", "https"}:
+        # Local reverse proxies often forward ``localhost`` without its
+        # browser-facing port. Preserve the configured port when both hosts
+        # refer to the same local machine; otherwise iframe assets fall back
+        # to port 80 and fail with ERR_CONNECTION_REFUSED.
+        forwarded_name = forwarded_host.rsplit(":", 1)[0].lower()
+        configured_name = (configured.hostname or "").lower()
+        configured_has_port = configured.port is not None
+        if (":" not in forwarded_host and configured_has_port
+                and forwarded_name == configured_name
+                and forwarded_name in {"localhost", "127.0.0.1"}):
+            forwarded_host = configured.netloc
         public_origin = f"{forwarded_proto}://{forwarded_host}"
     else:
-        public_origin = request.app.state.settings.platform_public_url.rstrip("/")
+        public_origin = configured_origin
     return public_origin + "/designer/api/v1/render/vendor/"
 
 

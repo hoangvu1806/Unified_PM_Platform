@@ -31,7 +31,7 @@ First identify the roles that the particular task needs: safe-area/header, brand
 - Balance vertical rhythm from the top safe area through the footer. Avoid both cramped headers and oversized empty gaps between the hero, greeting, and task. Let the content determine height; do not force the same vertical layout on login, OTP, success, settings, or other different tasks.
 - Add a card only when it groups related content. Avoid a card wrapping the greeting and then another card wrapping the form without a clear visual reason. Keep approved footers within the safe area and visible; do not invent footer claims or remove required footer content to make a composition fit.
 - Treat persistent bottom actions/footers as layout regions, not overlays. Prefer a normal-flow footer after the content. Never use `position: fixed` to pin a footer over a scrollable list, card stack, form, or terminal actions. If a pinned action bar is essential, make the screen a constrained flex column, put scrolling content in a `min-height: 0; overflow-y: auto` region, and keep the footer as a separate non-overlapping sibling; if overlay positioning is unavoidable, reserve bottom padding at least equal to the full footer height plus safe-area inset and spacing. Verify the last content item and all footer actions remain visible together while scrolling.
-- Use the same spacing scale and alignment logic for related controls. For authentication alternatives, keep the primary action, centered “Hoặc” divider, and alternate action visually grouped, with symmetric divider lines and the spacing specified by the core mobile rules.
+- Use the same spacing scale and alignment logic for related controls. Group and separate action groups only when those actions are present in the approved default screen contract.
 
 ## 3. Keep typography and copy coherent
 
@@ -43,10 +43,22 @@ First identify the roles that the particular task needs: safe-area/header, brand
 
 ## 4. Keep control language and states predictable
 
+### Separate app content, conditions, and QA cases
+
+- Classify each proposed region before layout: **persistent** (visible in the approved default), **conditional** (visible only while an approved BA condition is true), or **test-only** (a QA variant exercised outside the product screen). Do not treat all three classes as simultaneous screen content.
+- For each conditional region, bind visibility to the real screen control/value named by the approved rule. The initial control value and first-paint visibility must match the approved default; changing that control must reveal or hide only the relevant region. Never render a conditional upload, warning, or action as always visible just because it exists in the workflow.
+- Treat navigation to a different task or workflow stage as a separate screen. Keep loading, error, success, and alternative-condition examples in the canvas test/review mechanism; do not add a state selector, demo toggle, or multiple state panels to the app UI.
+- Keep the product UI at its normal platform viewport and task composition. A tablet may use a deliberate responsive layout, and a long mobile form may scroll, but neither should become a workflow dashboard or an oversized card containing every stage/state. Do not compress approved controls or shrink text to fit branches above the fold.
+- Verify the approved default on first paint before interacting, then verify every BA-approved branch after changing its actual input. A scenario is not proven merely because the region exists in the HTML. If the BA package does not establish a default value or branch outcome, preserve the ambiguity for review rather than inventing one.
+- Make every executable QA scenario traceable to an approved condition: name the real screen control, the approved value/action that triggers the branch, and the stable target region ID. Never infer or fabricate selectors, triggers, or target IDs from a state label. If a selector is missing, malformed, ambiguous, cannot be operated, or the scenario cannot be mapped to a real control and target, report that scenario as **not verified** (non-blocking warning); do not call it a rendered-screen failure and do not silently mark it passed.
+- A conditional-state check is a blocking failure only when the approved default assertion is wrong on a uniquely mapped real control/region, or when a declared real trigger is successfully applied and its uniquely mapped target still has the wrong visibility. Keep unverified scenarios visible in QA results so missing coverage is not mistaken for success.
+
 - Across screens in one flow, reuse the same semantic colors and component language for primary actions, secondary actions, links, fields, focus, success, warning, and errors. A distinct style direction may map those roles to its own palette, but do not introduce an unrelated one-off color.
 - Keep actions visually distinct and comfortably separated. Apply the core knowledge's platform-specific target guidance and its preview measurement proxy; the checkbox or small icon's label should provide the usable hit area.
 - Do not show success checks, completed password criteria, active states, or other positive feedback before the corresponding input or action has actually reached that state.
 - Show only the approved default state on first render. Keep loading, error, success, and test variants distinct and do not add a test/simulator control to the product screen.
+- Implement BA conditional-display rules as actual behavior tied to the selected value, with the initial/default visibility matching the approved selection. A conditional field or upload area must not remain visible when its condition is false; confirming that it exists in the HTML is not enough.
+- Keep sticky/fixed bottom actions from covering scrollable content. Prefer normal flow; otherwise use separate scroll and footer siblings and verify the first viewport and the end of the form.
 - State changes must not silently alter the product identity, typography system, action labels, or unrelated screen content.
 
 ## 5. Make style alternatives meaningfully different

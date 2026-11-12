@@ -1,5 +1,5 @@
-import { ArrowLeft, ExternalLink, LogOut, Moon, PanelRight, Settings2, Sun } from "lucide-react";
-import { isEmbedded, logout, usePlatform } from "./platform";
+import { Activity, ArrowLeft, ExternalLink, LogOut, Moon, PanelRight, Settings2, Sun } from "lucide-react";
+import { isEmbedded, logout, projectId, usePlatform } from "./platform";
 import type { Run, Session } from "./types";
 
 export function WorkspaceHeader({
@@ -92,6 +92,20 @@ export function WorkspaceHeader({
                         <ExternalLink size={15} /> Trang thiết kế
                     </button>
                 )}
+                <a
+                    className="secondary-button compact"
+                    style={{ textDecoration: "none" }}
+                    href={`${import.meta.env.BASE_URL}logs.html?${new URLSearchParams({
+                        ...(projectId ? { project: projectId } : {}),
+                        ...(session ? { session: session.id } : {}),
+                        ...(run ? { run: run.id } : {}),
+                    })}`}
+                    title="Mở log chi tiết của Designer"
+                    target="_blank"
+                    rel="noreferrer"
+                >
+                    <Activity size={15} /> Logs
+                </a>
                 <div className="topbar-divider" />
                 {/* Embedded: the platform header owns the one light/dark switch. */}
                 {!isEmbedded && (

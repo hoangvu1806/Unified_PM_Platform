@@ -5,6 +5,17 @@ interaction, lucide icons) and checks it in headless Chromium.
 UI at `/designer/`, API at `/designer/api/v1/` behind the gateway; data in Postgres schema
 `designer`, files in platform storage (S3). Everything runs in this one container.
 
+## Local run logs
+
+The separate trace viewer is served at `/designer/logs.html`. Start this deploy checkout with
+`docker compose up -d --build`, sign in, then open
+`http://localhost:8080/designer/logs.html?project=<project-id>`; the Designer header also has a
+**Logs** link that carries the current project, session, and run. The page shows stored history
+and subscribes to new events while a run is active. Each Designer model call records its phase,
+function, prompt/context, structured input, result, token usage, and errors. Renderer checks include
+screen input, visible text, findings, and pass/fail score. Trace fields are capped at 40,000
+characters; image bytes are represented by their size instead of stored in the event payload.
+
 ## Today
 
 - Sessions, runs, events (SSE), reviews, BA handoffs and project access work as before.

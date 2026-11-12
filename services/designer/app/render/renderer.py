@@ -151,6 +151,7 @@ class Renderer:
         strict_touch_targets: bool = False,
         strict_visual_quality: bool = False,
         required_texts: list[str] | None = None,
+        forbidden_texts: list[str] | None = None,
         max_height: int = 6000,
     ) -> RenderResult:
         console: list[str] = []
@@ -165,7 +166,8 @@ class Renderer:
                 report = await page.evaluate(LINT_JS, {"mobile": width <= 480, "axe": axe,
                                                        "strictTouchTargets": strict_touch_targets,
                                                        "strictVisualQuality": strict_visual_quality,
-                                                       "requiredTexts": required_texts or []})
+                                                       "requiredTexts": required_texts or [],
+                                                       "forbiddenTexts": forbidden_texts or []})
                 result.findings, result.text, result.height = report["findings"], report["text"], report["height"]
             else:
                 result.text = await page.evaluate("() => document.body.innerText")
@@ -178,3 +180,183 @@ class Renderer:
                 result.image = await page.screenshot(**options)
                 result.mime = f"image/{screenshot}"
             return result
+
+    async def check_state_scenarios(
+        self,
+        fragment: str,
+        scenarios: list[dict[str, Any]],
+        *,
+        width: int,
+        theme_css: str | None = None,
+        fonts: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Check executable states without treating bad QA mappings as UI failures."""
+        findings: list[dict[str, Any]] = []
+        async with self.page(fragment, width=width, theme_css=theme_css, fonts=fonts) as page:
+            for index, scenario in enumerate(scenarios):
+                if index:
+                    await page.reload(wait_until="load")
+                    await page.wait_for_function(READY_JS)
+                    await page.evaluate("() => document.fonts.ready")
+                name = str(scenario.get("name") or "unnamed scenario")
+                issues: list[str] = []
+                unverified: list[str] = []
+
+                async def resolve_one(selector: str, purpose: str):
+                    try:
+                        locator = page.locator(selector)
+                        count = await locator.count()
+                    except Exception as exc:
+                        unverified.append(f"{purpose} selector {selector!r} could not be resolved ({type(exc).__name__}).")
+                        return None
+                    if count != 1:
+                        unverified.append(f"{purpose} selector {selector!r} matched {count} elements; expected exactly one.")
+                        return None
+                    return locator
+                # Verify the real first-paint state before mutating controls. This
+                # catches the common case where a conditional panel is rendered
+                # unconditionally and only hidden after an interaction.
+                for selector, expected in (scenario.get("initial_values") or {}).items():
+                    locator = await resolve_one(selector, "Initial-value")
+                    if locator is None:
+                        continue
+                    try:
+                        actual = await locator.input_value()
+                        if actual != str(expected):
+                            issues.append(f"Expected initial value {expected!r} for {selector!r}, found {actual!r}.")
+                    except Exception as exc:
+                        unverified.append(f"Could not read initial value for {selector!r} ({type(exc).__name__}).")
+
+                for selector, expected in (scenario.get("initial_checked") or {}).items():
+                    locator = await resolve_one(selector, "Initial-checkbox")
+                    if locator is None:
+                        continue
+                    try:
+                        actual = await locator.is_checked()
+                        if actual != expected:
+                            issues.append(f"Expected initial checked={expected} for {selector!r}, found {actual}.")
+                    except Exception as exc:
+                        unverified.append(f"Could not read initial checkbox {selector!r} ({type(exc).__name__}).")
+
+                async def check_visibility(selectors: list[str], expected: bool, phase: str) -> None:
+                    for selector in selectors:
+                        locator = await resolve_one(selector, f"{phase} visibility")
+                        if locator is None:
+                            continue
+                        try:
+                            is_visible = await locator.is_visible()
+                        except Exception as exc:
+                            unverified.append(f"Could not inspect {phase} visibility for {selector!r} ({type(exc).__name__}).")
+                            continue
+                        if is_visible != expected:
+                            expectation = "visible" if expected else "hidden"
+                            issues.append(f"Expected {selector!r} to be {expectation} {phase}.")
+
+                target_checks = scenario.get("target_checks") or []
+                await page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+                if target_checks:
+                    for check in target_checks:
+                        if check.get("phase") == "first_paint":
+                            await check_visibility(
+                                [check.get("target_selector", "")], bool(check.get("visible")), "on first paint"
+                            )
+                else:
+                    # Backward compatibility for saved specs created before the
+                    # explicit scenario→trigger→target contract was introduced.
+                    await check_visibility(scenario.get("initial_visible") or [], True, "on first paint")
+                    await check_visibility(scenario.get("initial_hidden") or [], False, "on first paint")
+
+                click_selectors = scenario.get("click_selectors") or []
+                trigger_declared = bool(scenario.get("set_values") or scenario.get("set_checked") or click_selectors)
+                trigger_applied = trigger_declared
+                applied_triggers: set[str] = set()
+                for selector, value in (scenario.get("set_values") or {}).items():
+                    locator = await resolve_one(selector, "Input trigger")
+                    if locator is None:
+                        trigger_applied = False
+                        continue
+                    try:
+                        if await locator.evaluate("el => el.tagName.toLowerCase()") == "select":
+                            await locator.select_option(str(value))
+                        else:
+                            await locator.fill(str(value))
+                        applied_triggers.add(selector)
+                    except Exception as exc:
+                        trigger_applied = False
+                        unverified.append(f"Could not apply input trigger {selector!r} ({type(exc).__name__}).")
+
+                for selector, checked in (scenario.get("set_checked") or {}).items():
+                    locator = await resolve_one(selector, "Checkbox trigger")
+                    if locator is None:
+                        trigger_applied = False
+                        continue
+                    try:
+                        await (locator.check() if checked else locator.uncheck())
+                        applied_triggers.add(selector)
+                    except Exception as exc:
+                        trigger_applied = False
+                        unverified.append(f"Could not apply checkbox trigger {selector!r} ({type(exc).__name__}).")
+
+                for selector in click_selectors:
+                    locator = await resolve_one(selector, "Click trigger")
+                    if locator is None:
+                        trigger_applied = False
+                        continue
+                    try:
+                        await locator.click()
+                        applied_triggers.add(selector)
+                    except Exception as exc:
+                        trigger_applied = False
+                        unverified.append(f"Could not apply click trigger {selector!r} ({type(exc).__name__}).")
+
+                if target_checks:
+                    checks_by_trigger: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+                    for check in target_checks:
+                        if check.get("phase") != "after_trigger":
+                            continue
+                        trigger_selectors = tuple(check.get("trigger_selectors") or [])
+                        checks_by_trigger.setdefault(trigger_selectors, []).append(check)
+                    for trigger_selectors, checks in checks_by_trigger.items():
+                        missing = set(trigger_selectors) - applied_triggers
+                        if missing:
+                            unverified.append(
+                                "Mapped target(s) were not checked because trigger(s) could not be applied: "
+                                + ", ".join(sorted(missing)) + "."
+                            )
+                            continue
+                        await page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+                        for check in checks:
+                            await check_visibility(
+                                [check.get("target_selector", "")], bool(check.get("visible")),
+                                "after applying mapped trigger(s) " + ", ".join(trigger_selectors),
+                            )
+                else:
+                    post_visible = scenario.get("visible") or []
+                    post_hidden = scenario.get("hidden") or []
+                    if post_visible or post_hidden:
+                        if not trigger_declared:
+                            unverified.append("Post-trigger visibility assertions have no declared input/checkbox trigger.")
+                        elif not trigger_applied:
+                            unverified.append("Post-trigger visibility was not checked because one or more declared triggers could not be applied.")
+                        else:
+                            await page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+                            await check_visibility(post_visible, True, "after applying scenario inputs")
+                            await check_visibility(post_hidden, False, "after applying scenario inputs")
+
+                if issues:
+                    findings.append({
+                        "severity": "error",
+                        "rule": "conditional-state",
+                        "count": len(issues),
+                        "elements": [],
+                        "message": f"State scenario {name!r} failed: " + " ".join(issues),
+                    })
+                if unverified:
+                    findings.append({
+                        "severity": "warning",
+                        "rule": "state-not-verified",
+                        "count": len(unverified),
+                        "elements": [],
+                        "message": f"State scenario {name!r} was not fully verified: " + " ".join(unverified),
+                    })
+        return findings

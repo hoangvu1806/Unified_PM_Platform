@@ -362,6 +362,15 @@ async def stream_events(
     )
 
 
+@router.get("/runs/{run_id}/event-history")
+async def event_history(request: Request, run_id: UUID) -> list[dict[str, Any]]:
+    """Return persisted workflow and debug events for the local Logs page."""
+    if not await request.app.state.store.get_run(run_id):
+        raise not_found("Run")
+    events = await request.app.state.store.list_events(run_id)
+    return [event.model_dump(mode="json", by_alias=True) for event in events]
+
+
 @router.post("/runs/{run_id}/reviews", status_code=status.HTTP_202_ACCEPTED)
 async def review_run(request: Request, run_id: UUID, body: ReviewCreate) -> dict[str, str]:
     await request.app.state.runs.review(run_id, body)

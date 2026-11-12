@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
     // Served under /designer/ by the platform gateway.
     base: env.VITE_BASE || "/designer/",
     plugins: [react()],
-    // Two pages: the studio (chat, review) and the design page opened in its own tab.
-    build: { rollupOptions: { input: { main: "index.html", canvas: "canvas.html" } } },
+    // Studio, design canvas, and local run log viewer.
+    build: { rollupOptions: { input: { main: "index.html", canvas: "canvas.html", logs: "logs.html" } } },
     server: {
       host: "127.0.0.1",
       port,

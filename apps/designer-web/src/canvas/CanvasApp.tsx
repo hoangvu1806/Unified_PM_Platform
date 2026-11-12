@@ -322,7 +322,7 @@ function StateFrame({
             <div className="canvas-multi-viewport" style={{ width: w * scale, height: h * scale }}>
                 <iframe ref={ref} title={screenName} sandbox="allow-scripts allow-forms"
                     srcDoc={noScrollDoc(doc)} onLoad={handleLoad}
-                    style={{ width: w, height: h, transform: `scale(${scale})`, transformOrigin: "0 0", pointerEvents: "none", border: 0 }} />
+                    style={{ width: w, height: h, zoom: scale, pointerEvents: "none", border: 0 }} />
             </div>
         </div>
     );
